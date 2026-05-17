@@ -28,7 +28,7 @@ enum STTProvider {
 
     private static func callOpenAI(apiKey: String, wavData: Data, prompt: String) async throws -> String {
         let boundary = UUID().uuidString
-        let model = "gpt-4o-transcribe"
+        let model = "gpt-4o-mini-transcribe-2025-12-15"
         let url = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
 
         var request = URLRequest(url: url)

@@ -2,7 +2,7 @@
 
 # Generate Xcode project from project.yml
 generate:
-	cd /Users/sonpiaz/yap && xcodegen generate
+	xcodegen generate
 
 # Open in Xcode
 open: generate

@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sonpiaz/yap/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sonpiaz/yap" alt="License" /></a>
-  <a href="https://github.com/sonpiaz/yap/stargazers"><img src="https://img.shields.io/github/stars/sonpiaz/yap" alt="Stars" /></a>
+  <a href="https://github.com/sonpiaz/haynoi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sonpiaz/haynoi" alt="License" /></a>
+  <a href="https://github.com/sonpiaz/haynoi/stargazers"><img src="https://img.shields.io/github/stars/sonpiaz/haynoi" alt="Stars" /></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14+" />
   <img src="https://img.shields.io/badge/Swift-5.9-orange" alt="Swift 5.9" />
 </p>
@@ -35,8 +35,8 @@
 ### Build from source
 
 ```bash
-git clone https://github.com/sonpiaz/yap.git
-cd yap
+git clone https://github.com/sonpiaz/haynoi.git
+cd haynoi
 brew install xcodegen    # if not installed
 make run
 ```
