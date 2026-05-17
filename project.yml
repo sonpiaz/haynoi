@@ -6,6 +6,11 @@ options:
   xcodeVersion: "16.0"
   generateEmptyDirectories: true
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.1
+
 targets:
   Haynoi:
     type: application
@@ -18,6 +23,8 @@ targets:
       - path: Resources/Sounds
         type: folder
         buildPhase: resources
+    dependencies:
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Haynoi</title>
+        <link>https://raw.githubusercontent.com/sonpiaz/haynoi/main/appcast.xml</link>
+        <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
+        <language>en</language>
+    </channel>
+</rss>

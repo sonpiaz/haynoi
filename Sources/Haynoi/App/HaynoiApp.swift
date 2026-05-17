@@ -1,3 +1,4 @@
+import Sparkle
 import SwiftUI
 import UserNotifications
 
@@ -6,11 +7,26 @@ struct HaynoiApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState.shared
 
+    private let updaterController: SPUStandardUpdaterController
+
+    init() {
+        // Sparkle: start updater on launch. Reads SUFeedURL + SUPublicEDKey
+        // from Info.plist. Checks for updates on schedule (daily by default)
+        // and exposes "Check for Updates…" menu action.
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
+    }
+
     var body: some Scene {
         MenuBarExtra {
             ContentView()
                 .environmentObject(appState)
                 .frame(width: 360, height: 400)
+            Divider()
+            CheckForUpdatesView(updater: updaterController.updater)
         } label: {
             Label("Haynoi", systemImage: appState.menuBarIcon)
         }
@@ -19,6 +35,31 @@ struct HaynoiApp: App {
         Settings {
             SettingsView()
         }
+    }
+}
+
+/// Menu item with state-driven enable/disable for Sparkle updates.
+/// Disabled while an update check is in-flight; otherwise tappable.
+private struct CheckForUpdatesView: View {
+    @ObservedObject private var checker: UpdaterChecker
+    private let updater: SPUUpdater
+
+    init(updater: SPUUpdater) {
+        self.updater = updater
+        self.checker = UpdaterChecker(updater: updater)
+    }
+
+    var body: some View {
+        Button("Check for Updates…") { updater.checkForUpdates() }
+            .disabled(!checker.canCheckForUpdates)
+    }
+}
+
+private final class UpdaterChecker: ObservableObject {
+    @Published var canCheckForUpdates = false
+    init(updater: SPUUpdater) {
+        updater.publisher(for: \.canCheckForUpdates)
+            .assign(to: &$canCheckForUpdates)
     }
 }
 

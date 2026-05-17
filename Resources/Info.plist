@@ -22,5 +22,13 @@
     <false/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Haynoi needs microphone access to transcribe your speech.</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/sonpiaz/haynoi/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>bNwy/kIFEdy42wob6UPwd8m08B8UAjTMwAqYJcXrtBw=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

@@ -2,63 +2,113 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: write  # needed to create GitHub Release + push appcast.xml
 
 jobs:
-  build:
+  release:
     runs-on: macos-15
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+      - uses: actions/checkout@v6
         with:
-          xcode-version: latest-stable
+          fetch-depth: 0  # full history so we can push appcast.xml back
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          for candidate in /Applications/Xcode_16.0.app /Applications/Xcode.app; do
+            if [[ -d "$candidate" ]]; then
+              sudo xcode-select -s "${candidate}/Contents/Developer"
+              echo "DEVELOPER_DIR=${candidate}/Contents/Developer" >> "$GITHUB_ENV"
+              break
+            fi
+          done
+          xcodebuild -version
 
       - name: Install xcodegen
         run: brew install xcodegen
 
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Build release
+      - name: Import Developer ID signing cert
+        env:
+          DEV_ID_CERT_P12_BASE64: ${{ secrets.DEV_ID_CERT_P12_BASE64 }}
+          DEV_ID_CERT_PASSWORD: ${{ secrets.DEV_ID_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          xcodebuild -project Haynoi.xcodeproj \
-            -scheme Haynoi \
-            -configuration Release \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          set -euo pipefail
+          echo "$DEV_ID_CERT_P12_BASE64" | base64 -d > /tmp/cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$DEV_ID_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm /tmp/cert.p12
 
-      - name: Package app bundle
+      - name: Build universal app
+        env:
+          ARCHES: "arm64 x86_64"
+        run: ./scripts/package_app.sh release
+
+      - name: Sign + notarize
+        env:
+          APP_IDENTITY: ${{ secrets.APP_IDENTITY }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ./scripts/sign-and-notarize.sh
+
+      - name: Generate appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          APP_PATH="build/Build/Products/Release/Haynoi.app"
+          set -euo pipefail
+          echo "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle.key
+          source version.env
+          SPARKLE_PRIVATE_KEY_FILE=/tmp/sparkle.key \
+            ./scripts/make_appcast.sh "Haynoi-${MARKETING_VERSION}-universal.zip"
+          rm /tmp/sparkle.key
 
-          # Ad-hoc sign
-          codesign --force --deep --sign - "$APP_PATH"
-
-          # Zip
-          ZIP_NAME="Haynoi-${VERSION}.zip"
-          ditto -c -k --keepParent "$APP_PATH" "$ZIP_NAME"
-
-          # Generate sha256
-          shasum -a 256 "$ZIP_NAME" > "$ZIP_NAME.sha256"
-
-          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+      - name: Read release notes
+        id: notes
+        run: |
+          source version.env
+          ./scripts/changelog-to-html.sh "$MARKETING_VERSION" > /tmp/notes.html
+          {
+            echo "html<<EOF"
+            cat /tmp/notes.html
+            echo
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Haynoi v${{ env.VERSION }}"
-          body: "Haynoi v${{ env.VERSION }} — Push-to-talk dictation for macOS."
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Haynoi ${{ env.RELEASE_TAG }}
+          body: ${{ steps.notes.outputs.html }}
           files: |
-            ${{ env.ZIP_NAME }}
-            ${{ env.ZIP_NAME }}.sha256
+            Haynoi-*-universal.zip
+            Haynoi-*-universal.dSYM.zip
+
+      - name: Commit updated appcast
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet appcast.xml; then
+            echo "appcast.xml unchanged — nothing to commit"
+          else
+            git add appcast.xml
+            git commit -m "release: ${RELEASE_TAG}"
+            git push origin HEAD:main
+          fi
