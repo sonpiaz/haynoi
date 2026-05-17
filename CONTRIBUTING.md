@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to Yap!
+Thanks for your interest in contributing to Haynoi!
 
 ## Reporting Issues
 

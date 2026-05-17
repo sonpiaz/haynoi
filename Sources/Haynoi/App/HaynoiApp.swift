@@ -2,7 +2,7 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct YapApp: App {
+struct HaynoiApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState.shared
 
@@ -12,7 +12,7 @@ struct YapApp: App {
                 .environmentObject(appState)
                 .frame(width: 360, height: 400)
         } label: {
-            Label("Yap", systemImage: appState.menuBarIcon)
+            Label("Haynoi", systemImage: appState.menuBarIcon)
         }
         .menuBarExtraStyle(.window)
 
@@ -28,7 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: ["soundEnabled": true])
-        NSLog("[Yap] App launched")
+        NSLog("[Haynoi] App launched")
         NSApplication.shared.setActivationPolicy(.regular)
 
         // Apply saved hotkey
@@ -44,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Request notification permission (for insertion fallback)
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            NSLog("[Yap] Notification permission: %@", granted ? "granted" : "denied")
+            NSLog("[Haynoi] Notification permission: %@", granted ? "granted" : "denied")
         }
 
         // Show onboarding on first launch
@@ -79,7 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Welcome to Yap"
+        window.title = "Welcome to Haynoi"
         window.contentView = NSHostingView(rootView: view)
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -104,7 +104,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Yap"
+        window.title = "Haynoi"
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
         window.makeKeyAndOrderFront(nil)

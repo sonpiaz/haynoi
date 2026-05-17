@@ -27,8 +27,8 @@ jobs:
 
       - name: Build release
         run: |
-          xcodebuild -project Yap.xcodeproj \
-            -scheme Yap \
+          xcodebuild -project Haynoi.xcodeproj \
+            -scheme Haynoi \
             -configuration Release \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
@@ -39,13 +39,13 @@ jobs:
       - name: Package app bundle
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          APP_PATH="build/Build/Products/Release/Yap.app"
+          APP_PATH="build/Build/Products/Release/Haynoi.app"
 
           # Ad-hoc sign
           codesign --force --deep --sign - "$APP_PATH"
 
           # Zip
-          ZIP_NAME="Yap-${VERSION}.zip"
+          ZIP_NAME="Haynoi-${VERSION}.zip"
           ditto -c -k --keepParent "$APP_PATH" "$ZIP_NAME"
 
           # Generate sha256
@@ -57,8 +57,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Yap v${{ env.VERSION }}"
-          body: "Yap v${{ env.VERSION }} — Push-to-talk dictation for macOS."
+          name: "Haynoi v${{ env.VERSION }}"
+          body: "Haynoi v${{ env.VERSION }} — Push-to-talk dictation for macOS."
           files: |
             ${{ env.ZIP_NAME }}
             ${{ env.ZIP_NAME }}.sha256

@@ -30,7 +30,7 @@ final class AudioRecorder {
             self.engine = nil
             throw RecorderError.badFormat
         }
-        NSLog("[Yap] Mic format: %.0fHz, %dch", hwFormat.sampleRate, hwFormat.channelCount)
+        NSLog("[Haynoi] Mic format: %.0fHz, %dch", hwFormat.sampleRate, hwFormat.channelCount)
 
         guard let whisperFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -57,7 +57,7 @@ final class AudioRecorder {
 
         eng.prepare()
         try eng.start()
-        NSLog("[Yap] Recording started")
+        NSLog("[Haynoi] Recording started")
     }
 
     /// Stops recording and returns the accumulated 16kHz mono samples.
@@ -72,7 +72,7 @@ final class AudioRecorder {
         lock.unlock()
 
         DispatchQueue.main.async { [weak self] in self?.audioLevel = 0 }
-        NSLog("[Yap] Recording stopped, %d samples (%.1fs)", samples.count, Float(samples.count) / 16000)
+        NSLog("[Haynoi] Recording stopped, %d samples (%.1fs)", samples.count, Float(samples.count) / 16000)
         return samples
     }
 

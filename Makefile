@@ -6,17 +6,17 @@ generate:
 
 # Open in Xcode
 open: generate
-	open Yap.xcodeproj
+	open Haynoi.xcodeproj
 
 # Build via xcodebuild
 build: generate
-	xcodebuild -project Yap.xcodeproj -scheme Yap -configuration Debug build
+	xcodebuild -project Haynoi.xcodeproj -scheme Haynoi -configuration Debug build
 
 # Run the built app
 run: build
-	open build/Debug/Yap.app
+	open build/Debug/Haynoi.app
 
 # Clean
 clean:
 	rm -rf build DerivedData .build
-	rm -rf Yap.xcodeproj
+	rm -rf Haynoi.xcodeproj

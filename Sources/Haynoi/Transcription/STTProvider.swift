@@ -77,7 +77,7 @@ enum STTProvider {
                 let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
                     .flatMap(Double.init) ?? pow(2.0, Double(attempt + 1))
                 let delay = min(retryAfter, 30.0)
-                NSLog("[Yap] Rate limited (transcription), retrying in %.0fs (%d/3)", delay, attempt + 1)
+                NSLog("[Haynoi] Rate limited (transcription), retrying in %.0fs (%d/3)", delay, attempt + 1)
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 lastError = STTError.apiError(429, "Rate limited")
                 continue
@@ -126,19 +126,19 @@ enum STTProvider {
             guard let http = response as? HTTPURLResponse else { return text }
             if http.statusCode == 429 {
                 let delay = pow(2.0, Double(attempt + 1))
-                NSLog("[Yap] Rate limited (rewrite), retrying in %.0fs (%d/3)", delay, attempt + 1)
+                NSLog("[Haynoi] Rate limited (rewrite), retrying in %.0fs (%d/3)", delay, attempt + 1)
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 continue
             }
             guard http.statusCode == 200 else {
-                NSLog("[Yap] Rewrite failed (%d), using raw transcription", http.statusCode)
+                NSLog("[Haynoi] Rewrite failed (%d), using raw transcription", http.statusCode)
                 return text
             }
             rewriteData = data
             break
         }
         guard let data = rewriteData else {
-            NSLog("[Yap] Rewrite rate limited after 3 attempts, using raw transcription")
+            NSLog("[Haynoi] Rewrite rate limited after 3 attempts, using raw transcription")
             return text
         }
 

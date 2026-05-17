@@ -1,14 +1,14 @@
 #!/bin/bash
-# Quick build & run Yap
+# Quick build & run Haynoi
 set -e
 cd "$(dirname "$0")"
 
 echo "⚙️  Building..."
 xcodegen generate -q 2>/dev/null
-xcodebuild -project Yap.xcodeproj -scheme Yap -configuration Debug build 2>&1 | grep -E "error:|BUILD"
+xcodebuild -project Haynoi.xcodeproj -scheme Haynoi -configuration Debug build 2>&1 | grep -E "error:|BUILD"
 
 echo "🚀 Launching..."
-osascript -e 'tell application "Yap" to quit' 2>/dev/null || true
+osascript -e 'tell application "Haynoi" to quit' 2>/dev/null || true
 sleep 0.5
-open ~/Library/Developer/Xcode/DerivedData/Yap-*/Build/Products/Debug/Yap.app
-echo "✅ Yap is running"
+open ~/Library/Developer/Xcode/DerivedData/Haynoi-*/Build/Products/Debug/Haynoi.app
+echo "✅ Haynoi is running"

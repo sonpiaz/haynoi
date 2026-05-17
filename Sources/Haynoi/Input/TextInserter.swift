@@ -11,7 +11,7 @@ enum TextInserter {
 
     static func insert(_ text: String) async {
         let axTrusted = AXIsProcessTrusted()
-        NSLog("[Yap] Insert: AXTrusted=%d, targetApp=%@, text length=%d",
+        NSLog("[Haynoi] Insert: AXTrusted=%d, targetApp=%@, text length=%d",
               axTrusted ? 1 : 0,
               targetApp?.bundleIdentifier ?? "nil",
               text.count)
@@ -22,7 +22,7 @@ enum TextInserter {
 
         // Step 1: Restore focus to target app
         let focusOK = await restoreFocus()
-        NSLog("[Yap] Focus restored: %d", focusOK ? 1 : 0)
+        NSLog("[Haynoi] Focus restored: %d", focusOK ? 1 : 0)
 
         // Extra settle time — let target app fully process activation
         try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
@@ -33,19 +33,19 @@ enum TextInserter {
         if axTrusted {
             let pasted = await pasteViaClipboard(text)
             if pasted {
-                NSLog("[Yap] ✅ Inserted via Cmd+V")
+                NSLog("[Haynoi] ✅ Inserted via Cmd+V")
                 return
             }
         }
 
         // Step 3: AX insertion fallback (works for native macOS apps)
         if axTrusted, tryAXInsertion(text) {
-            NSLog("[Yap] ✅ Inserted via AX")
+            NSLog("[Haynoi] ✅ Inserted via AX")
             return
         }
 
         // Step 4: Fallback — just put in clipboard and notify
-        NSLog("[Yap] ⚠️ All insert methods failed, clipboard fallback")
+        NSLog("[Haynoi] ⚠️ All insert methods failed, clipboard fallback")
         copyToClipboardWithNotification(text,
             reason: axTrusted
                 ? "Auto-paste failed. Press ⌘V to paste."
@@ -71,13 +71,13 @@ enum TextInserter {
 
             if !hasModifiers {
                 if i > 0 {
-                    NSLog("[Yap] Modifiers released after %dms", i * 10)
+                    NSLog("[Haynoi] Modifiers released after %dms", i * 10)
                 }
                 return
             }
             try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
         }
-        NSLog("[Yap] ⚠️ Modifiers still held after 500ms, proceeding anyway")
+        NSLog("[Haynoi] ⚠️ Modifiers still held after 500ms, proceeding anyway")
     }
 
     // MARK: - Focus Restoration
@@ -107,7 +107,7 @@ enum TextInserter {
 
         let actual = NSWorkspace.shared.frontmostApplication
         let match = target.processIdentifier == actual?.processIdentifier
-        NSLog("[Yap] Focus: target=%@ actual=%@ match=%d",
+        NSLog("[Haynoi] Focus: target=%@ actual=%@ match=%d",
               target.bundleIdentifier ?? "?",
               actual?.bundleIdentifier ?? "?",
               match ? 1 : 0)
@@ -123,7 +123,7 @@ enum TextInserter {
         var focusedRef: CFTypeRef?
         let err = AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef)
         guard err == .success else {
-            NSLog("[Yap] AX: no focused element (error %d) in %@", err.rawValue, app.bundleIdentifier ?? "?")
+            NSLog("[Haynoi] AX: no focused element (error %d) in %@", err.rawValue, app.bundleIdentifier ?? "?")
             return false
         }
 
@@ -132,10 +132,10 @@ enum TextInserter {
         // Try 1: Set selected text
         let setResult = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, text as CFTypeRef)
         if setResult == .success {
-            NSLog("[Yap] AX: selectedText succeeded")
+            NSLog("[Haynoi] AX: selectedText succeeded")
             return true
         }
-        NSLog("[Yap] AX: selectedText failed (%d), trying value approach", setResult.rawValue)
+        NSLog("[Haynoi] AX: selectedText failed (%d), trying value approach", setResult.rawValue)
 
         // Try 2: Value + range
         var valueRef: CFTypeRef?
@@ -162,7 +162,7 @@ enum TextInserter {
             }
         }
 
-        NSLog("[Yap] AX: all methods failed for %@", app.bundleIdentifier ?? "?")
+        NSLog("[Haynoi] AX: all methods failed for %@", app.bundleIdentifier ?? "?")
         return false
     }
 
@@ -180,13 +180,13 @@ enum TextInserter {
 
         // Simulate Cmd+V
         guard let src = CGEventSource(stateID: .hidSystemState) else {
-            NSLog("[Yap] CGEventSource failed")
+            NSLog("[Haynoi] CGEventSource failed")
             return false
         }
 
         guard let down = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true),
               let up = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false) else {
-            NSLog("[Yap] CGEvent creation failed")
+            NSLog("[Haynoi] CGEvent creation failed")
             return false
         }
 
@@ -199,7 +199,7 @@ enum TextInserter {
         up.flags = .maskCommand
         up.post(tap: .cghidEventTap)
 
-        NSLog("[Yap] Cmd+V posted to .cghidEventTap")
+        NSLog("[Haynoi] Cmd+V posted to .cghidEventTap")
 
         // Don't restore old clipboard — it races with paste and causes failures.
         // User's clipboard will just have the transcribed text, which is fine.
@@ -214,7 +214,7 @@ enum TextInserter {
         pb.setString(text, forType: .string)
 
         let content = UNMutableNotificationContent()
-        content.title = "Yap"
+        content.title = "Haynoi"
         content.subtitle = reason
         content.body = String(text.prefix(100)) + (text.count > 100 ? "…" : "")
         content.sound = .default

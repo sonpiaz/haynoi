@@ -206,7 +206,7 @@ struct SettingsView: View {
         default: mgr.targetModifier = .maskCommand
         }
         mgr.start()
-        NSLog("[Yap] Hotkey changed to: %@", choice)
+        NSLog("[Haynoi] Hotkey changed to: %@", choice)
     }
 
     private func permissionRow(_ title: String, granted: Bool, action: @escaping () -> Void) -> some View {

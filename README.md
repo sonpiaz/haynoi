@@ -1,4 +1,4 @@
-<h1 align="center">Yap</h1>
+<h1 align="center">Haynoi</h1>
 
 <p align="center">
   Push-to-talk dictation for macOS. Hold a hotkey, speak, text appears.
@@ -43,7 +43,7 @@ make run
 
 ## Quick Start
 
-1. Launch Yap — the onboarding wizard guides you through permissions
+1. Launch Haynoi — the onboarding wizard guides you through permissions
 2. Go to Settings → add your [OpenAI API key](https://platform.openai.com)
 3. Hold `⌘ Command` and speak
 4. Release — text appears in the active app
@@ -58,7 +58,7 @@ make run
 
 ## Privacy
 
-Yap sends audio data **only** to OpenAI for transcription. No audio is stored or sent anywhere else. API keys and transcription history are stored locally in UserDefaults on your Mac.
+Haynoi sends audio data **only** to OpenAI for transcription. No audio is stored or sent anywhere else. API keys and transcription history are stored locally in UserDefaults on your Mac.
 
 ## Development
 
@@ -72,9 +72,9 @@ make clean       # Clean build artifacts
 ## Project Structure
 
 ```
-Sources/Yap/
+Sources/Haynoi/
 ├── App/
-│   ├── YapApp.swift              — App entry, menu bar, onboarding
+│   ├── HaynoiApp.swift              — App entry, menu bar, onboarding
 │   ├── AppState.swift            — Shared state, transcription history
 │   └── PipelineController.swift  — Hotkey → Record → Transcribe → Insert
 ├── Audio/

@@ -41,7 +41,7 @@ final class PipelineController {
             Task { @MainActor in self?.cancelRecording() }
         }
         hotkey.start()
-        NSLog("[Yap] Pipeline ready. AX=%d InputMon=%d",
+        NSLog("[Haynoi] Pipeline ready. AX=%d InputMon=%d",
               AXIsProcessTrusted() ? 1 : 0,
               CGPreflightListenEventAccess() ? 1 : 0)
     }
@@ -54,7 +54,7 @@ final class PipelineController {
     func preRecording() {
         guard !state.isRecording, !isPreRecording else { return }
 
-        // Capture target app NOW — before any Yap UI appears or steals focus
+        // Capture target app NOW — before any Haynoi UI appears or steals focus
         TextInserter.targetApp = NSWorkspace.shared.frontmostApplication
 
         do {
@@ -117,7 +117,7 @@ final class PipelineController {
 
         // Too short — cancel
         if duration < minimumDuration {
-            NSLog("[Yap] Recording too short (%.2fs), cancelled", duration)
+            NSLog("[Haynoi] Recording too short (%.2fs), cancelled", duration)
             return
         }
 
@@ -129,9 +129,9 @@ final class PipelineController {
 
         // Silence detection — skip if audio is too quiet (no speech)
         let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
-        NSLog("[Yap] Audio RMS: %.5f", rms)
+        NSLog("[Haynoi] Audio RMS: %.5f", rms)
         guard rms > 0.005 else {
-            NSLog("[Yap] Too quiet, skipping transcription")
+            NSLog("[Haynoi] Too quiet, skipping transcription")
             return
         }
 
@@ -139,7 +139,7 @@ final class PipelineController {
             SoundFeedback.shared.playStopTone()
         }
 
-        NSLog("[Yap] Transcribing %d samples (%.1fs)", samples.count, Float(samples.count) / 16000)
+        NSLog("[Haynoi] Transcribing %d samples (%.1fs)", samples.count, Float(samples.count) / 16000)
         state.isTranscribing = true
 
         Task {
@@ -151,7 +151,7 @@ final class PipelineController {
                 }
                 // Apply snippets
                 let finalText = SnippetManager.applySnippets(to: text)
-                NSLog("[Yap] Transcribed: %@", finalText)
+                NSLog("[Haynoi] Transcribed: %@", finalText)
                 state.isTranscribing = false
                 state.addTranscription(finalText)
                 await TextInserter.insert(finalText)
@@ -161,7 +161,7 @@ final class PipelineController {
             } catch {
                 state.isTranscribing = false
                 state.error = error.localizedDescription
-                NSLog("[Yap] Transcription error: %@", error.localizedDescription)
+                NSLog("[Haynoi] Transcription error: %@", error.localizedDescription)
             }
         }
     }

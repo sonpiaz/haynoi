@@ -39,7 +39,7 @@ final class HotkeyManager {
         stop()
 
         guard CGPreflightListenEventAccess() else {
-            NSLog("[Yap] Input Monitoring permission not granted")
+            NSLog("[Haynoi] Input Monitoring permission not granted")
             return
         }
 
@@ -52,7 +52,7 @@ final class HotkeyManager {
             let mgr = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
 
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                NSLog("[Yap] CGEventTap disabled, re-enabling")
+                NSLog("[Haynoi] CGEventTap disabled, re-enabling")
                 if let tap = mgr.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
                 return Unmanaged.passUnretained(event)
             }
@@ -76,7 +76,7 @@ final class HotkeyManager {
             callback: callback,
             userInfo: refcon
         ) else {
-            NSLog("[Yap] Failed to create CGEventTap")
+            NSLog("[Haynoi] Failed to create CGEventTap")
             return
         }
 
@@ -86,14 +86,14 @@ final class HotkeyManager {
             CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
         }
         CGEvent.tapEnable(tap: tap, enable: true)
-        NSLog("[Yap] CGEventTap started (listenOnly, modifier 0x%llx, delay %.0fms)",
+        NSLog("[Haynoi] CGEventTap started (listenOnly, modifier 0x%llx, delay %.0fms)",
               targetModifier.rawValue, activationDelay * 1000)
 
         DispatchQueue.main.async {
             self.tapCheckTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
                 guard let self, let tap = self.eventTap else { return }
                 if !CGEvent.tapIsEnabled(tap: tap) {
-                    NSLog("[Yap] Re-enabling disabled tap")
+                    NSLog("[Haynoi] Re-enabling disabled tap")
                     CGEvent.tapEnable(tap: tap, enable: true)
                 }
             }
@@ -146,7 +146,7 @@ final class HotkeyManager {
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.isModifierDown else { return }
                 self.isActivated = true
-                NSLog("[Yap] ACTIVATED — held past grace period")
+                NSLog("[Haynoi] ACTIVATED — held past grace period")
                 self.onKeyDown?()
             }
             activationWorkItem = work
@@ -160,7 +160,7 @@ final class HotkeyManager {
 
             if isActivated {
                 isActivated = false
-                NSLog("[Yap] RELEASED")
+                NSLog("[Haynoi] RELEASED")
                 DispatchQueue.main.async { self.onKeyUp?() }
             } else {
                 // Released before grace period — was just a tap/shortcut

@@ -11,9 +11,9 @@ struct OnboardingView: View {
     var onComplete: () -> Void
 
     private let steps: [(title: String, subtitle: String, icon: String)] = [
-        ("Microphone", "Yap needs your mic to hear your voice and convert speech to text.", "mic.fill"),
-        ("Accessibility", "Yap needs Accessibility to type text directly into any app you're using.", "hand.raised.fill"),
-        ("Input Monitoring", "Yap needs Input Monitoring to detect when you hold the ⌘ key.", "keyboard.fill"),
+        ("Microphone", "Haynoi needs your mic to hear your voice and convert speech to text.", "mic.fill"),
+        ("Accessibility", "Haynoi needs Accessibility to type text directly into any app you're using.", "hand.raised.fill"),
+        ("Input Monitoring", "Haynoi needs Input Monitoring to detect when you hold the ⌘ key.", "keyboard.fill"),
     ]
 
     var body: some View {
@@ -26,10 +26,10 @@ struct OnboardingView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
 
-                Text("Welcome to Yap")
+                Text("Welcome to Haynoi")
                     .font(.system(size: 24, weight: .bold))
 
-                Text("Let's set up a few things so Yap can work its magic.")
+                Text("Let's set up a few things so Haynoi can work its magic.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -115,7 +115,7 @@ struct OnboardingView: View {
                 .padding(.top, 4)
 
                 if index > 0 {
-                    Text("Yap will detect automatically when you grant it")
+                    Text("Haynoi will detect automatically when you grant it")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

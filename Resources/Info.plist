@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Yap</string>
+    <string>Haynoi</string>
     <key>CFBundleDisplayName</key>
-    <string>Yap</string>
+    <string>Haynoi</string>
     <key>CFBundleIdentifier</key>
-    <string>com.sonpiaz.yap</string>
+    <string>com.sonpiaz.haynoi</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
@@ -15,12 +15,12 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>Yap</string>
+    <string>Haynoi</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
     <false/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Yap needs microphone access to transcribe your speech.</string>
+    <string>Haynoi needs microphone access to transcribe your speech.</string>
 </dict>
 </plist>

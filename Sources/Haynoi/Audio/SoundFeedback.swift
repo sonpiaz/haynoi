@@ -27,7 +27,7 @@ final class SoundFeedback {
         guard let url = Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: themePath)
            ?? Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds/deep")
         else {
-            NSLog("[Yap] Sound not found: %@/%@.wav", currentTheme, name)
+            NSLog("[Haynoi] Sound not found: %@/%@.wav", currentTheme, name)
             return
         }
 
@@ -36,7 +36,7 @@ final class SoundFeedback {
             player?.volume = 0.5
             player?.play()
         } catch {
-            NSLog("[Yap] Sound error: %@", error.localizedDescription)
+            NSLog("[Haynoi] Sound error: %@", error.localizedDescription)
         }
     }
 }
