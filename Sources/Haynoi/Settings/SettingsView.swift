@@ -16,8 +16,9 @@ struct SettingsView: View {
     @State private var newWord = ""
     @State private var snippetTrigger = ""
     @State private var snippetExpansion = ""
-    @State private var deviceCodeMessage = ""
     @State private var signedInEmail = KymaAuth.currentUserEmail
+    @State private var signInError = ""
+    @State private var isSigningIn = false
 
     var body: some View {
         Form {
@@ -50,13 +51,16 @@ struct SettingsView: View {
                     .buttonStyle(.bordered).controlSize(.small)
                 }
             } else {
-                Button("Sign in") { startDeviceFlow() }
-                    .buttonStyle(.borderedProminent)
-                if !deviceCodeMessage.isEmpty {
-                    Text(deviceCodeMessage)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                HStack(spacing: 8) {
+                    Button(isSigningIn ? "Signing in…" : "Sign in") { signIn() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isSigningIn)
+                    if isSigningIn {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                if !signInError.isEmpty {
+                    Text(signInError).font(.caption).foregroundStyle(.red)
                 }
                 Text("Sign in to start dictating. Pay-as-you-go credits, no subscription.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -267,29 +271,18 @@ struct SettingsView: View {
         inputMonitoring = CGPreflightListenEventAccess()
     }
 
-    private func startDeviceFlow() {
-        deviceCodeMessage = "Requesting code…"
-        Task {
+    private func signIn() {
+        signInError = ""
+        isSigningIn = true
+        Task { @MainActor in
+            defer { isSigningIn = false }
             do {
-                let resp = try await KymaAuth.startDeviceFlow()
-                let msg = "Code: \(resp.user_code)\nOpen \(resp.verification_url) in browser to approve"
-                await MainActor.run {
-                    deviceCodeMessage = msg
-                    NSWorkspace.shared.open(URL(string: resp.verification_url)!)
-                }
-                let token = try await KymaAuth.pollForApproval(
-                    deviceCode: resp.device_code,
-                    interval: resp.interval,
-                    expiresIn: resp.expires_in
-                )
-                await MainActor.run {
-                    signedInEmail = token.email
-                    deviceCodeMessage = ""
-                }
+                let token = try await KymaAuth.shared.signIn()
+                signedInEmail = token.email
+            } catch KymaAuth.AuthError.cancelled {
+                // user closed the auth window — no error to show
             } catch {
-                await MainActor.run {
-                    deviceCodeMessage = "Sign-in failed: \(error.localizedDescription)"
-                }
+                signInError = error.localizedDescription
             }
         }
     }

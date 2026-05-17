@@ -22,6 +22,17 @@
     <false/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Haynoi needs microphone access to transcribe your speech.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.sonpiaz.haynoi.oauth</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>haynoi</string>
+            </array>
+        </dict>
+    </array>
     <key>SUFeedURL</key>
     <string>https://raw.githubusercontent.com/sonpiaz/haynoi/main/appcast.xml</string>
     <key>SUPublicEDKey</key>
