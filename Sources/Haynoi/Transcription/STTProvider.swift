@@ -3,101 +3,52 @@ import Foundation
 
 // MARK: - STT Provider
 //
-// Two paths:
-//   1. Hosted (default) — Bearer kyma-xxx → kymaapi.com/v1/audio/transcriptions
-//                         Default model: whisper-v3-turbo (Groq Whisper, $0.04/hr)
-//   2. BYOK — Bearer sk-xxx → api.openai.com/v1/audio/transcriptions
-//             Default model: gpt-4o-mini-transcribe-2025-12-15 ($0.36/hr)
+// All transcription routed through Kyma. Two quality tiers picked by user:
+//   "fast"    → whisper-v3-turbo (default, cheap)
+//   "quality" → gpt-4o-mini-transcribe-2025-12-15 (premium accuracy)
 //
-// Mode toggled via UserDefaults key "transcriptionMode" ("hosted" | "byok").
-// Default: "hosted" if KymaAuth.isSignedIn, else "byok".
+// User must be signed in via KymaAuth (device code flow).
+// No BYOK — single hosted backend, single sign-in.
 
 enum STTProvider {
     static func transcribe(_ samples: [Float]) async throws -> String {
+        guard let apiKey = KymaAuth.currentApiKey else {
+            throw STTError.notSignedIn
+        }
+
         let mode = TranscriptionMode.current.resolved
         let wavData = try createWAV(samples: samples, sampleRate: 16000)
         let prompt = CustomDictionary.promptFragment + mode.sttPrompt
+        let model = resolveModel()
 
-        let useHosted = resolveUseHosted()
-        var text: String
+        var text = try await callKymaTranscribe(
+            apiKey: apiKey, wavData: wavData, model: model, prompt: prompt
+        )
 
-        if useHosted {
-            guard let kymaKey = KymaAuth.currentApiKey else {
-                throw STTError.notSignedIn
-            }
-            text = try await callKyma(apiKey: kymaKey, wavData: wavData, prompt: prompt)
-
-            if mode.needsRewrite, !text.isEmpty {
-                text = try await rewriteWithKyma(apiKey: kymaKey, text: text, systemPrompt: mode.rewritePrompt)
-            }
-        } else {
-            let openaiKey = UserDefaults.standard.string(forKey: "openaiApiKey") ?? ""
-            guard !openaiKey.isEmpty else {
-                throw STTError.noApiKey
-            }
-            text = try await callOpenAI(apiKey: openaiKey, wavData: wavData, prompt: prompt)
-
-            if mode.needsRewrite, !text.isEmpty {
-                text = try await rewriteWithOpenAI(apiKey: openaiKey, text: text, systemPrompt: mode.rewritePrompt)
-            }
+        if mode.needsRewrite, !text.isEmpty {
+            text = try await rewriteWithKyma(
+                apiKey: apiKey, text: text, systemPrompt: mode.rewritePrompt
+            )
         }
-
         return text
     }
 
-    /// "hosted" if user explicitly chose hosted OR (no explicit choice + signed in to Kyma).
-    /// "byok" otherwise.
-    private static func resolveUseHosted() -> Bool {
-        let saved = UserDefaults.standard.string(forKey: "sttBackend")
-        switch saved {
-        case "hosted": return true
-        case "byok": return false
-        default: return KymaAuth.isSignedIn  // first-launch default
-        }
+    /// Resolves Kyma model alias from user's quality setting.
+    private static func resolveModel() -> String {
+        let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "fast"
+        return quality == "quality" ? "transcribe-quality" : "transcribe"
     }
 
-    // MARK: - Kyma API (Hosted)
+    // MARK: - Kyma API calls
 
-    private static func callKyma(apiKey: String, wavData: Data, prompt: String) async throws -> String {
-        let model = "whisper-v3-turbo"  // Groq Whisper via Kyma, cheap + fast
-        let url = URL(string: "https://kymaapi.com/v1/audio/transcriptions")!
-        return try await callTranscriptionAPI(
-            url: url, apiKey: apiKey, model: model, wavData: wavData, prompt: prompt
-        )
-    }
+    private static let kymaBaseURL = "https://kymaapi.com"
 
-    private static func rewriteWithKyma(apiKey: String, text: String, systemPrompt: String) async throws -> String {
-        let url = URL(string: "https://kymaapi.com/v1/chat/completions")!
-        return try await callChatAPI(
-            url: url, apiKey: apiKey, model: "gpt-4o-mini",
-            systemPrompt: systemPrompt, userText: text
-        )
-    }
-
-    // MARK: - OpenAI API (BYOK)
-
-    private static func callOpenAI(apiKey: String, wavData: Data, prompt: String) async throws -> String {
-        let model = "gpt-4o-mini-transcribe-2025-12-15"
-        let url = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
-        return try await callTranscriptionAPI(
-            url: url, apiKey: apiKey, model: model, wavData: wavData, prompt: prompt
-        )
-    }
-
-    private static func rewriteWithOpenAI(apiKey: String, text: String, systemPrompt: String) async throws -> String {
-        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-        return try await callChatAPI(
-            url: url, apiKey: apiKey, model: "gpt-4o-mini",
-            systemPrompt: systemPrompt, userText: text
-        )
-    }
-
-    // MARK: - Shared multipart transcription call (OpenAI-compatible)
-
-    private static func callTranscriptionAPI(
-        url: URL, apiKey: String, model: String, wavData: Data, prompt: String
+    private static func callKymaTranscribe(
+        apiKey: String, wavData: Data, model: String, prompt: String
     ) async throws -> String {
         let boundary = UUID().uuidString
+        let url = URL(string: "\(kymaBaseURL)/v1/audio/transcriptions")!
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
@@ -132,6 +83,9 @@ enum STTProvider {
             guard let http = response as? HTTPURLResponse else {
                 throw STTError.networkError
             }
+            if http.statusCode == 401 {
+                throw STTError.notSignedIn
+            }
             if http.statusCode == 429 {
                 let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
                     .flatMap(Double.init) ?? pow(2.0, Double(attempt + 1))
@@ -154,11 +108,10 @@ enum STTProvider {
         throw lastError
     }
 
-    // MARK: - Shared chat completion call (OpenAI-compatible)
-
-    private static func callChatAPI(
-        url: URL, apiKey: String, model: String, systemPrompt: String, userText: String
+    private static func rewriteWithKyma(
+        apiKey: String, text: String, systemPrompt: String
     ) async throws -> String {
+        let url = URL(string: "\(kymaBaseURL)/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 15
@@ -166,12 +119,12 @@ enum STTProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
-            "model": model,
+            "model": "gpt-4o-mini",
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
                 ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": userText],
+                ["role": "user", "content": text],
             ],
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -179,7 +132,7 @@ enum STTProvider {
         var rewriteData: Data?
         for attempt in 0..<3 {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return userText }
+            guard let http = response as? HTTPURLResponse else { return text }
             if http.statusCode == 429 {
                 let delay = pow(2.0, Double(attempt + 1))
                 NSLog("[Haynoi] Rate limited (rewrite), retrying in %.0fs (%d/3)", delay, attempt + 1)
@@ -188,21 +141,18 @@ enum STTProvider {
             }
             guard http.statusCode == 200 else {
                 NSLog("[Haynoi] Rewrite failed (%d), using raw transcription", http.statusCode)
-                return userText
+                return text
             }
             rewriteData = data
             break
         }
-        guard let data = rewriteData else {
-            NSLog("[Haynoi] Rewrite rate limited after 3 attempts, using raw transcription")
-            return userText
-        }
+        guard let data = rewriteData else { return text }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String else {
-            return userText
+            return text
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -255,7 +205,6 @@ private extension Data {
 // MARK: - Errors
 
 enum STTError: LocalizedError {
-    case noApiKey
     case notSignedIn
     case networkError
     case apiError(Int, String)
@@ -263,8 +212,7 @@ enum STTError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noApiKey: return "No OpenAI API key — add in Settings (⌘,) or sign in to Kyma"
-        case .notSignedIn: return "Not signed in — Settings (⌘,) → Sign in to Kyma"
+        case .notSignedIn: return "Not signed in — Settings (⌘,) → Sign in"
         case .networkError: return "Network error"
         case .apiError(let code, let msg): return "API error \(code): \(msg)"
         case .parseError: return "Failed to parse response"

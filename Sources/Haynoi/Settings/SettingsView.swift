@@ -3,9 +3,8 @@ import AVFoundation
 import ApplicationServices
 
 struct SettingsView: View {
-    @AppStorage("openaiApiKey") private var apiKey = ""
     @AppStorage("transcriptionMode") private var modeRaw = TranscriptionMode.normal.rawValue
-    @AppStorage("sttBackend") private var sttBackend = ""  // "" = auto (hosted if signed in)
+    @AppStorage("sttQuality") private var sttQuality = "fast"  // "fast" | "quality"
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "deep"
     @AppStorage("muteMusic") private var muteMusic = false
@@ -23,7 +22,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             accountSection
-            apiSection
+            qualitySection
             modeSection
             hotkeySection
             dictionarySection
@@ -39,58 +38,46 @@ struct SettingsView: View {
 
     private var accountSection: some View {
         Section("Account") {
-            Picker("Backend", selection: $sttBackend) {
-                Text("Hosted (Kyma — recommended)").tag("hosted")
-                Text("Bring your own OpenAI key").tag("byok")
+            if let email = signedInEmail {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text("Signed in as \(email)").font(.callout)
+                    Spacer()
+                    Button("Sign out") {
+                        KymaAuth.signOut()
+                        signedInEmail = nil
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
+                }
+            } else {
+                Button("Sign in") { startDeviceFlow() }
+                    .buttonStyle(.borderedProminent)
+                if !deviceCodeMessage.isEmpty {
+                    Text(deviceCodeMessage)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                Text("Sign in to start dictating. Pay-as-you-go credits, no subscription.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var qualitySection: some View {
+        Section("Transcription Quality") {
+            Picker("Quality", selection: $sttQuality) {
+                Text("Fast").tag("fast")
+                Text("Quality").tag("quality")
             }
             .pickerStyle(.segmented)
+            .disabled(signedInEmail == nil)
 
-            if effectiveBackend == "hosted" {
-                if let email = signedInEmail {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text("Signed in as \(email)").font(.caption)
-                        Spacer()
-                        Button("Sign out") {
-                            KymaAuth.signOut()
-                            signedInEmail = nil
-                        }
-                        .buttonStyle(.bordered).controlSize(.small)
-                    }
-                } else {
-                    Button("Sign in to Kyma") { startDeviceFlow() }
-                        .buttonStyle(.borderedProminent)
-                    if !deviceCodeMessage.isEmpty {
-                        Text(deviceCodeMessage)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    Text("Sign in with email — uses Kyma's whisper-v3-turbo, billed via credits")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            Text(sttQuality == "quality"
+                ? "Higher accuracy for tricky audio. Costs more credits per minute."
+                : "Fast and cheap — great for everyday dictation.")
+                .font(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    private var apiSection: some View {
-        if effectiveBackend == "byok" {
-            return AnyView(
-                Section("OpenAI API Key") {
-                    SecureField("sk-...", text: $apiKey)
-                        .textFieldStyle(.roundedBorder)
-                    Text("Uses gpt-4o-mini-transcribe-2025-12-15 — best for Vietnamese + English")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            )
-        }
-        return AnyView(EmptyView())
-    }
-
-    /// Resolves the actual backend in use. Empty saved choice → defaults to hosted if signed in, else byok.
-    private var effectiveBackend: String {
-        if !sttBackend.isEmpty { return sttBackend }
-        return KymaAuth.isSignedIn ? "hosted" : "byok"
     }
 
     private var modeSection: some View {
@@ -298,7 +285,6 @@ struct SettingsView: View {
                 await MainActor.run {
                     signedInEmail = token.email
                     deviceCodeMessage = ""
-                    sttBackend = "hosted"
                 }
             } catch {
                 await MainActor.run {
