@@ -5,6 +5,7 @@ import ApplicationServices
 struct SettingsView: View {
     @AppStorage("openaiApiKey") private var apiKey = ""
     @AppStorage("transcriptionMode") private var modeRaw = TranscriptionMode.normal.rawValue
+    @AppStorage("sttBackend") private var sttBackend = ""  // "" = auto (hosted if signed in)
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "deep"
     @AppStorage("muteMusic") private var muteMusic = false
@@ -16,9 +17,12 @@ struct SettingsView: View {
     @State private var newWord = ""
     @State private var snippetTrigger = ""
     @State private var snippetExpansion = ""
+    @State private var deviceCodeMessage = ""
+    @State private var signedInEmail = KymaAuth.currentUserEmail
 
     var body: some View {
         Form {
+            accountSection
             apiSection
             modeSection
             hotkeySection
@@ -33,13 +37,60 @@ struct SettingsView: View {
 
     // MARK: - Sections
 
-    private var apiSection: some View {
-        Section("OpenAI API Key") {
-            SecureField("sk-...", text: $apiKey)
-                .textFieldStyle(.roundedBorder)
-            Text("Uses gpt-4o-transcribe — best for Vietnamese + English")
-                .font(.caption).foregroundStyle(.secondary)
+    private var accountSection: some View {
+        Section("Account") {
+            Picker("Backend", selection: $sttBackend) {
+                Text("Hosted (Kyma — recommended)").tag("hosted")
+                Text("Bring your own OpenAI key").tag("byok")
+            }
+            .pickerStyle(.segmented)
+
+            if effectiveBackend == "hosted" {
+                if let email = signedInEmail {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text("Signed in as \(email)").font(.caption)
+                        Spacer()
+                        Button("Sign out") {
+                            KymaAuth.signOut()
+                            signedInEmail = nil
+                        }
+                        .buttonStyle(.bordered).controlSize(.small)
+                    }
+                } else {
+                    Button("Sign in to Kyma") { startDeviceFlow() }
+                        .buttonStyle(.borderedProminent)
+                    if !deviceCodeMessage.isEmpty {
+                        Text(deviceCodeMessage)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                    Text("Sign in with email — uses Kyma's whisper-v3-turbo, billed via credits")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
+    }
+
+    private var apiSection: some View {
+        if effectiveBackend == "byok" {
+            return AnyView(
+                Section("OpenAI API Key") {
+                    SecureField("sk-...", text: $apiKey)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Uses gpt-4o-mini-transcribe-2025-12-15 — best for Vietnamese + English")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            )
+        }
+        return AnyView(EmptyView())
+    }
+
+    /// Resolves the actual backend in use. Empty saved choice → defaults to hosted if signed in, else byok.
+    private var effectiveBackend: String {
+        if !sttBackend.isEmpty { return sttBackend }
+        return KymaAuth.isSignedIn ? "hosted" : "byok"
     }
 
     private var modeSection: some View {
@@ -227,6 +278,34 @@ struct SettingsView: View {
         micPermission = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         axPermission = AXIsProcessTrusted()
         inputMonitoring = CGPreflightListenEventAccess()
+    }
+
+    private func startDeviceFlow() {
+        deviceCodeMessage = "Requesting code…"
+        Task {
+            do {
+                let resp = try await KymaAuth.startDeviceFlow()
+                let msg = "Code: \(resp.user_code)\nOpen \(resp.verification_url) in browser to approve"
+                await MainActor.run {
+                    deviceCodeMessage = msg
+                    NSWorkspace.shared.open(URL(string: resp.verification_url)!)
+                }
+                let token = try await KymaAuth.pollForApproval(
+                    deviceCode: resp.device_code,
+                    interval: resp.interval,
+                    expiresIn: resp.expires_in
+                )
+                await MainActor.run {
+                    signedInEmail = token.email
+                    deviceCodeMessage = ""
+                    sttBackend = "hosted"
+                }
+            } catch {
+                await MainActor.run {
+                    deviceCodeMessage = "Sign-in failed: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 }
 
