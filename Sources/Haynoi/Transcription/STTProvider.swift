@@ -41,7 +41,9 @@ enum STTProvider {
 
     // MARK: - Kyma API calls
 
-    private static let kymaBaseURL = "https://kymaapi.com"
+    // Data-plane goes straight to the API edge (skips the website proxy hop).
+    // Auth stays on kymaapi.com (browser flow) — see KymaAuth.baseURL.
+    private static let kymaBaseURL = "https://api.kymaapi.com"
 
     private static func callKymaTranscribe(
         apiKey: String, wavData: Data, model: String, prompt: String
@@ -119,7 +121,7 @@ enum STTProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
-            "model": "gpt-4o-mini",
+            "model": "fast",
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
