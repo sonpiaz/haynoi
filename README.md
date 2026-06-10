@@ -5,6 +5,10 @@
 </p>
 
 <p align="center">
+  Powered by <a href="https://kymaapi.com">Kyma API</a> — one key, every model. Free credit on signup.
+</p>
+
+<p align="center">
   <a href="https://github.com/sonpiaz/haynoi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sonpiaz/haynoi" alt="License" /></a>
   <a href="https://github.com/sonpiaz/haynoi/stargazers"><img src="https://img.shields.io/github/stars/sonpiaz/haynoi" alt="Stars" /></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14+" />
@@ -44,21 +48,21 @@ make run
 ## Quick Start
 
 1. Launch Haynoi — the onboarding wizard guides you through permissions
-2. Go to Settings → add your [OpenAI API key](https://platform.openai.com)
+2. Sign in with your [Kyma](https://kymaapi.com) account from Settings (⌘,) — free credit on signup, no key to paste
 3. Hold `⌘ Command` and speak
 4. Release — text appears in the active app
 
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- OpenAI API key (uses `gpt-4o-transcribe`)
+- A [Kyma](https://kymaapi.com) account (free credit on signup)
 - Microphone permission
 - Accessibility permission (for text insertion)
 - Input Monitoring permission (for hotkey detection)
 
 ## Privacy
 
-Haynoi sends audio data **only** to OpenAI for transcription. No audio is stored or sent anywhere else. API keys and transcription history are stored locally in UserDefaults on your Mac.
+Haynoi sends audio data **only** to [Kyma API](https://kymaapi.com) for transcription. No audio is stored or sent anywhere else. Your Kyma credential lives in the macOS Keychain; transcription history is stored locally on your Mac.
 
 ## Development
 
@@ -84,7 +88,7 @@ Sources/Haynoi/
 │   ├── HotkeyManager.swift       — Global hotkey via CGEventTap
 │   └── TextInserter.swift        — AX API + clipboard text insertion
 ├── Transcription/
-│   ├── STTProvider.swift         — OpenAI gpt-4o-transcribe API
+│   ├── STTProvider.swift         — Kyma transcription (fast / quality tiers)
 │   └── TranscriptionMode.swift   — Normal / Clean / Email / Auto modes
 ├── Settings/
 │   └── SettingsView.swift        — API key, hotkey, dictionary, permissions
@@ -103,7 +107,7 @@ Sources/Haynoi/
 | [Swift 5.9](https://swift.org/) | Language |
 | SwiftUI | UI framework |
 | AVFoundation | Audio capture & sound synthesis |
-| OpenAI API | `gpt-4o-transcribe` (STT), `gpt-4o-mini` (rewrite) |
+| [Kyma API](https://kymaapi.com) | `whisper-v3-turbo` / `gpt-4o-mini-transcribe` (STT), `gemini-2.5-flash` (rewrite) |
 | Accessibility API | Direct text insertion |
 | CGEventTap | Global hotkey detection |
 | [XcodeGen](https://github.com/yonaskolb/XcodeGen) | Project generation |
