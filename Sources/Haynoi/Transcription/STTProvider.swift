@@ -121,7 +121,9 @@ enum STTProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
-            "model": "fast",
+            // Benchmarked 2026-06-10: gemini-2.5-flash 1.7s clean output;
+            // qwen-3-32b (alias "fast") leaks <think> tags and takes 8s.
+            "model": "gemini-2.5-flash",
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
