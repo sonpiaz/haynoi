@@ -31,3 +31,4 @@ Models/
 .env
 .pi/
 PLAN.md
+.wrangler/
