@@ -33,6 +33,10 @@ enum UsageTracker {
     // F2 migration flag — set after the one-time history scan completes
     private static let migrationDoneKey = "insightsMigrationDone"
 
+    // Serial queue that serialises all load→modify→save cycles on insights.json,
+    // preventing a race when two rapid completions interleave their reads/writes.
+    private static let insightsQueue = DispatchQueue(label: "haynoi.usagetracker.insights")
+
     // MARK: - Record
 
     static func recordTranscription(wordCount: Int = 0, durationSeconds: Double = 0,
@@ -134,40 +138,49 @@ enum UsageTracker {
         return decoded
     }
 
-    /// Persist insights to disk on a background queue (atomic write).
+    /// Persist insights to disk via insightsQueue (atomic write).
+    /// Use only from call sites that are NOT already running on insightsQueue
+    /// (e.g. runMigrationIfNeeded). updateInsights inlines its own write.
     private static func saveInsights(_ data: InsightsData) {
         let url = insightsFileURL
-        DispatchQueue.global(qos: .utility).async {
+        insightsQueue.async {
             guard let encoded = try? JSONEncoder().encode(data) else { return }
             try? encoded.write(to: url, options: .atomic)
         }
     }
 
     /// Increment daily aggregate and per-app counter after a new dictation.
+    /// The entire load→modify→save cycle runs synchronously on insightsQueue so
+    /// two rapid completions cannot interleave their reads and lose a write.
     private static func updateInsights(wordCount: Int, appBundleId: String?, appName: String?) {
-        var data = loadInsights()
-        let today = dayString(Date())
+        insightsQueue.async {
+            var data = loadInsights()
+            let today = dayString(Date())
 
-        // Daily aggregate
-        data.dailyWords[today, default: 0] += wordCount
-        // Prune to ~370 most-recent day-keys (D20)
-        if data.dailyWords.count > 370 {
-            let sorted = data.dailyWords.keys.sorted()
-            let toRemove = sorted.prefix(data.dailyWords.count - 370)
-            toRemove.forEach { data.dailyWords.removeValue(forKey: $0) }
+            // Daily aggregate
+            data.dailyWords[today, default: 0] += wordCount
+            // Prune to ~370 most-recent day-keys (D20)
+            if data.dailyWords.count > 370 {
+                let sorted = data.dailyWords.keys.sorted()
+                let toRemove = sorted.prefix(data.dailyWords.count - 370)
+                toRemove.forEach { data.dailyWords.removeValue(forKey: $0) }
+            }
+
+            // Per-app cumulative counter — only when we have a bundle id (D18)
+            if let bundleId = appBundleId {
+                let name = appName ?? bundleId
+                var entry = data.appWords[bundleId]
+                    ?? InsightsData.AppWordTotal(displayName: name, words: 0)
+                entry.displayName = name  // latest localized name wins (D28)
+                entry.words += wordCount
+                data.appWords[bundleId] = entry
+            }
+
+            // Write atomically on the same queue — no context switch needed.
+            let url = insightsFileURL
+            guard let encoded = try? JSONEncoder().encode(data) else { return }
+            try? encoded.write(to: url, options: .atomic)
         }
-
-        // Per-app cumulative counter — only when we have a bundle id (D18)
-        if let bundleId = appBundleId {
-            let name = appName ?? bundleId
-            var entry = data.appWords[bundleId]
-                ?? InsightsData.AppWordTotal(displayName: name, words: 0)
-            entry.displayName = name  // latest localized name wins (D28)
-            entry.words += wordCount
-            data.appWords[bundleId] = entry
-        }
-
-        saveInsights(data)
     }
 
     // MARK: - One-time migration (F2 / D13)

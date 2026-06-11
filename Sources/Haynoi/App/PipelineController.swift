@@ -457,15 +457,25 @@ final class PipelineController {
                 // so the Retry button disappears and a second retry cannot replay
                 // the same recording.
                 FailedDictationStore.deleteNewest()
+                // Capture attribution from retry target app (mirrors primary path).
+                let retryBundleId = retryTargetApp?.bundleIdentifier
+                let retryAppName = retryTargetApp?.localizedName
                 await MainActor.run {
                     state.isTranscribing = false
-                    state.addTranscription(finalText)
+                    state.addTranscription(finalText,
+                                           appBundleId: retryBundleId,
+                                           appName: retryAppName)
                     state.hasFailedDictation = FailedDictationStore.hasAny
                 }
                 await TextInserter.insert(finalText, targetApp: retryTargetApp)
                 let wordCount = finalText.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
-                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
+                let totalBefore = UsageTracker.totalWords
+                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur,
+                                                 appBundleId: retryBundleId,
+                                                 appName: retryAppName)
+                let totalAfter = UsageTracker.totalWords
+                MilestoneTracker.markUnseenIfNeeded(previousTotal: totalBefore, newTotal: totalAfter)
             } catch {
                 await MainActor.run {
                     state.isTranscribing = false

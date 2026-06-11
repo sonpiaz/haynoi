@@ -163,22 +163,22 @@ struct InsightsView: View {
     private var appBreakdownSection: some View {
         let total = UsageTracker.totalWords
         let appMap = insights.appWords
-        let topApps = appMap.values
-            .sorted { $0.words > $1.words }
-            .prefix(5)
+        // Sort map entries (key = bundleId) by words descending, take top 5.
+        // Keyed by bundleId so two apps sharing a display name never collide.
+        let topEntries = appMap.sorted { $0.value.words > $1.value.words }.prefix(5)
         let attributedSum = appMap.values.reduce(0) { $0 + $1.words }
         let remainder = max(0, total - attributedSum)
 
         return VStack(alignment: .leading, spacing: R.r3) {
             sectionLabel("Where your words go")
-            if topApps.isEmpty && remainder == 0 {
+            if topEntries.isEmpty && remainder == 0 {
                 Text("Per-app breakdown will appear after new dictations.")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.mercuryLabel4(for: scheme))
             } else {
                 VStack(spacing: 6) {
-                    ForEach(Array(topApps), id: \.displayName) { app in
-                        AppWordRow(bundleId: bundleIdFor(app: app, in: appMap),
+                    ForEach(topEntries, id: \.key) { bundleId, app in
+                        AppWordRow(bundleId: bundleId,
                                    displayName: app.displayName,
                                    words: app.words,
                                    totalWords: total,
@@ -334,11 +334,6 @@ struct InsightsView: View {
         return fmt.string(from: NSNumber(value: count)) ?? "\(count)"
     }
 
-    // Look up the bundle id key for a given AppWordTotal value
-    private func bundleIdFor(app: UsageTracker.InsightsData.AppWordTotal,
-                             in map: [String: UsageTracker.InsightsData.AppWordTotal]) -> String? {
-        map.first(where: { $0.value.displayName == app.displayName })?.key
-    }
 }
 
 // MARK: - HeatmapGrid (F2.4d / D20 / D30)
@@ -356,7 +351,8 @@ private struct HeatmapGrid: View {
 
     // Build a 16-week Monday-first grid. Returns array of 112 cells (col 0 = oldest week).
     private var gridCells: [[HeatmapCell]] {
-        let cal = Calendar(identifier: .gregorian)
+        var cal = Calendar(identifier: .gregorian)
+        cal.firstWeekday = 2 // Monday — locale-independent; prevents week-number drift
         let today = Date()
 
         // Find the Monday of the current week
