@@ -435,40 +435,53 @@ private struct PermissionsTab: View {
     @State private var axPermission = false
     @State private var inputMonitoring = false
 
+    // Fix sheet state (D8 / D26) — replaces the old prompting calls
+    @State private var showAxFixSheet = false
+    @State private var showImFixSheet = false
+
     var body: some View {
         Form {
             Section("Status") {
+                // Microphone: keeps the standard system prompt (unchanged per SPEC F1.8)
                 permissionRow(
                     "Microphone",
+                    icon: "mic.fill",
                     description: "Required to record your voice.",
-                    granted: micPermission,
-                    prefsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+                    granted: micPermission
                 ) {
                     AVCaptureDevice.requestAccess(for: .audio) { _ in
                         DispatchQueue.main.async { refreshPermissions() }
                     }
                 }
 
-                permissionRow(
+                // Accessibility: drag-grant sheet instead of the old prompting call (D8)
+                dragPermissionRow(
                     "Accessibility",
+                    icon: "hand.raised.fill",
                     description: "Required to type into other apps.",
                     granted: axPermission,
-                    prefsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-                ) {
-                    let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-                    _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
-                    refreshPermissions()
+                    showSheet: $showAxFixSheet
+                )
+                .sheet(isPresented: $showAxFixSheet, onDismiss: refreshPermissions) {
+                    DragGrantSheetHost(
+                        permissionType: .accessibility,
+                        isPresented: $showAxFixSheet
+                    )
                 }
 
-                permissionRow(
+                // Input Monitoring: drag-grant sheet instead of just opening Settings (D8)
+                dragPermissionRow(
                     "Input Monitoring",
+                    icon: "keyboard.fill",
                     description: "Required to detect the hotkey.",
                     granted: inputMonitoring,
-                    prefsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-                ) {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    showSheet: $showImFixSheet
+                )
+                .sheet(isPresented: $showImFixSheet, onDismiss: refreshPermissions) {
+                    DragGrantSheetHost(
+                        permissionType: .inputMonitoring,
+                        isPresented: $showImFixSheet
+                    )
                 }
             }
         }
@@ -477,12 +490,13 @@ private struct PermissionsTab: View {
         .onAppear { refreshPermissions() }
     }
 
+    // Standard row for Microphone (system prompt flow)
     @ViewBuilder
     private func permissionRow(
         _ title: String,
+        icon: String,
         description: String,
         granted: Bool,
-        prefsURL: String,
         action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -494,11 +508,38 @@ private struct PermissionsTab: View {
                 if granted {
                     Text("Granted").foregroundStyle(.secondary).font(.caption)
                 } else {
-                    Button("Open Settings") {
-                        if let url = URL(string: prefsURL) { NSWorkspace.shared.open(url) }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    Button("Fix") { action() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // Drag-grant row for Input Monitoring and Accessibility (D8)
+    @ViewBuilder
+    private func dragPermissionRow(
+        _ title: String,
+        icon: String,
+        description: String,
+        granted: Bool,
+        showSheet: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(granted ? .green : .red)
+                Text(title).font(.body)
+                Spacer()
+                if granted {
+                    Text("Granted").foregroundStyle(.secondary).font(.caption)
+                } else {
+                    Button("Fix") { showSheet.wrappedValue = true }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
                 }
             }
             Text(description)
@@ -509,6 +550,7 @@ private struct PermissionsTab: View {
 
     private func refreshPermissions() {
         micPermission = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        // Non-prompting variants — no pre-registration (F1.7)
         axPermission = AXIsProcessTrusted()
         inputMonitoring = CGPreflightListenEventAccess()
     }
