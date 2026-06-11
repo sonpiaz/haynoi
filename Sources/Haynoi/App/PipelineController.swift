@@ -26,6 +26,22 @@ final class PipelineController {
     // Fix #2: error-tone auto-clear timer
     private var errorClearTimer: Timer?
 
+    // Fix #9: active insertion task — serializes insertions so dictation N+1
+    // waits for N's insertion to finish (prevents targetApp static race).
+    private var activeInsertion: Task<Void, Never>?
+
+    // Fix #10: delay before actually starting the audio engine.
+    // Bare Cmd presses (Cmd+C, Cmd+Tab) release within 90ms and should NEVER
+    // spin up the microphone — that reads as spyware.
+    private static let preRecordingEngineDelayNs: UInt64 = 90_000_000 // 90ms
+
+    // Fix #10: task handle for the delayed engine-start, so it can be cancelled
+    // if the key is released or a chord is detected before the delay elapses.
+    private var preRecordingDelayTask: Task<Void, Never>?
+
+    // Fix #5 (AudioRecorder): observer for self-abort notifications.
+    private var abortObserver: NSObjectProtocol?
+
     private init() {
         // Bridge AudioRecorder.audioLevel → AppState.audioLevel
         levelCancellable = recorder.$audioLevel
@@ -53,6 +69,17 @@ final class PipelineController {
             Task { @MainActor in self?.cancelRecording() }
         }
         hotkey.start()
+
+        // Fix #5: observe AudioRecorder self-abort (device failure mid-recording).
+        abortObserver = NotificationCenter.default.addObserver(
+            forName: AudioRecorder.didAbortRecording,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let reason = note.userInfo?["reason"] as? String ?? "Recording error"
+            Task { @MainActor in self?.handleRecorderAbort(reason) }
+        }
+
         // Sync initial state from store
         state.hasFailedDictation = FailedDictationStore.hasAny
         NSLog("[Haynoi] Pipeline ready. AX=%d InputMon=%d",
@@ -62,7 +89,9 @@ final class PipelineController {
 
     // MARK: - Recording
 
-    /// Step 1: Command pressed — start mic immediately (captures audio from the very start)
+    /// Step 1: Command pressed — schedule mic start after a short delay.
+    /// Fix #10: actual engine start is deferred 90ms so bare Cmd presses (chords)
+    /// never spin up the microphone. The pre-buffer semantics survive for real holds.
     private var isPreRecording = false
 
     func preRecording() {
@@ -85,16 +114,39 @@ final class PipelineController {
             return
         }
 
-        // Capture target app NOW — before any Haynoi UI appears or steals focus
-        TextInserter.targetApp = NSWorkspace.shared.frontmostApplication
+        // Capture target app NOW — before any Haynoi UI appears or steals focus.
+        // Fix #9: stored locally; will be passed through to insert() explicitly.
+        let capturedTargetApp = NSWorkspace.shared.frontmostApplication
 
+        // Fix #10: delay actual engine start by 90ms. Chord releases < 90ms skip audio.
+        isPreRecording = true
+        preRecordingDelayTask = Task {
+            try? await Task.sleep(nanoseconds: PipelineController.preRecordingEngineDelayNs)
+            guard !Task.isCancelled else {
+                NSLog("[Haynoi] pre-recording delay cancelled (chord or fast release)")
+                return
+            }
+            await MainActor.run {
+                self.startEngineForPreRecording(capturedTargetApp: capturedTargetApp)
+            }
+        }
+    }
+
+    /// Called after the 90ms chord-filter delay to actually start the audio engine.
+    private func startEngineForPreRecording(capturedTargetApp: NSRunningApplication?) {
+        guard isPreRecording, !state.isRecording else { return }
+        // Store target app for this dictation (Fix #9: per-dictation, not static).
+        currentDictationTargetApp = capturedTargetApp
         do {
             try recorder.startRecording()
-            isPreRecording = true
         } catch {
+            isPreRecording = false
             state.error = "Mic error: \(error.localizedDescription)"
         }
     }
+
+    // Fix #9: per-dictation target app — set in preRecording, consumed in stopRecording.
+    private var currentDictationTargetApp: NSRunningApplication?
 
     /// Step 2: 200ms passed, no other key — confirm this is a solo hold
     func confirmRecording() {
@@ -105,7 +157,11 @@ final class PipelineController {
         guard isPreRecording, !state.isRecording else { return }
         isPreRecording = false
 
-        // If preRecording didn't start (no mic), try now
+        // If engine hasn't started yet (pre-recording delay still in flight),
+        // cancel the delay task and start immediately now.
+        preRecordingDelayTask?.cancel()
+        preRecordingDelayTask = nil
+
         if recorder.isRunning == false {
             do { try recorder.startRecording() } catch {
                 state.error = "Mic error: \(error.localizedDescription)"
@@ -155,6 +211,10 @@ final class PipelineController {
 
         let samples = recorder.stopRecording()
 
+        // Capture per-dictation target app before the next preRecording can overwrite it.
+        // Fix #9: snapshot and pass through, do not use a shared static.
+        let dictationTargetApp = currentDictationTargetApp
+
         // Hide floating bar BEFORE state changes to avoid
         // SwiftUI teardown racing with @Published updates
         FloatingBarController.shared.hide()
@@ -194,33 +254,48 @@ final class PipelineController {
         NSLog("[Haynoi] Transcribing %d samples (%.1fs)", samples.count, Float(samples.count) / 16000)
         state.isTranscribing = true
 
-        Task {
+        // Fix #9: serialize insertions — wait for any in-flight insertion to complete
+        // before starting the new one. Recording is NOT blocked (samples are captured);
+        // only the text-insertion step serializes.
+        let previousInsertion = activeInsertion
+        activeInsertion = Task {
+            // Wait for the previous insertion to finish first.
+            await previousInsertion?.value
+
             do {
                 let text = try await STTProvider.transcribe(samples)
                 guard !text.isEmpty else {
-                    state.isTranscribing = false
+                    await MainActor.run { state.isTranscribing = false }
                     return
                 }
                 // Apply snippets
                 let finalText = SnippetManager.applySnippets(to: text)
                 NSLog("[Haynoi] Transcribed: %@", finalText)
-                state.isTranscribing = false
-                state.addTranscription(finalText)
-                await TextInserter.insert(finalText)
+                await MainActor.run {
+                    state.isTranscribing = false
+                    state.addTranscription(finalText)
+                }
+                // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
+                await TextInserter.insert(finalText, targetApp: dictationTargetApp)
                 let wordCount = text.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
                 UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
             } catch {
-                state.isTranscribing = false
-                // Fix #2: on final failure, persist WAV + error tone + notification.
-                // Show a human-readable message in state.error; raw detail goes to NSLog.
-                NSLog("[Haynoi] Transcription error (detail): %@", error.localizedDescription)
-                handleTranscriptionFailure(samples: samples, error: error)
+                await MainActor.run {
+                    state.isTranscribing = false
+                    // Fix #2: on final failure, persist WAV + error tone + notification.
+                    NSLog("[Haynoi] Transcription error (detail): %@", error.localizedDescription)
+                    handleTranscriptionFailure(samples: samples, error: error)
+                }
             }
         }
     }
 
     func cancelRecording() {
+        // Fix #10: cancel delayed engine-start if key is released before delay elapses.
+        preRecordingDelayTask?.cancel()
+        preRecordingDelayTask = nil
+
         if isPreRecording {
             _ = recorder.stopRecording()
             isPreRecording = false
@@ -238,6 +313,30 @@ final class PipelineController {
         // Fix #6: play cancel tone (was never called)
         if UserDefaults.standard.bool(forKey: "soundEnabled") {
             SoundFeedback.shared.playCancelTone()
+        }
+    }
+
+    // MARK: - Device Abort Handler (Fix #5)
+
+    /// Called when AudioRecorder posts `didAbortRecording` (device failure mid-recording).
+    private func handleRecorderAbort(_ reason: String) {
+        NSLog("[Haynoi] Recorder aborted: %@", reason)
+
+        // Tear down recording state without calling recorder.stopRecording()
+        // (the recorder already cleaned itself up before posting the notification).
+        durationTimer?.invalidate()
+        durationTimer = nil
+        recordingStartTime = nil
+        isPreRecording = false
+
+        FloatingBarController.shared.hide()
+        state.isRecording = false
+        state.showOverlay = false
+        MediaController.resumeIfPaused()
+
+        setTransientError(reason)
+        if UserDefaults.standard.bool(forKey: "soundEnabled") {
+            SoundFeedback.shared.playErrorTone()
         }
     }
 
@@ -274,29 +373,36 @@ final class PipelineController {
         state.isTranscribing = true
         state.error = nil
 
+        // Retry uses the current frontmost app as the insertion target.
+        let retryTargetApp = NSWorkspace.shared.frontmostApplication
+
         Task {
             do {
                 let text = try await STTProvider.transcribe(samples)
                 guard !text.isEmpty else {
-                    state.isTranscribing = false
+                    await MainActor.run { state.isTranscribing = false }
                     return
                 }
                 let finalText = SnippetManager.applySnippets(to: text)
                 NSLog("[Haynoi] Retry succeeded: %@", finalText)
-                state.isTranscribing = false
-                state.addTranscription(finalText)
-                await TextInserter.insert(finalText)
-                // Clear the failed indicator since retry succeeded
-                state.hasFailedDictation = FailedDictationStore.hasAny
+                await MainActor.run {
+                    state.isTranscribing = false
+                    state.addTranscription(finalText)
+                    // Clear the failed indicator since retry succeeded
+                    state.hasFailedDictation = FailedDictationStore.hasAny
+                }
+                await TextInserter.insert(finalText, targetApp: retryTargetApp)
                 let wordCount = finalText.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
                 UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
             } catch {
-                state.isTranscribing = false
-                NSLog("[Haynoi] Retry also failed: %@", error.localizedDescription)
-                state.error = "Retry failed — check your connection and try again."
-                if UserDefaults.standard.bool(forKey: "soundEnabled") {
-                    SoundFeedback.shared.playErrorTone()
+                await MainActor.run {
+                    state.isTranscribing = false
+                    NSLog("[Haynoi] Retry also failed: %@", error.localizedDescription)
+                    state.error = "Retry failed — check your connection and try again."
+                    if UserDefaults.standard.bool(forKey: "soundEnabled") {
+                        SoundFeedback.shared.playErrorTone()
+                    }
                 }
             }
         }
