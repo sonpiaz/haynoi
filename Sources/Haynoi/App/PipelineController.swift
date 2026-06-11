@@ -23,7 +23,7 @@ final class PipelineController {
     // Future work: replace with adaptive per-session calibration.
     private let silenceRMSThreshold: Float = 0.005
 
-    // Fix #2: error-tone auto-clear timer
+    // Retained for legacy call-sites; actual clear is now in AppState.setTransientError
     private var errorClearTimer: Timer?
 
     // Fix #9: active insertion task — serializes insertions so dictation N+1
@@ -194,7 +194,7 @@ final class PipelineController {
                 if self.state.recordingDuration >= self.maxRecordingDuration {
                     NSLog("[Haynoi] Max recording duration reached (%.0fs), stopping",
                           self.maxRecordingDuration)
-                    self.state.status = "Max dictation length reached"
+                    self.state.setTransientStatus("Max dictation length reached")
                     self.stopRecording()
                 }
             }
@@ -215,31 +215,34 @@ final class PipelineController {
         // Fix #9: snapshot and pass through, do not use a shared static.
         let dictationTargetApp = currentDictationTargetApp
 
-        // Hide floating bar BEFORE state changes to avoid
-        // SwiftUI teardown racing with @Published updates
-        FloatingBarController.shared.hide()
+        // Transition orb to "thinking" state rather than hiding it — the orb
+        // stays visible during the network round-trip so users know work is in
+        // flight.  The orb will auto-hide after success/error transitions.
+        FloatingBarController.shared.transition(to: .transcribing)
         state.isRecording = false
         state.showOverlay = false
         MediaController.resumeIfPaused()
 
-        // Too short — cancel
+        // Too short — cancel silently, just hide the orb
         if duration < minimumDuration {
             NSLog("[Haynoi] Recording too short (%.2fs), cancelled", duration)
+            FloatingBarController.shared.hide()
             return
         }
 
         // Need at least 0.5s of audio (8000 samples at 16kHz)
         guard samples.count > 8000 else {
-            state.error = "Too short to transcribe"
+            FloatingBarController.shared.transition(to: .error)
+            state.setTransientError("Too short to transcribe")
             return
         }
 
-        // Fix #3: silence detection gives visible feedback instead of silently
-        // discarding audio (was a hard guard with only NSLog).
+        // Fix #3: silence detection gives visible feedback
         let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
         NSLog("[Haynoi] Audio RMS: %.5f (threshold %.5f)", rms, silenceRMSThreshold)
         guard rms > silenceRMSThreshold else {
             NSLog("[Haynoi] Too quiet, skipping transcription")
+            FloatingBarController.shared.transition(to: .error)
             setTransientError("No speech detected")
             if UserDefaults.standard.bool(forKey: "soundEnabled") {
                 SoundFeedback.shared.playErrorTone()
@@ -274,6 +277,11 @@ final class PipelineController {
                 await MainActor.run {
                     state.isTranscribing = false
                     state.addTranscription(finalText)
+                    // Orb: success flash then auto-hide
+                    FloatingBarController.shared.transition(to: .success)
+                    if UserDefaults.standard.bool(forKey: "soundEnabled") {
+                        SoundFeedback.shared.playSuccessTone()
+                    }
                 }
                 // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
                 await TextInserter.insert(finalText, targetApp: dictationTargetApp)
@@ -295,6 +303,8 @@ final class PipelineController {
                     // Account-level errors (no credits / revoked key) are not
                     // transient: saving the WAV and offering a retry would just
                     // loop into the same failure. Surface the actionable copy.
+                    // Orb: error flash then auto-hide
+                    FloatingBarController.shared.transition(to: .error)
                     if let sttErr = error as? STTError,
                        case .outOfCredits = sttErr {
                         state.error = sttErr.errorDescription
@@ -330,6 +340,7 @@ final class PipelineController {
         _ = recorder.stopRecording()
         state.isRecording = false
         state.showOverlay = false
+        // On cancel: just hide — no success/error feedback needed
         FloatingBarController.shared.hide()
         MediaController.resumeIfPaused()
         // Fix #6: invalidate timer + reset recordingStartTime
@@ -355,7 +366,8 @@ final class PipelineController {
         recordingStartTime = nil
         isPreRecording = false
 
-        FloatingBarController.shared.hide()
+        // Show error orb briefly, then hide
+        FloatingBarController.shared.transition(to: .error)
         state.isRecording = false
         state.showOverlay = false
         MediaController.resumeIfPaused()
@@ -383,8 +395,9 @@ final class PipelineController {
         // Human-readable state message (raw detail already in NSLog above).
         // Prefer the specific STTError copy; fall back to the generic line.
         let humanCopy = (error as? STTError)?.errorDescription
-        state.error = humanCopy.map { "\($0) — recording saved." }
+        let message = humanCopy.map { "\($0) — recording saved." }
             ?? "Couldn't transcribe — recording saved. Retry from the menu."
+        state.error = message
 
         // System notification so the user sees it even in another app
         NotificationHelper.postFailedDictation()
@@ -446,7 +459,7 @@ final class PipelineController {
                 await MainActor.run {
                     state.isTranscribing = false
                     NSLog("[Haynoi] Retry also failed: %@", error.localizedDescription)
-                    state.error = "Retry failed — check your connection and try again."
+                    state.setTransientError("Retry failed — check your connection and try again.")
                     if UserDefaults.standard.bool(forKey: "soundEnabled") {
                         SoundFeedback.shared.playErrorTone()
                     }
@@ -457,17 +470,8 @@ final class PipelineController {
 
     // MARK: - Helpers
 
-    /// Sets state.error and schedules an auto-clear after ~4s.
+    /// Sets state.error with auto-clear.  Delegates to AppState's Combine-based timer.
     private func setTransientError(_ message: String) {
-        state.error = message
-        errorClearTimer?.invalidate()
-        errorClearTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                // Only clear if the same message is still showing
-                if self?.state.error == message {
-                    self?.state.error = nil
-                }
-            }
-        }
+        state.setTransientError(message)
     }
 }
