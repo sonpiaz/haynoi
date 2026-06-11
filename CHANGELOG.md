@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-11
+
+### Added
+- Drag-to-grant permissions: during onboarding, drag the Haynoi icon straight
+  into the System Settings list that opens beside the window — no more hunting
+  for the app by name. Settings → Permissions gains matching Fix buttons.
+- Insights: a private scoreboard for your voice — lifetime words with human
+  comparisons, honest words-per-minute, current and longest streaks, a 16-week
+  activity heatmap, where your words go by app, and quiet milestones.
+
+### Fixed
+- Words-per-minute no longer shows impossible numbers when older history
+  predates duration tracking.
+
 ## [0.1.0] - 2026-06-11
 
 Initial public release.
