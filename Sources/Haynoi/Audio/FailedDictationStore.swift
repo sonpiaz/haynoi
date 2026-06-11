@@ -33,7 +33,7 @@ enum FailedDictationStore {
             return nil
         }
 
-        let ts = Int(Date().timeIntervalSince1970)
+        let ts = Int(Date().timeIntervalSince1970 * 1000)
         let dest = failedDirectory.appendingPathComponent("dictation_\(ts).wav")
 
         guard let wavData = try? createWAV(samples: samples, sampleRate: sampleRate) else {
@@ -69,6 +69,20 @@ enum FailedDictationStore {
 
     /// True if at least one saved file exists.
     static var hasAny: Bool { newestFileURL() != nil }
+
+    /// Deletes the newest saved WAV file. Call after a successful retry so the
+    /// Retry button no longer appears and a second retry cannot re-insert the
+    /// same text.
+    static func deleteNewest() {
+        guard let url = newestFileURL() else { return }
+        do {
+            try FileManager.default.removeItem(at: url)
+            NSLog("[Haynoi] FailedDictationStore: deleted %@", url.lastPathComponent)
+        } catch {
+            NSLog("[Haynoi] FailedDictationStore: delete error: %@",
+                  error.localizedDescription)
+        }
+    }
 
     // MARK: - Prune
 

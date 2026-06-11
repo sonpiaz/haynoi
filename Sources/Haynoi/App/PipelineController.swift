@@ -365,6 +365,13 @@ final class PipelineController {
     /// the result. Wired to the "Retry Last Dictation" menu item and to the
     /// notification action handler in AppDelegate.
     func retryLastFailedDictation() {
+        // Fix #3: re-entry guard — retry must not run concurrently with itself
+        // or with a live dictation.
+        guard !state.isTranscribing, !state.isRecording else {
+            NSLog("[Haynoi] retryLastFailedDictation: skipped (already transcribing or recording)")
+            return
+        }
+
         guard let samples = FailedDictationStore.loadNewest() else {
             NSLog("[Haynoi] retryLastFailedDictation: no saved recording found")
             return
@@ -373,8 +380,16 @@ final class PipelineController {
         state.isTranscribing = true
         state.error = nil
 
-        // Retry uses the current frontmost app as the insertion target.
-        let retryTargetApp = NSWorkspace.shared.frontmostApplication
+        // Fix #6: capture the frontmost app now. If it is Haynoi itself (e.g.
+        // the user clicked Retry from our menu), do not try to paste — copy to
+        // clipboard and show the "Press ⌘V" notification instead.
+        let retryTargetApp: NSRunningApplication?
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        if frontmost?.bundleIdentifier == Bundle.main.bundleIdentifier {
+            retryTargetApp = nil // signals clipboard-fallback below
+        } else {
+            retryTargetApp = frontmost
+        }
 
         Task {
             do {
@@ -385,10 +400,13 @@ final class PipelineController {
                 }
                 let finalText = SnippetManager.applySnippets(to: text)
                 NSLog("[Haynoi] Retry succeeded: %@", finalText)
+                // Fix #2: delete the saved WAV BEFORE recomputing hasFailedDictation
+                // so the Retry button disappears and a second retry cannot replay
+                // the same recording.
+                FailedDictationStore.deleteNewest()
                 await MainActor.run {
                     state.isTranscribing = false
                     state.addTranscription(finalText)
-                    // Clear the failed indicator since retry succeeded
                     state.hasFailedDictation = FailedDictationStore.hasAny
                 }
                 await TextInserter.insert(finalText, targetApp: retryTargetApp)

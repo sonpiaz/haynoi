@@ -1,3 +1,4 @@
+import Carbon
 import Cocoa
 import CoreGraphics
 
@@ -20,13 +21,8 @@ import CoreGraphics
 /// we resync isModifierDown against the real hardware key state. If the target
 /// modifier is no longer physically down, we run the release path to end any
 /// stuck recording. The watchdog also checks for secure event input (via the
-/// private CGS SPI) and sets a flag so preRecording can reject silently.
-
-// MARK: - Secure Event Input SPI (Fix #5)
-// CGSIsSecureEventInputSet is a private CGS function available on macOS 10.4+.
-// We declare it via @_silgen_name so we don't need to import the private header.
-@_silgen_name("CGSIsSecureEventInputSet")
-private func CGSIsSecureEventInputSet() -> Bool
+/// public Carbon API IsSecureEventInputEnabled()) and sets a flag so
+/// preRecording can reject silently.
 
 final class HotkeyManager {
     static let shared = HotkeyManager()
@@ -87,13 +83,15 @@ final class HotkeyManager {
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 NSLog("[Haynoi] CGEventTap disabled, re-enabling")
                 if let tap = mgr.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
-                // Fix #5: resync after re-enable so stuck recording is cleared
-                mgr.resyncModifierState()
+                // Fix #5: resync after re-enable so stuck recording is cleared.
+                // Hop to main so resyncModifierState's precondition is satisfied.
+                DispatchQueue.main.async { mgr.resyncModifierState() }
                 return Unmanaged.passUnretained(event)
             }
 
             if type == .flagsChanged {
-                mgr.handleFlagsChanged(event.flags.rawValue)
+                let rawFlags = event.flags.rawValue
+                DispatchQueue.main.async { mgr.handleFlagsChanged(rawFlags) }
             } else if type == .keyDown {
                 // Just for diagnostics — verify tap is alive
                 let _ = event.getIntegerValueField(.keyboardEventKeycode)
@@ -139,13 +137,14 @@ final class HotkeyManager {
             self.tapCheckTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
                 guard let self, let tap = self.eventTap else { return }
 
-                // Fix #5: check secure input in the watchdog via private CGS SPI.
+                // Fix #5: check secure input in the watchdog via the public Carbon
+                // API IsSecureEventInputEnabled() (available since macOS 10.4).
                 // When a password field or screensaver is active, key events are
                 // routed away — starting a recording would capture silence.
                 // Reading AppState on main actor; the Timer runs on the main
                 // RunLoop so this is safe. Wrapped in Task @MainActor to satisfy
                 // the Swift concurrency checker.
-                let secureInput = CGSIsSecureEventInputSet()
+                let secureInput = Bool(IsSecureEventInputEnabled())
                 Task { @MainActor in
                     if secureInput != AppState.shared.secureInputActive {
                         if secureInput {
@@ -228,6 +227,7 @@ final class HotkeyManager {
     /// isn't (e.g. release event was lost during tap disable), synthetically
     /// fire the release path to clear stuck recording state.
     private func resyncModifierState() {
+        dispatchPrecondition(condition: .onQueue(.main))
         guard isModifierDown else { return }
         guard let event = CGEvent(source: nil) else { return }
         let actuallyDown = event.flags.contains(targetModifier)
@@ -248,6 +248,7 @@ final class HotkeyManager {
     // MARK: - Event Handling
 
     private func handleFlagsChanged(_ rawFlags: UInt64) {
+        dispatchPrecondition(condition: .onQueue(.main))
         let targetRaw = targetModifier.rawValue
         let isDown = (rawFlags & targetRaw) != 0
 

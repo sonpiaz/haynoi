@@ -188,18 +188,18 @@ struct OnboardingView: View {
     /// Monitoring entitlement recognition from TCC, then terminates self.
     private func relaunchApp() {
         UserDefaults.standard.set(true, forKey: "onboardingCompleted")
-        guard let bundlePath = Bundle.main.bundleURL.path.addingPercentEncoding(
-            withAllowedCharacters: .urlPathAllowed
-        ) else {
-            NSApp.terminate(nil)
-            return
-        }
         let path = Bundle.main.bundleURL.path
         let task = Process()
         task.launchPath = "/usr/bin/open"
         task.arguments = ["-a", path]
-        try? task.run()
-        NSApp.terminate(nil)
+        do {
+            try task.run()
+            NSApp.terminate(nil)
+        } catch {
+            // Do not terminate — the user would be left with no running app.
+            // Log the error so it shows up in Console.app.
+            NSLog("[Haynoi] relaunchApp: failed to launch — %@", error.localizedDescription)
+        }
     }
 
     // MARK: - Helpers

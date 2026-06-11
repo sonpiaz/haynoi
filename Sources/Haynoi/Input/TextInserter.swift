@@ -94,8 +94,6 @@ enum TextInserter {
     /// Fix #9: ceiling raised to 10s; returns false if ceiling hit (caller uses clipboard fallback).
     @discardableResult
     private static func waitForModifierRelease() async -> Bool {
-        let modifierMask: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
-
         // 10 second ceiling, checked every 10ms = 1000 iterations.
         for i in 0..<1000 {
             guard let event = CGEvent(source: nil) else { break }
@@ -138,8 +136,9 @@ enum TextInserter {
             }
         }
 
-        // Try one more time with options
-        target.activate(options: .activateIgnoringOtherApps)
+        // Try one more time with no options (activateIgnoringOtherApps is a no-op
+        // on macOS 14+ and emits a deprecation warning).
+        target.activate(options: [])
         try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
 
         let actual = NSWorkspace.shared.frontmostApplication
@@ -308,12 +307,12 @@ enum TextInserter {
         }
 
         // Fix #3: restore old clipboard ~400ms after paste, unless someone else wrote.
-        // 400ms total = 300ms we waited + we trigger restore immediately after pasteDetected check.
-        Task.detached {
+        // 400ms total = 300ms we waited + 100ms additional here.
+        // All pasteboard access is confined to @MainActor, eliminating Sendable warnings.
+        let restoreChangeCount = postWriteChangeCount
+        Task { @MainActor in
             try? await Task.sleep(nanoseconds: 100_000_000) // 100ms more = ~400ms total
-            await MainActor.run {
-                restorePasteboard(pb, items: savedItems, writtenChangeCount: postWriteChangeCount)
-            }
+            restorePasteboard(NSPasteboard.general, items: savedItems, writtenChangeCount: restoreChangeCount)
         }
 
         if pasteDetected {
