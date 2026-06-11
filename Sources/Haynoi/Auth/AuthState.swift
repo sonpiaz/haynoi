@@ -35,7 +35,9 @@ final class AuthState: ObservableObject {
     }
 
     /// Call when the server returns 401.  Clears keychain and marks key invalid.
+    /// Idempotent: concurrent transcribe + rewrite 401s must not double-fire.
     func handleKeyRevoked() {
+        guard !keyInvalid else { return }
         KymaAuth.signOut()
         signedInEmail = nil
         keyInvalid = true
