@@ -684,7 +684,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         onboardingWindow?.close()
         onboardingWindow = nil
 
-        let view = OnboardingView {
+        // Stateless resume (D2): start at the first unsatisfied step from live state.
+        let resumeStep = OnboardingView.resumeStep()
+
+        let view = OnboardingView(initialStep: resumeStep) {
             DispatchQueue.main.async { [weak self] in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
@@ -693,7 +696,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 580),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
