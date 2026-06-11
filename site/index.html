@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Haynoi — Hold a Key. Speak. Done.</title>
+  <meta name="description" content="Haynoi is a macOS push-to-talk dictation app. Hold ⌘, speak, and polished text appears in any app — email, code editors, chat. Vietnamese-first accuracy, sub-2-second transcription." />
+  <meta name="theme-color" content="#F7F4EE" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Haynoi — Hold a Key. Speak. Done." />
+  <meta property="og:description" content="macOS push-to-talk dictation with Vietnamese-first accuracy. Works in every app." />
+  <meta property="og:image" content="icon.png" />
+  <meta property="og:type" content="website" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Haynoi — Hold a Key. Speak. Done." />
+  <meta name="twitter:description" content="macOS push-to-talk dictation with Vietnamese-first accuracy. Works in every app." />
+  <meta name="twitter:image" content="icon.png" />
+
+  <link rel="icon" href="icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="icon.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="#top">
+      <img src="icon.png" alt="Haynoi icon" />
+      Haynoi
+    </a>
+    <ul class="nav-links">
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#story">The name</a></li>
+      <li>
+        <a class="nav-cta" href="https://github.com/sonpiaz/haynoi/releases/latest" target="_blank" rel="noopener">
+          Download
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<main>
+<section class="hero" id="top">
+  <div class="container">
+
+    <!-- Animated orb — aurora spectrum recolor -->
+    <div class="orb-stage fade-up fade-up-1">
+      <div class="orb-wrap">
+        <div class="orb-ring"></div>
+        <div class="orb-ring-2"></div>
+
+        <div class="wave-bars" aria-hidden="true">
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+          <div class="wave-bar"></div>
+        </div>
+
+        <div class="orb-core" role="img" aria-label="Haynoi recording orb"></div>
+
+        <div class="orb-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zm0 1.5A1.5 1.5 0 0 0 10.5 5v7a1.5 1.5 0 0 0 3 0V5A1.5 1.5 0 0 0 12 3.5zM6.5 10.5a.75.75 0 0 1 .75.75 4.75 4.75 0 0 0 9.5 0 .75.75 0 0 1 1.5 0 6.25 6.25 0 0 1-5.5 6.206V19.5h2.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5H11v-2.044A6.25 6.25 0 0 1 5.75 11.25a.75.75 0 0 1 .75-.75z"/>
+          </svg>
+        </div>
+
+        <div class="key-badge" aria-label="Hold command key">⌘ hold</div>
+      </div>
+    </div>
+
+    <!-- Trust chip row replacing old eyebrow (graft #2) -->
+    <div class="hero-chips fade-up fade-up-2" aria-label="Platform, pricing, and license summary">
+      <span class="hero-chip">macOS</span>
+      <span class="hero-chip-sep" aria-hidden="true">·</span>
+      <span class="hero-chip">Free to start</span>
+      <span class="hero-chip-sep" aria-hidden="true">·</span>
+      <span class="hero-chip">Open Source</span>
+    </div>
+
+    <h1 class="hero-title fade-up fade-up-3">
+      Hold a key.<br />
+      Speak.<br />
+      <em>Done.</em>
+    </h1>
+
+    <!-- Inline keycap in subcopy (graft #3) -->
+    <p class="hero-sub fade-up fade-up-4">
+      Hold <kbd class="keycap">⌘</kbd>, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. Sub-2-second transcription with Vietnamese-first accuracy and an elegant floating orb that disappears when you're finished.
+    </p>
+
+    <div class="cta-group fade-up fade-up-5">
+      <a class="btn-primary" href="https://github.com/sonpiaz/haynoi/releases/latest" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+        </svg>
+        Download for macOS
+      </a>
+      <!-- Powered by Kyma pill (graft #9) -->
+      <span class="cta-fine">Free to start · macOS 14+ · Apple silicon &amp; Intel</span>
+      <a class="kyma-pill" href="https://kymaapi.com" target="_blank" rel="noopener" aria-label="Powered by Kyma">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Powered by Kyma
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ── HOW IT WORKS ── -->
+<section class="how" id="how">
+  <div class="container">
+    <div class="how-header">
+      <!-- Concrete speed stat added to intro (graft #4) -->
+      <h2 class="serif">Three moments. That is the whole loop.</h2>
+      <p>Speaking is about three times faster than typing — Haynoi closes that gap for every app on your Mac, from silence to finished sentence without interrupting your flow.</p>
+    </div>
+
+    <div class="how-steps">
+
+      <!-- Step 1 -->
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-visual">
+          <div class="key-vis" aria-label="Command key">⌘</div>
+        </div>
+        <div class="step-title">Hold the key</div>
+        <p class="step-desc">
+          Press and hold <strong>⌘</strong> (or any key you choose) anywhere on your Mac. The aurora orb floats up quietly — it is listening.
+        </p>
+      </div>
+
+      <!-- Arrow -->
+      <div class="arrow-connector" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-visual">
+          <div class="waveform-vis" aria-label="Audio waveform">
+            <div class="wv-bar"></div>
+            <div class="wv-bar"></div>
+            <div class="wv-bar"></div>
+            <div class="wv-bar"></div>
+            <div class="wv-bar"></div>
+            <div class="wv-bar"></div>
+            <div class="wv-bar"></div>
+          </div>
+        </div>
+        <div class="step-title">Speak naturally</div>
+        <p class="step-desc">
+          Talk as you think — full sentences, mixed Vietnamese and English, technical terms. Haynoi captures every word without a drift in accuracy.
+        </p>
+      </div>
+
+      <!-- Arrow -->
+      <div class="arrow-connector" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-visual" style="width:100%">
+          <div class="text-vis" aria-label="Transcribed text appearing in app">
+            <div class="text-vis-inner">Gửi báo cáo cho anh Minh vào thứ Sáu nhé&thinsp;</div>
+            <span class="cursor" aria-hidden="true"></span>
+          </div>
+        </div>
+        <div class="step-title">Text appears</div>
+        <p class="step-desc">
+          Release the key. Within two seconds, polished text lands exactly where your cursor was — in the email, Slack thread, or code comment you had open.
+        </p>
+        <div class="timer-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          Under 2 seconds
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ── FEATURES ── -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="features-header">
+      <div class="section-label">What it does</div>
+      <h2>Built for people whose<br class="hide-mobile" /> words move fast.</h2>
+      <p>Haynoi is small by design. Every feature earns its place.</p>
+    </div>
+
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <div class="feat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+            <path d="M19 11a7 7 0 0 1-14 0"/>
+            <line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="8" y1="22" x2="16" y2="22"/>
+          </svg>
+        </div>
+        <h3>Vietnamese-first accuracy</h3>
+        <p>
+          Haynoi is tuned for how Vietnamese speakers actually talk — tones, regional accents, and
+          the natural code-switching between Vietnamese and English that defines how most of us
+          communicate at work.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <h3>Works in every Mac app</h3>
+        <p>
+          Email, Slack, Notion, VS Code, Terminal, even the address bar — Haynoi injects text at the
+          cursor level, so it works anywhere a keyboard would. No special integration required.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </div>
+        <h3>Fast and Quality tiers</h3>
+        <p>
+          Choose Fast for speed-first dictation where you edit after, or Quality when the first draft
+          needs to be publication-ready. Switch per session. Both run on the same push-to-talk shortcut.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+        </div>
+        <h3>Smart output modes</h3>
+        <p>
+          Clean mode strips filler words and hesitations. Email mode shapes a proper greeting and sign-off.
+          Auto mode reads context and picks for you. Speak naturally; Haynoi decides how it should read.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <h3>Custom dictionary and snippets</h3>
+        <p>
+          Teach Haynoi your project names, company terms, and abbreviations once. From then on they
+          transcribe correctly — no more "Affitor" becoming "a filter" or "Kyma" becoming "karma."
+        </p>
+      </div>
+
+      <!-- Silent auto-updates card (graft #6 — replaces no card; grid had 6 cards with OSS; OSS moved to band) -->
+      <div class="feature-card">
+        <div class="feat-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M21 2v6h-6"/>
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+            <path d="M3 22v-6h6"/>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          </svg>
+        </div>
+        <h3>Silent auto-updates</h3>
+        <p>
+          Haynoi updates itself in the background via Sparkle. You open the app you love, never a
+          maintenance window you did not ask for. New transcription models land without lifting a finger.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ── NAME STORY ── -->
+<section class="name-story" id="story">
+  <div class="container">
+    <div class="name-story-inner">
+
+      <div class="story-label">The name carries a meaning</div>
+
+      <!-- Semantic dl replacing div role=table markup (fix #12) -->
+      <dl class="triple-meanings" aria-label="Triple meaning of Haynoi">
+        <div class="meaning-cell">
+          <dt class="meaning-vn">hãy nói</dt>
+          <dd class="meaning-en">Speak up — the command</dd>
+        </div>
+        <div class="meaning-divider" aria-hidden="true"></div>
+        <div class="meaning-cell">
+          <dt class="meaning-vn">hay nói</dt>
+          <dd class="meaning-en">Loves to talk — the person</dd>
+        </div>
+        <div class="meaning-divider" aria-hidden="true"></div>
+        <div class="meaning-cell">
+          <dt class="meaning-vn">Hà Nội</dt>
+          <dd class="meaning-en">The city — an Easter egg</dd>
+        </div>
+      </dl>
+
+      <div class="story-body">
+        <p>
+          A name that works three ways at once felt right for a tool built around voice.
+          <em>Hãy nói</em> is the imperative — the first thing you say to a microphone,
+          and the quiet instruction the app gives you every time you hold the key.
+        </p>
+        <p>
+          <em>Hay nói</em> is the personality. The kind of person who has always thought faster
+          than they could type, whose best ideas arrive in speech and evaporate before fingers
+          catch up. Haynoi exists for that person.
+        </p>
+        <p>
+          And then there is Hà Nội — the city that the founder still hears in his vowels,
+          left as a quiet wink for anyone who notices. Three layers, one word, zero explanation needed.
+        </p>
+      </div>
+
+      <div class="founder-note" aria-label="Founder note">
+        <div class="founder-avatar" aria-hidden="true">S</div>
+        <div class="founder-text">
+          Built by <strong>Son Piaz</strong> — a Vietnamese founder who has spent enough late nights
+          typing what he should have just said out loud.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ── OSS BAND (graft #7) ── -->
+<section class="oss-band" aria-label="Open source">
+  <div class="container">
+    <div class="oss-band-inner">
+      <div class="oss-text">
+        <div class="section-label">Open source</div>
+        <h2>Built in the open,<br />owned by no one.</h2>
+        <p>
+          Haynoi is MIT licensed. Read every line of the recording pipeline, contribute a language
+          model improvement, or fork it for your own use. The repo welcomes pull requests.
+        </p>
+        <a class="btn-outline" href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+          </svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="oss-badge" aria-label="MIT License">
+        <span class="oss-badge-label">License</span>
+        <span class="oss-badge-mit">MIT</span>
+        <span class="oss-badge-sub">Free forever</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ── PRICING TRANSPARENCY STRIP (graft #1) ── -->
+<section class="pricing-strip" aria-label="Pricing overview">
+  <div class="container">
+    <div class="pricing-strip-inner">
+
+      <div class="pricing-item">
+        <div class="pricing-label">Starting price</div>
+        <div class="pricing-value">Free</div>
+        <div class="pricing-sub">Free credits to start</div>
+      </div>
+
+      <div class="pricing-divider" aria-hidden="true"></div>
+
+      <div class="pricing-item">
+        <div class="pricing-label">Billing model</div>
+        <div class="pricing-value">Pay-as-you-go</div>
+        <div class="pricing-sub">No subscription, no commitments</div>
+      </div>
+
+      <div class="pricing-divider" aria-hidden="true"></div>
+
+      <div class="pricing-item">
+        <div class="pricing-label">Account</div>
+        <div class="pricing-value">Kyma</div>
+        <div class="pricing-sub">One account for the whole platform</div>
+      </div>
+
+      <div class="pricing-divider" aria-hidden="true"></div>
+
+      <div class="pricing-item">
+        <div class="pricing-label">macOS</div>
+        <div class="pricing-value">14+</div>
+        <div class="pricing-sub">Apple silicon &amp; Intel</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<hr class="rule" />
+
+<!-- ── BOTTOM CTA ── -->
+<section class="bottom-cta">
+  <div class="container">
+
+    <!-- Real app icon moment (graft #8) -->
+    <img src="icon.png"
+         alt="Haynoi app icon — the aurora waveform you'll see in your Dock"
+         class="cta-app-icon" />
+
+    <!-- Closing headline (graft #4) -->
+    <h2>Your voice is faster<br />than your keyboard.</h2>
+    <p class="sub">
+      Free to start. No subscription. Pay only for what you transcribe, through your Kyma account.
+    </p>
+
+    <div class="cta-group">
+      <a class="btn-primary" href="https://github.com/sonpiaz/haynoi/releases/latest" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+        </svg>
+        Download for macOS
+      </a>
+      <span class="cta-fine">Free to start · macOS 14+ · Apple silicon &amp; Intel</span>
+    </div>
+
+    <p class="kyma-note">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      Transcription powered by <a href="https://kymaapi.com" target="_blank" rel="noopener">Kyma</a>.
+      Your voice stays yours — audio is never stored or used for training.
+    </p>
+  </div>
+</section>
+</main>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-left">
+        <img src="icon.png" alt="" aria-hidden="true" />
+        <span class="footer-brand">Haynoi</span>
+        <span class="mit-badge">MIT</span>
+      </div>
+      <p class="footer-copy" style="margin-top:0.4rem">© 2026 Affitor LLC. All rights reserved.</p>
+    </div>
+    <ul class="footer-links">
+      <li>
+        <a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener" aria-label="GitHub repository">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+          </svg>
+          GitHub
+        </a>
+      </li>
+      <li>
+        <a href="https://github.com/sonpiaz/haynoi/blob/main/LICENSE" target="_blank" rel="noopener">
+          MIT License
+        </a>
+      </li>
+      <li>
+        <a href="https://kymaapi.com" target="_blank" rel="noopener">
+          Powered by Kyma
+        </a>
+      </li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
