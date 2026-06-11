@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-11
+
+### Fixed
+- Drag-to-grant now works on the first try: the icon drags like a real
+  Finder item, System Settings accepts the drop, and the step advances the
+  moment you flip the switch. No more double-clicking, no more hunting for
+  the app by hand.
+
 ## [0.1.1] - 2026-06-11
 
 ### Added

@@ -950,7 +950,6 @@ struct AppIconDragChipView: View {
     let onDragEnd: () -> Void
 
     @State private var breathingScale: CGFloat = 1.0
-    @State private var dragSafetyTimer: Timer?
 
     private var isDragging: Bool { chipState == .dragging }
 
@@ -977,51 +976,28 @@ struct AppIconDragChipView: View {
                         y: isDragging ? 8 : 3
                     )
                     .scaleEffect(isDragging ? 1.08 : breathingScale)
-                    .onDrag {
-                        // Enter dragging state
-                        DispatchQueue.main.async {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                chipState = .dragging
-                            }
-                            // Safety-net: if the data-request completion never fires (cancelled
-                            // drag / Escape / released outside any target), recover after 4s (D10).
-                            dragSafetyTimer?.invalidate()
-                            dragSafetyTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
-                                DispatchQueue.main.async {
-                                    guard chipState == .dragging else { return }
-                                    withAnimation(.easeInOut(duration: 0.2)) { chipState = .waiting }
-                                    onDragEnd()
+                    .overlay(
+                        // Finder-grade drag: SwiftUI's onDrag wraps the bundle in a
+                        // data representation System Settings rejects; a real
+                        // NSDraggingSession with an NSURL pasteboard writer is
+                        // accepted like a drag from Finder, starts on first
+                        // press-move, and reports its end authoritatively.
+                        BundleDragSourceView(
+                            onDragWillBegin: {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                    chipState = .dragging
                                 }
-                            }
-                        }
-                        // Payload: bundle file URL — panes accept it like a Finder drop
-                        let provider = NSItemProvider(contentsOf: Bundle.main.bundleURL)
-                            ?? NSItemProvider()
-                        // Register completion to detect drag-session end (D4 / D10)
-                        provider.registerDataRepresentation(
-                            forTypeIdentifier: UTType.fileURL.identifier,
-                            visibility: .all
-                        ) { completion in
-                            DispatchQueue.main.async {
-                                // Completion fired — safety net no longer needed
-                                dragSafetyTimer?.invalidate()
-                                dragSafetyTimer = nil
-                                // AppKit cannot report the drop target, so any session end
-                                // enters waiting so the user knows to flip the switch (D10)
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                    if chipState == .dragging {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            chipState = .waiting
-                                        }
+                            },
+                            onDragEnded: {
+                                if chipState == .dragging {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        chipState = .waiting
                                     }
-                                    onDragEnd()
                                 }
+                                onDragEnd()
                             }
-                            completion(nil, nil)
-                            return nil
-                        }
-                        return provider
-                    }
+                        )
+                    )
             }
 
             Text("Drag me into the list")
@@ -1034,9 +1010,67 @@ struct AppIconDragChipView: View {
                 breathingScale = 1.04
             }
         }
-        .onDisappear {
-            dragSafetyTimer?.invalidate()
-            dragSafetyTimer = nil
+    }
+}
+
+/// Transparent AppKit overlay that drags the app bundle exactly like Finder:
+/// mouseDown + 3pt of travel begins an NSDraggingSession whose pasteboard
+/// writer is the bundle's NSURL (public.file-url) — the payload the System
+/// Settings permission lists validate. draggingSession(_:endedAt:) is the
+/// authoritative end signal, so no safety timers are needed.
+private struct BundleDragSourceView: NSViewRepresentable {
+    var onDragWillBegin: () -> Void
+    var onDragEnded: () -> Void
+
+    func makeNSView(context: Context) -> DragSourceNSView {
+        let view = DragSourceNSView()
+        view.onDragWillBegin = onDragWillBegin
+        view.onDragEnded = onDragEnded
+        return view
+    }
+
+    func updateNSView(_ nsView: DragSourceNSView, context: Context) {
+        nsView.onDragWillBegin = onDragWillBegin
+        nsView.onDragEnded = onDragEnded
+    }
+
+    final class DragSourceNSView: NSView, NSDraggingSource {
+        var onDragWillBegin: (() -> Void)?
+        var onDragEnded: (() -> Void)?
+        private var pressOrigin: NSPoint?
+
+        override func mouseDown(with event: NSEvent) {
+            pressOrigin = event.locationInWindow
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let origin = pressOrigin else { return }
+            let loc = event.locationInWindow
+            guard hypot(loc.x - origin.x, loc.y - origin.y) > 3 else { return }
+            pressOrigin = nil
+
+            let item = NSDraggingItem(pasteboardWriter: Bundle.main.bundleURL as NSURL)
+            let icon = NSApp.applicationIconImage ?? NSImage()
+            item.setDraggingFrame(bounds, contents: icon)
+            beginDraggingSession(with: [item], event: event, source: self)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            pressOrigin = nil
+        }
+
+        func draggingSession(_ session: NSDraggingSession,
+                             sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+            context == .outsideApplication ? .copy : []
+        }
+
+        func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+            DispatchQueue.main.async { self.onDragWillBegin?() }
+        }
+
+        func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint,
+                             operation: NSDragOperation) {
+            DispatchQueue.main.async { self.onDragEnded?() }
         }
     }
 }
