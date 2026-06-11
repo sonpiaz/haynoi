@@ -950,6 +950,7 @@ struct AppIconDragChipView: View {
     let onDragEnd: () -> Void
 
     @State private var breathingScale: CGFloat = 1.0
+    @State private var dragSafetyTimer: Timer?
 
     private var isDragging: Bool { chipState == .dragging }
 
@@ -982,6 +983,16 @@ struct AppIconDragChipView: View {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                 chipState = .dragging
                             }
+                            // Safety-net: if the data-request completion never fires (cancelled
+                            // drag / Escape / released outside any target), recover after 4s (D10).
+                            dragSafetyTimer?.invalidate()
+                            dragSafetyTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
+                                DispatchQueue.main.async {
+                                    guard chipState == .dragging else { return }
+                                    withAnimation(.easeInOut(duration: 0.2)) { chipState = .waiting }
+                                    onDragEnd()
+                                }
+                            }
                         }
                         // Payload: bundle file URL — panes accept it like a Finder drop
                         let provider = NSItemProvider(contentsOf: Bundle.main.bundleURL)
@@ -991,15 +1002,20 @@ struct AppIconDragChipView: View {
                             forTypeIdentifier: UTType.fileURL.identifier,
                             visibility: .all
                         ) { completion in
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            DispatchQueue.main.async {
+                                // Completion fired — safety net no longer needed
+                                dragSafetyTimer?.invalidate()
+                                dragSafetyTimer = nil
                                 // AppKit cannot report the drop target, so any session end
                                 // enters waiting so the user knows to flip the switch (D10)
-                                if chipState == .dragging {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        chipState = .waiting
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    if chipState == .dragging {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            chipState = .waiting
+                                        }
                                     }
+                                    onDragEnd()
                                 }
-                                onDragEnd()
                             }
                             completion(nil, nil)
                             return nil
@@ -1017,6 +1033,10 @@ struct AppIconDragChipView: View {
             withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
                 breathingScale = 1.04
             }
+        }
+        .onDisappear {
+            dragSafetyTimer?.invalidate()
+            dragSafetyTimer = nil
         }
     }
 }
@@ -1197,6 +1217,7 @@ struct DragGrantSheetHost: View {
                 }
                 withAnimation { granted = true }
                 pollTimer?.invalidate()
+                fallbackTimer?.invalidate()
                 // Auto-dismiss ~800ms after grant is shown (D8)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { isPresented = false }
             }
