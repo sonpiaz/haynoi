@@ -24,6 +24,20 @@ final class AppState: ObservableObject {
     @Published var transcriptions: [Transcription] = []
     @Published var showOverlay = false
 
+    // Fix #1: hotkey tap liveness — exposed so onboarding can check and UI
+    // can surface a relaunch prompt when grant doesn't take effect immediately
+    @Published var hotkeyActive: Bool = false
+
+    // Fix #5: secure input blocks key events; set when the watchdog detects it
+    @Published var secureInputActive: Bool = false
+
+    // Fix #2: whether a failed dictation WAV exists that can be retried
+    @Published var hasFailedDictation: Bool = false
+
+    // Fix #4: one-shot transient status string (e.g. "Max dictation length reached")
+    // PipelineController sets this; UI may show it alongside or instead of error.
+    @Published var status: String?
+
     private init() {
         loadHistory()
     }
