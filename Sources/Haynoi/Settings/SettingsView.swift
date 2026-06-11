@@ -4,7 +4,7 @@ import ApplicationServices
 
 struct SettingsView: View {
     @AppStorage("transcriptionMode") private var modeRaw = TranscriptionMode.normal.rawValue
-    @AppStorage("sttQuality") private var sttQuality = "fast"  // "fast" | "quality"
+    @AppStorage("sttQuality") private var sttQuality = "quality"  // "quality" (default) | "fast"
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "deep"
     @AppStorage("muteMusic") private var muteMusic = false
@@ -78,8 +78,8 @@ struct SettingsView: View {
             .disabled(signedInEmail == nil)
 
             Text(sttQuality == "quality"
-                ? "Higher accuracy for tricky audio. Costs more credits per minute."
-                : "Fast and cheap — great for everyday dictation.")
+                ? "Best accuracy for Vietnamese + English — the default."
+                : "Cheaper and quick — fine for clear, simple speech.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

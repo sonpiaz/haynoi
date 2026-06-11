@@ -4,8 +4,8 @@ import Foundation
 // MARK: - STT Provider
 //
 // All transcription routed through Kyma. Two quality tiers picked by user:
-//   "fast"    → whisper-v3-turbo (default, cheap)
-//   "quality" → gpt-4o-mini-transcribe-2025-12-15 (premium accuracy)
+//   "quality" → gpt-4o-mini-transcribe-2025-12-15 (default — best Vi/En accuracy)
+//   "fast"    → whisper-v3-turbo (cheaper, clear speech only)
 //
 // User must be signed in via KymaAuth (device code flow).
 // No BYOK — single hosted backend, single sign-in.
@@ -48,7 +48,7 @@ enum STTProvider {
 
     /// Resolves Kyma model alias from user's quality setting.
     private static func resolveModel() -> String {
-        let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "fast"
+        let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "quality"
         return quality == "quality" ? "transcribe-quality" : "transcribe"
     }
 
