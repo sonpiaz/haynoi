@@ -1,107 +1,341 @@
 import SwiftUI
 
-enum SidebarItem: String, CaseIterable, Identifiable {
-    case history = "History"
-    case usage = "Usage"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .history: return "waveform.circle"
-        case .usage: return "chart.bar"
-        }
-    }
-}
+// MARK: - MainView (Mercury "private ledger")
+//
+// Layout: aurora hairline (2px) → titlebar → two-column body
+//   Left (flexible): greeting block + stats strip + search + ledger history
+//   Right (260px): balance card + mode pills + quick nav
+// The NavigationSplitView from the old design is replaced by a hand-rolled
+// HSplitView equivalent so we can pin the aurora hairline and control every
+// pixel of the paper/ink aesthetic.
 
 struct MainView: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.colorScheme) private var scheme
 
-    // Live-updating hotkey symbol for guidance strings
     @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
 
-    @State private var selected: SidebarItem = .history
+    @ObservedObject private var balanceManager = BalanceManager.shared
+
+    // Context panel nav selection
+    @State private var selectedNav: MercuryNavItem = .ledger
 
     var body: some View {
-        NavigationSplitView {
-            List(SidebarItem.allCases, selection: $selected) { item in
-                Label(item.rawValue, systemImage: item.icon)
-                    .tag(item)
-            }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 200)
-            Divider()
-            SettingsLink {
-                Label("Settings", systemImage: "gear")
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 8)
-        } detail: {
-            ZStack(alignment: .top) {
-                switch selected {
-                case .history:
-                    ContentView()
-                        .environmentObject(state)
-                case .usage:
-                    UsageView()
-                }
+        VStack(spacing: 0) {
+            // Aurora hairline — Mercury signature, pinned to the very top
+            AuroraHairline()
 
-                // Item 4: slim non-blocking banner instead of a full-window dim overlay
-                if state.isRecording {
-                    recordingBanner
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
+            // Recording banner — slim, beneath hairline, paper/ink styled
+            if state.isRecording {
+                mercuryRecordingBanner
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .animation(.easeInOut(duration: 0.2), value: state.isRecording)
+
+            // Two-column body
+            HStack(spacing: 0) {
+                // Left: the ledger
+                ContentView()
+                    .environmentObject(state)
+                    .frame(maxWidth: .infinity)
+
+                // Vertical divider
+                Rectangle()
+                    .fill(Color.mercuryDivider(for: scheme))
+                    .frame(width: 1)
+
+                // Right: context panel
+                contextPanel
+                    .frame(width: 260)
+            }
         }
+        .frame(minWidth: 680, minHeight: 480)
+        .background(Color.mercuryBackground(for: scheme))
+        .animation(.easeInOut(duration: 0.2), value: state.isRecording)
+        .onAppear { BalanceManager.shared.refresh() }
     }
 
-    // MARK: - Recording Banner (Item 4)
+    // MARK: - Recording Banner (Mercury style)
 
-    private var recordingBanner: some View {
+    private var mercuryRecordingBanner: some View {
         HStack(spacing: 10) {
-            // Single shared waveform — same visual language as the orb
+            Circle()
+                .fill(Color.mercuryOrange)
+                .frame(width: 6, height: 6)
+
             RecordingBannerWaveform(audioLevel: CGFloat(state.audioLevel))
-                .frame(width: 36, height: 16)
+                .frame(width: 36, height: 14)
 
             Text("Recording — release \(HotkeyDisplay.symbol) to transcribe")
-                .font(.caption)
-                .foregroundStyle(.primary)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.mercuryLabel3(for: scheme))
 
             Spacer()
 
             Text(formatDuration(state.recordingDuration))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                .monospacedDigit()
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, R.r6)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 0))
+        .background(Color.mercuryWarm(for: scheme))
         .overlay(alignment: .bottom) {
-            Divider()
+            Rectangle()
+                .fill(Color.mercuryDivider(for: scheme))
+                .frame(height: 1)
         }
     }
+
+    // MARK: - Context Panel (right rail)
+
+    private var contextPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            // Balance card
+            contextSection(label: "Balance") {
+                balanceCard
+            }
+
+            contextLine
+
+            // Mode pills
+            contextSection(label: "Mode") {
+                MercuryModePills()
+            }
+
+            contextLine
+
+            // Nav links — only the ledger row is wired to a panel today.
+            // TODO: wire Dictionary/Snippets panels after extracting views from Settings
+            VStack(alignment: .leading, spacing: 2) {
+                mercuryNavRow(.ledger)
+            }
+            .padding(.horizontal, R.r4)
+            .padding(.vertical, R.r3)
+
+            Spacer()
+
+            contextLine
+
+            // Settings link
+            SettingsLink {
+                HStack(spacing: 6) {
+                    Image(systemName: "gear")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    Text("Settings")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                }
+                .padding(.horizontal, R.r5)
+                .padding(.vertical, R.r3)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(Color.mercuryWarm(for: scheme))
+    }
+
+    private func contextSection<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: R.r3) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                .kerning(0.8)
+                .padding(.horizontal, R.r5)
+                .padding(.top, R.r5)
+
+            content()
+                .padding(.horizontal, R.r5)
+                .padding(.bottom, R.r5)
+        }
+    }
+
+    private var contextLine: some View {
+        Rectangle()
+            .fill(Color.mercuryDivider(for: scheme))
+            .frame(height: 1)
+    }
+
+    // MARK: - Balance Card
+
+    private var balanceCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let balance = balanceManager.balance {
+                Text(String(format: "$%.2f", balance))
+                    .font(.mercuryBalance)
+                    .foregroundStyle(Color.mercuryLabel(for: scheme))
+                    .monospacedDigit()
+
+                Text(balance < 0.05
+                     ? "Out of credits — top up to continue."
+                     : "Pay as you go — no subscription.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Progress bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.mercuryMid(for: scheme))
+                            .frame(height: 3)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(LinearGradient(colors: [.auroraCyan, .auroraViolet], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: geo.size.width * balanceFraction, height: 3)
+                    }
+                }
+                .frame(height: 3)
+                .padding(.top, 4)
+                .padding(.bottom, 2)
+
+                HStack {
+                    Text("~$0.02 / min")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    Spacer()
+                    Link("Top up ↗", destination: URL(string: "https://kymaapi.com")!)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.auroraBlue)
+                }
+            } else {
+                // Loading / signed out state
+                HStack(spacing: 6) {
+                    Text("Sign in to see balance.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    Spacer()
+                    SettingsLink {
+                        Text("Sign in")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.auroraBlue)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(R.r4)
+        .background(Color.mercuryBackground(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.mercuryDivider(for: scheme), lineWidth: 1)
+        )
+    }
+
+    private var balanceFraction: CGFloat {
+        guard let b = balanceManager.balance, b > 0 else { return 0 }
+        // Treat $20 as "full"; cap at 1.0
+        return min(CGFloat(b) / 20.0, 1.0)
+    }
+
+    // MARK: - Nav Rows
+
+    @ViewBuilder
+    private func mercuryNavRow(_ item: MercuryNavItem) -> some View {
+        let isActive = selectedNav == item
+        Button {
+            selectedNav = item
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(isActive ? Color.mercuryLabel2(for: scheme) : Color.mercuryLabel4(for: scheme))
+                    .frame(width: 16)
+                Text(item.rawValue)
+                    .font(.system(size: 12, weight: isActive ? .medium : .regular))
+                    .foregroundStyle(isActive ? Color.mercuryLabel(for: scheme) : Color.mercuryLabel3(for: scheme))
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isActive ? Color.mercuryDivider(for: scheme) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Helpers
 
     private func formatDuration(_ d: TimeInterval) -> String {
         String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
     }
 }
 
-// MARK: - Recording Banner Waveform (Item 4, shared visual language)
+// MARK: - Mercury Nav Items
 
-/// A simple bar waveform used in the banner — same visual language as the orb
-/// ring, but linearized for a horizontal strip.  Zero-dependency on the orb
-/// implementation so each can evolve independently.
+enum MercuryNavItem: String, CaseIterable, Identifiable {
+    case ledger = "Ledger"
+    case dictionary = "Dictionary"
+    case snippets = "Snippets"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .ledger: return "list.bullet.rectangle"
+        case .dictionary: return "book.closed"
+        case .snippets: return "text.quote"
+        }
+    }
+}
+
+// MARK: - Mercury Mode Pills
+
+private struct MercuryModePills: View {
+    @AppStorage("transcriptionMode") private var modeRaw = TranscriptionMode.normal.rawValue
+    @Environment(\.colorScheme) private var scheme
+
+    private var currentMode: TranscriptionMode {
+        TranscriptionMode(rawValue: modeRaw) ?? .normal
+    }
+
+    var body: some View {
+        let modes = TranscriptionMode.allCases
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+            ForEach(modes) { mode in
+                modePill(mode)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modePill(_ mode: TranscriptionMode) -> some View {
+        let isActive = mode == currentMode
+        Button {
+            modeRaw = mode.rawValue
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(mode.rawValue)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isActive ? Color.auroraBlue : Color.mercuryLabel2(for: scheme))
+                Text(mode.shortDescription)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isActive ? Color.auroraBlue.opacity(0.05) : Color.mercuryBackground(for: scheme))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        isActive ? Color.auroraBlue.opacity(0.5) : Color.mercuryDivider(for: scheme),
+                        lineWidth: isActive ? 1.5 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Recording Banner Waveform (kept from original, aurora-toned)
+
 struct RecordingBannerWaveform: View {
     let audioLevel: CGFloat
-
     private let barCount = 8
 
     var body: some View {
-        // TimelineView drives the redraw; phase derives from wall-clock time so
-        // there is no unbounded animated value losing float precision.
         TimelineView(.animation) { timeline in
             Canvas { context, size in
                 let phase = timeline.date.timeIntervalSinceReferenceDate * 2.4
@@ -111,12 +345,10 @@ struct RecordingBannerWaveform: View {
 
                 for i in 0..<barCount {
                     let x = CGFloat(i) * (barW + gap)
-
                     let freq1 = sin(phase * 1.1 + Double(i) * 0.65) * 0.5 + 0.5
                     let freq2 = cos(phase * 0.7 + Double(i) * 0.45) * 0.3 + 0.5
                     let response = freq1 * 0.6 + freq2 * 0.4
                     let h = max(3, size.height * max(audioLevel, 0.05) * CGFloat(response))
-
                     let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
                     let path = Path(roundedRect: rect, cornerRadius: 1.5)
                     context.fill(path, with: .color(Color(red: 0.35, green: 0.78, blue: 0.98).opacity(0.8)))
@@ -126,41 +358,67 @@ struct RecordingBannerWaveform: View {
     }
 }
 
-// MARK: - Usage View
+// MARK: - UsageView (Mercury reskin)
 
 struct UsageView: View {
-    var body: some View {
-        Form {
-            Section {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(UsageTracker.currentMonthCount)")
-                            .font(.system(size: 48, weight: .bold, design: .rounded))
-                        Text("transcriptions this month")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.blue)
-                }
-            }
+    @Environment(\.colorScheme) private var scheme
 
-            Section("History") {
-                let stats = UsageTracker.stats
-                if stats.isEmpty {
-                    Text("No usage data yet").foregroundStyle(.secondary)
-                } else {
-                    ForEach(stats, id: \.month) { item in
-                        HStack {
-                            Text(item.month).font(.system(.body, design: .monospaced))
-                            Spacer()
-                            Text("\(item.count) transcriptions").foregroundStyle(.secondary)
+    var body: some View {
+        VStack(spacing: 0) {
+            // Stat
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(UsageTracker.currentMonthCount)")
+                    .font(.system(size: 48, weight: .semibold, design: .serif))
+                    .foregroundStyle(Color.mercuryLabel(for: scheme))
+                    .monospacedDigit()
+                Text("transcriptions this month")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(R.r6)
+            .background(Color.mercuryWarm(for: scheme))
+
+            Rectangle()
+                .fill(Color.mercuryDivider(for: scheme))
+                .frame(height: 1)
+
+            // Monthly breakdown
+            let stats = UsageTracker.stats
+            if stats.isEmpty {
+                VStack(spacing: 10) {
+                    Spacer()
+                    Text("No usage history yet.")
+                        .font(.system(size: 13, design: .serif).italic())
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    Spacer()
+                }
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(stats, id: \.month) { item in
+                            HStack {
+                                Text(item.month)
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                                Spacer()
+                                Text("\(item.count) transcriptions")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                            }
+                            .padding(.horizontal, R.r6)
+                            .padding(.vertical, 12)
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(Color.mercuryDivider(for: scheme))
+                                    .frame(height: 1)
+                                    .padding(.leading, R.r6)
+                            }
                         }
                     }
                 }
             }
         }
-        .formStyle(.grouped)
+        .background(Color.mercuryBackground(for: scheme))
     }
 }

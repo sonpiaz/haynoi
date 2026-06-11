@@ -35,13 +35,15 @@ struct HaynoiApp: App {
     }
 }
 
-// MARK: - Menu Bar Content
+// MARK: - Menu Bar Content (Mercury)
 
-/// Full-height menu bar popover: history list on top, control footer on bottom.
+/// Mercury-styled menu bar popover — paper ground, ink text, serif name poem.
 private struct MenuBarContent: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var authState: AuthState
     @ObservedObject private var checker: UpdaterChecker
+    @ObservedObject private var balanceManager = BalanceManager.shared
+    @Environment(\.colorScheme) private var scheme
     private let updater: SPUUpdater
 
     init(updater: SPUUpdater) {
@@ -50,122 +52,425 @@ private struct MenuBarContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // History list — scrollable, fills available space
-            ContentView()
-                .environmentObject(state)
-                .frame(minHeight: 280, maxHeight: 400)
+        ScrollView {
+            VStack(spacing: 0) {
+                // Header — app identity + name poem
+                popoverHeader
 
-            Divider()
-            menuFooter
+                popoverDivider
+
+                // Last dictation preview
+                if let last = state.transcriptions.first {
+                    lastDictationRow(last)
+                    popoverDivider
+                }
+
+                // Standalone retry row — shown when there is a failed dictation but no history yet
+                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording
+                    && !isLastErrorOutOfCredits && state.transcriptions.isEmpty {
+                    standaloneRetryRow
+                    popoverDivider
+                }
+
+                // Retry / out-of-credits
+                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
+                    retryRow
+                    popoverDivider
+                }
+
+                // Credits strip
+                creditsStrip
+
+                popoverDivider
+
+                // Actions list
+                actionsSection
+
+                popoverDivider
+
+                // Account footer
+                accountFooter
+            }
         }
+        .frame(maxHeight: 520)
+        .background(Color.mercuryBackground(for: scheme))
+        .onAppear { BalanceManager.shared.refresh() }
     }
 
-    // MARK: - Footer
+    // MARK: - Header
 
-    private var menuFooter: some View {
-        VStack(spacing: 0) {
-            // Retry / out-of-credits row
-            if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
-                retryRow
-                Divider()
+    private var popoverHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // App icon
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            // Name + tagline poem
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Haynoi")
+                    .font(.mercuryPopoverName)
+                    .foregroundStyle(Color.mercuryLabel(for: scheme))
+
+                Text("hãy nói  ·  hay nói  ·  Hà Nội")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
             }
 
-            // Account chip + gear + open + quit
-            HStack(spacing: 0) {
-                accountChip
-                Spacer(minLength: 0)
-                footerActions
+            Spacer()
+
+            // Orb mini indicator
+            VStack(spacing: 4) {
+                ZStack {
+                    Circle()
+                        .fill(Color.auroraBlue.opacity(0.07))
+                        .frame(width: 28, height: 28)
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color(red: 0.55, green: 0.9, blue: 1.0),
+                                    Color(red: 0.3, green: 0.15, blue: 0.65)
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 5
+                            )
+                        )
+                        .frame(width: 10, height: 10)
+                        .shadow(color: Color.auroraCyan.opacity(0.6), radius: 3)
+                }
+                Text(orbStatusLabel)
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.bar)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+        .background(Color.mercuryWarm(for: scheme))
     }
+
+    private var orbStatusLabel: String {
+        if state.isRecording { return "recording" }
+        if state.isTranscribing { return "thinking" }
+        return "ready"
+    }
+
+    // MARK: - Last Dictation
+
+    private func lastDictationRow(_ entry: Transcription) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Last dictation")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                .kerning(0.7)
+                .textCase(.uppercase)
+
+            Text(entry.text)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                .lineLimit(2)
+
+            HStack(spacing: 6) {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(entry.text, forType: .string)
+                } label: {
+                    Text("Copy")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.mercuryWarm(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                .help("Copy last dictation")
+
+                if state.hasFailedDictation {
+                    Button {
+                        PipelineController.shared.retryLastFailedDictation()
+                    } label: {
+                        Text("Retry")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.mercuryOrange)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.mercuryWarm(for: scheme))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color.mercuryBackground(for: scheme))
+    }
+
+    // MARK: - Standalone Retry Row (empty history, transient failure)
+
+    /// Shown when the first-ever dictation fails transiently — before any history
+    /// entry exists, so the in-row retry inside lastDictationRow is not visible yet.
+    private var standaloneRetryRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.clockwise.circle.fill")
+                .foregroundStyle(Color.mercuryOrange)
+                .font(.system(size: 11))
+            Text("Dictation failed —")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.mercuryLabel3(for: scheme))
+            Button {
+                PipelineController.shared.retryLastFailedDictation()
+            } label: {
+                Text("Retry")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.mercuryOrange)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.mercuryWarm(for: scheme))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.mercuryOrange.opacity(0.04))
+    }
+
+    // MARK: - Retry Row (out-of-credits)
 
     @ViewBuilder
     private var retryRow: some View {
         if isLastErrorOutOfCredits {
-            // Not a button: the link must stay tappable, and there is nothing
-            // useful to retry until the account has credits again.
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(.red)
-                    .font(.caption)
-                Text("Add credits first")
-                    .font(.caption).foregroundStyle(.secondary)
-                Link("kymaapi.com",
-                     destination: URL(string: "https://kymaapi.com")!)
-                    .font(.caption)
+                    .foregroundStyle(Color.mercuryOrange)
+                    .font(.system(size: 11))
+                Text("Add credits to continue —")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                Link("kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.auroraBlue)
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.red.opacity(0.06))
-        } else {
-            Button {
-                PipelineController.shared.retryLastFailedDictation()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise.circle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-                    Text("Retry Last Dictation")
-                        .font(.caption).foregroundStyle(.orange)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
-            .background(Color.orange.opacity(0.08))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+            .background(Color.mercuryOrange.opacity(0.06))
         }
     }
 
-    private var accountChip: some View {
-        Group {
-            if let email = authState.signedInEmail {
-                HStack(spacing: 5) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
-                    Text(email)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+    // MARK: - Credits Strip
+
+    private var creditsStrip: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                if let balance = balanceManager.balance {
+                    Text(String(format: "$%.2f", balance))
+                        .font(.mercuryPopoverBalance)
+                        .foregroundStyle(Color.mercuryLabel(for: scheme))
+                        .monospacedDigit()
+                } else {
+                    Text("—")
+                        .font(.mercuryPopoverBalance)
+                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
                 }
-            } else {
-                Button {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.crop.circle")
-                            .font(.caption)
-                        Text("Sign in")
-                            .font(.caption)
+
+                // Mini bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.mercuryMid(for: scheme))
+                            .frame(height: 3)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(LinearGradient(colors: [.auroraCyan, .auroraViolet], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: geo.size.width * popoverBalanceFraction, height: 3)
                     }
-                    .foregroundStyle(.blue)
                 }
-                .buttonStyle(.plain)
+                .frame(height: 3)
+
+                Text(popoverMinutesEstimate)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
             }
+
+            Spacer()
+
+            Link("Top up ↗", destination: URL(string: "https://kymaapi.com")!)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.auroraBlue)
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.mercuryWarm(for: scheme))
     }
 
-    private var footerActions: some View {
-        HStack(spacing: 2) {
-            // Check for updates
-            Button {
-                updater.checkForUpdates()
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+    private var popoverBalanceFraction: CGFloat {
+        guard let b = balanceManager.balance, b > 0 else { return 0 }
+        return min(CGFloat(b) / 20.0, 1.0)
+    }
+
+    private var popoverMinutesEstimate: String {
+        guard let b = balanceManager.balance else { return "Sign in to see balance" }
+        let mins = Int(b / 0.02)
+        return "~\(mins) min remaining"
+    }
+
+    // MARK: - Actions Section
+
+    private var actionsSection: some View {
+        VStack(spacing: 2) {
+            // Open Ledger
+            popoverActionRow(
+                iconSystem: "list.bullet.rectangle",
+                iconBg: Color.auroraBlue.opacity(0.12),
+                iconFg: Color.auroraBlue,
+                label: "Open Ledger",
+                sub: "View your full dictation history",
+                trailing: "⌘O"
+            ) {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(#selector(NSApplicationDelegate.applicationShouldHandleReopen(_:hasVisibleWindows:)),
+                                 to: nil, from: nil)
             }
-            .buttonStyle(.plain)
-            .help("Check for Updates")
+
+            // Mode indicator
+            popoverActionRow(
+                iconSystem: "square.grid.2x2",
+                iconBg: Color.mercuryMid(for: scheme),
+                iconFg: Color.mercuryLabel3(for: scheme),
+                label: "Mode: \(TranscriptionMode.current.rawValue)",
+                sub: TranscriptionMode.current.shortDescription,
+                trailing: nil
+            ) {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+
+            // Check for updates
+            popoverActionRow(
+                iconSystem: "arrow.clockwise",
+                iconBg: Color.mercuryMid(for: scheme),
+                iconFg: Color.mercuryLabel3(for: scheme),
+                label: "Check for updates",
+                sub: "Powered by Kyma",
+                trailing: nil
+            ) {
+                updater.checkForUpdates()
+            }
             .disabled(!checker.canCheckForUpdates)
+
+            // Settings
+            popoverActionRow(
+                iconSystem: "gear",
+                iconBg: Color.mercuryMid(for: scheme),
+                iconFg: Color.mercuryLabel3(for: scheme),
+                label: "Settings",
+                sub: "Hotkey, sound, language",
+                trailing: "⌘,"
+            ) {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            .keyboardShortcut(",", modifiers: .command)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color.mercuryBackground(for: scheme))
+    }
+
+    @ViewBuilder
+    private func popoverActionRow(
+        iconSystem: String,
+        iconBg: Color,
+        iconFg: Color,
+        label: String,
+        sub: String,
+        trailing: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(iconBg)
+                        .frame(width: 28, height: 28)
+                    Image(systemName: iconSystem)
+                        .font(.system(size: 13))
+                        .foregroundStyle(iconFg)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                    Text(sub)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                }
+
+                Spacer()
+
+                if let key = trailing {
+                    Text(key)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Color.clear)
+        .onHover { h in /* hover highlight handled by button */ _ = h }
+    }
+
+    // MARK: - Account Footer
+
+    private var accountFooter: some View {
+        HStack(spacing: 10) {
+            // Avatar + email chip
+            HStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.auroraViolet, .auroraCyan], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 24, height: 24)
+                    Text(avatarInitial)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.mercuryDarkInk)
+                }
+
+                if let email = authState.signedInEmail {
+                    Text(shortenEmail(email))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .lineLimit(1)
+                } else {
+                    Button {
+                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                        NSApp.activate(ignoringOtherApps: true)
+                    } label: {
+                        Text("Sign in")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.auroraBlue)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Spacer()
 
             // Settings
             Button {
@@ -173,48 +478,59 @@ private struct MenuBarContent: View {
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Image(systemName: "gear")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
             }
             .buttonStyle(.plain)
+            .frame(width: 28, height: 28)
+            .background(Color.mercuryMid(for: scheme).opacity(0), in: RoundedRectangle(cornerRadius: 6))
             .help("Open Settings")
-            .keyboardShortcut(",", modifiers: .command)
-
-            // Open main window
-            Button {
-                // Activate app and open main window via standard reopen mechanism
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.sendAction(#selector(NSApplicationDelegate.applicationShouldHandleReopen(_:hasVisibleWindows:)),
-                                 to: nil, from: nil)
-            } label: {
-                Image(systemName: "rectangle.on.rectangle")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Open Haynoi")
 
             // Quit
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
                 Image(systemName: "power")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
             }
             .buttonStyle(.plain)
-            .help("Quit Haynoi (⌘Q)")
+            .frame(width: 28, height: 28)
+            .help("Quit Haynoi")
             .keyboardShortcut("q", modifiers: .command)
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.mercuryWarm(for: scheme))
     }
 
     // MARK: - Helpers
+
+    private var avatarInitial: String {
+        authState.signedInEmail?.first.map(String.init)?.uppercased() ?? "H"
+    }
+
+    private func shortenEmail(_ email: String) -> String {
+        guard email.count > 20 else { return email }
+        let parts = email.split(separator: "@")
+        guard parts.count == 2 else { return email }
+        let user = parts[0].prefix(4) + "…"
+        return "\(user)@\(parts[1])"
+    }
 
     private var isLastErrorOutOfCredits: Bool {
         guard let err = state.error else { return false }
         return err.contains("credits") || err.contains("credit")
     }
+
+    private var popoverDivider: some View {
+        Rectangle()
+            .fill(Color.mercuryDivider(for: scheme))
+            .frame(height: 1)
+    }
+
 }
+
 
 // MARK: - Sparkle Checker
 
@@ -347,10 +663,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         let contentView = MainView()
             .environmentObject(AppState.shared)
-            .frame(minWidth: 500, minHeight: 450)
+            .frame(minWidth: 680, minHeight: 480)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 580),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
