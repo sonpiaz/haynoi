@@ -7,15 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-05-16
+## [0.1.0] - 2026-06-11
 
-Initial beta release.
+Initial public release.
 
 ### Added
 - Push-to-talk dictation triggered by holding `⌘ Command` (or `⌥` / `⌃` / `fn`)
-- Cloud transcription via Kyma API — Fast (default) and Quality (premium accuracy) tiers
-- Vietnamese + English mixed transcription
-- Sign in via Kyma device code flow — no manual API key management
+- Cloud transcription via Kyma API — Quality (default) and Fast tiers
+- Vietnamese + English mixed transcription, with a language preference
+  (Auto-detect / Tiếng Việt / English — Auto by default)
+- Sign in with your Kyma account via OAuth (Authorization Code + PKCE) —
+  no manual API key management
+- Credit balance display in Settings, with clear out-of-credits guidance
+- Failed-dictation recovery: when transcription fails, your recording is
+  saved locally and can be retried with one click — spoken words are never
+  silently lost
+- Recording survives microphone changes (AirPods disconnect mid-sentence
+  no longer kills the dictation)
+- Clipboard contents are restored after auto-paste, and dictated text is
+  hidden from clipboard-history managers
 - Custom dictionary for names and domain terms the model gets wrong
 - Snippet triggers: say a word, get expanded text
 - Onboarding wizard for first-launch permission setup
@@ -26,3 +36,4 @@ Initial beta release.
 - Launch at login toggle
 - Sound feedback themes: Deep Bass, Crystal, Minimal
 - Auto-update via Sparkle
+- haynoi.com landing page with download and update feed
