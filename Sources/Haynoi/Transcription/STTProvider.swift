@@ -18,8 +18,21 @@ enum STTProvider {
 
         let mode = TranscriptionMode.current.resolved
         let wavData = try createWAV(samples: samples, sampleRate: 16000)
-        let prompt = CustomDictionary.promptFragment + mode.sttPrompt
         let model = resolveModel()
+
+        // Whisper treats `prompt` as continuation CONTEXT, not instructions —
+        // an all-English instruction string biases its decoder toward ENGLISH
+        // output (Vietnamese speech comes back translated/garbled). Only the
+        // gpt-4o transcribe family follows instructions; whisper gets
+        // Vietnamese-style context + raw vocabulary instead.
+        let prompt: String
+        if model == "transcribe-quality" {
+            prompt = CustomDictionary.promptFragment + mode.sttPrompt
+        } else {
+            let vocab = CustomDictionary.words.filter { !$0.isEmpty }.joined(separator: ", ")
+            prompt = "Đây là đoạn nói tiếng Việt, thỉnh thoảng xen vài từ tiếng Anh."
+                + (vocab.isEmpty ? "" : " Từ vựng: \(vocab).")
+        }
 
         var text = try await callKymaTranscribe(
             apiKey: apiKey, wavData: wavData, model: model, prompt: prompt
