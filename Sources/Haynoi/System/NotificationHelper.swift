@@ -1,5 +1,13 @@
 import UserNotifications
 
+// MARK: - Notification Names
+
+extension Notification.Name {
+    /// Posted by PipelineController after a successful dictation.
+    /// SettingsView listens to this and refreshes the credit balance.
+    static let haynoiDictationCompleted = Notification.Name("com.haynoi.dictationCompleted")
+}
+
 /// Shared notification helpers used by the pipeline and failure-recovery paths.
 ///
 /// Pattern mirrors TextInserter.copyToClipboardWithNotification so all
@@ -31,6 +39,31 @@ enum NotificationHelper {
         UNUserNotificationCenter.current().add(request) { err in
             if let err = err {
                 NSLog("[Haynoi] Failed to post failedDictation notification: %@",
+                      err.localizedDescription)
+            }
+        }
+    }
+
+    // MARK: - Session Expired (401 — key revoked)
+
+    /// Posts a notification telling the user their session has expired and they
+    /// must sign in again.  Tapping the notification opens Haynoi Settings.
+    static func postSessionExpired() {
+        let content = UNMutableNotificationContent()
+        content.title = "Haynoi"
+        content.subtitle = "Session expired."
+        content.body = "Open Settings (⌘,) to sign in again."
+        content.sound = .default
+        content.userInfo = ["action": "openSettings"]
+
+        let request = UNNotificationRequest(
+            identifier: "haynoi-session-expired",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { err in
+            if let err = err {
+                NSLog("[Haynoi] Failed to post sessionExpired notification: %@",
                       err.localizedDescription)
             }
         }

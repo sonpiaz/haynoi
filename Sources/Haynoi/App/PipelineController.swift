@@ -280,11 +280,37 @@ final class PipelineController {
                 let wordCount = text.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
                 UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
+                // Notify that a dictation completed so any open Settings panel can
+                // refresh the credit balance. Posted on the main actor: SwiftUI's
+                // .onReceive delivers on the posting thread.
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .haynoiDictationCompleted, object: nil
+                    )
+                }
             } catch {
                 await MainActor.run {
                     state.isTranscribing = false
-                    // Fix #2: on final failure, persist WAV + error tone + notification.
                     NSLog("[Haynoi] Transcription error (detail): %@", error.localizedDescription)
+                    // Account-level errors (no credits / revoked key) are not
+                    // transient: saving the WAV and offering a retry would just
+                    // loop into the same failure. Surface the actionable copy.
+                    if let sttErr = error as? STTError,
+                       case .outOfCredits = sttErr {
+                        state.error = sttErr.errorDescription
+                        if UserDefaults.standard.bool(forKey: "soundEnabled") {
+                            SoundFeedback.shared.playErrorTone()
+                        }
+                        return
+                    }
+                    if let sttErr = error as? STTError,
+                       case .sessionExpired = sttErr {
+                        state.error = sttErr.errorDescription
+                        if UserDefaults.standard.bool(forKey: "soundEnabled") {
+                            SoundFeedback.shared.playErrorTone()
+                        }
+                        return
+                    }
                     handleTranscriptionFailure(samples: samples, error: error)
                 }
             }
@@ -354,8 +380,11 @@ final class PipelineController {
             SoundFeedback.shared.playErrorTone()
         }
 
-        // Human-readable state message (raw detail already in NSLog above)
-        state.error = "Couldn't transcribe — recording saved. Retry from the menu."
+        // Human-readable state message (raw detail already in NSLog above).
+        // Prefer the specific STTError copy; fall back to the generic line.
+        let humanCopy = (error as? STTError)?.errorDescription
+        state.error = humanCopy.map { "\($0) — recording saved." }
+            ?? "Couldn't transcribe — recording saved. Retry from the menu."
 
         // System notification so the user sees it even in another app
         NotificationHelper.postFailedDictation()
