@@ -1,7 +1,16 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
+
+    // Live hotkey symbol — re-reads when the key changes.
+    // @AppStorage so the view re-renders if the setting changes during a session.
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
+
+    // Search field for item 5
+    @State private var searchText = ""
+    @State private var showClearConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -10,6 +19,10 @@ struct ContentView: View {
             } else {
                 statsHeader
                 Divider()
+                if !state.transcriptions.isEmpty {
+                    searchField
+                    Divider()
+                }
                 transcriptionList
             }
 
@@ -22,9 +35,18 @@ struct ContentView: View {
 
     private var statsHeader: some View {
         HStack(spacing: 16) {
-            statBadge(icon: "⭐", value: "\(UsageTracker.streakDays)", label: "day streak")
-            statBadge(icon: "🚀", value: formatWords(UsageTracker.totalWords), label: "words")
-            statBadge(icon: "🏆", value: "\(UsageTracker.wordsPerMinute)", label: "WPM")
+            statBadge(systemImage: "flame.fill",
+                      color: .orange,
+                      value: "\(UsageTracker.streakDays)",
+                      label: "day streak")
+            statBadge(systemImage: "text.word.spacing",
+                      color: .blue,
+                      value: formatWords(UsageTracker.totalWords),
+                      label: "words")
+            statBadge(systemImage: "gauge.with.needle",
+                      color: .green,
+                      value: "\(UsageTracker.wordsPerMinute)",
+                      label: "WPM")
             Spacer()
             Text("\(UsageTracker.currentMonthCount) this month")
                 .font(.caption2).foregroundStyle(.secondary)
@@ -34,9 +56,11 @@ struct ContentView: View {
         .background(.bar)
     }
 
-    private func statBadge(icon: String, value: String, label: String) -> some View {
+    private func statBadge(systemImage: String, color: Color, value: String, label: String) -> some View {
         HStack(spacing: 6) {
-            Text(icon)
+            Image(systemName: systemImage)
+                .foregroundStyle(color)
+                .font(.caption)
             VStack(alignment: .leading, spacing: 0) {
                 Text(value).font(.system(.caption, design: .rounded)).fontWeight(.semibold)
                 Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
@@ -44,27 +68,109 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Transcription List (grouped by date)
+    // MARK: - Search Field
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("Search transcriptions", text: $searchText)
+                .font(.caption)
+                .textFieldStyle(.plain)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            // Clear history button
+            Button {
+                showClearConfirmation = true
+            } label: {
+                Image(systemName: "trash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Clear History")
+            .confirmationDialog(
+                "Clear all transcription history?",
+                isPresented: $showClearConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear History", role: .destructive) {
+                    state.clearAllTranscriptions()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
+    }
+
+    // MARK: - Transcription List
 
     private var transcriptionList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                ForEach(state.groupedByDate, id: \.key) { group in
-                    Text(group.key.uppercased())
-                        .font(.system(.caption2, design: .rounded))
-                        .fontWeight(.medium)
+        let filtered = filteredTranscriptions
+        return ScrollView {
+            if filtered.isEmpty && !searchText.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                    Text("No results for \"\(searchText)\"")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, 2)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+            } else {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    ForEach(groupedFiltered(filtered), id: \.key) { group in
+                        Text(group.key.uppercased())
+                            .font(.system(.caption2, design: .rounded))
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 2)
 
-                    ForEach(group.value) { entry in
-                        TranscriptionRow(entry: entry)
+                        ForEach(group.value) { entry in
+                            TranscriptionRow(entry: entry) {
+                                state.deleteTranscription(id: entry.id)
+                            }
                             .padding(.horizontal, 12)
+                        }
                     }
                 }
+                .padding(.vertical, 8)
             }
-            .padding(.vertical, 8)
+        }
+    }
+
+    private var filteredTranscriptions: [Transcription] {
+        guard !searchText.isEmpty else { return state.transcriptions }
+        let q = searchText.lowercased()
+        return state.transcriptions.filter { $0.text.lowercased().contains(q) }
+    }
+
+    private func groupedFiltered(_ items: [Transcription]) -> [(key: String, value: [Transcription])] {
+        let cal = Calendar.current
+        let grouped = Dictionary(grouping: items) { entry -> String in
+            if cal.isDateInToday(entry.timestamp) { return "Today" }
+            if cal.isDateInYesterday(entry.timestamp) { return "Yesterday" }
+            let f = DateFormatter()
+            f.dateFormat = "MMMM d, yyyy"
+            return f.string(from: entry.timestamp)
+        }
+        return grouped.sorted { a, b in
+            (a.value.first?.timestamp ?? .distantPast) > (b.value.first?.timestamp ?? .distantPast)
         }
     }
 
@@ -76,10 +182,10 @@ struct ContentView: View {
             Image(systemName: "waveform.circle")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary.opacity(0.5))
-            Text("Hold ⌘ Command and speak")
+            Text("Hold \(HotkeyDisplay.symbolAndName) and speak")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Your transcriptions will appear here")
+            Text("Your transcriptions will appear here.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
             Spacer()
@@ -91,25 +197,17 @@ struct ContentView: View {
 
     private var statusBar: some View {
         VStack(spacing: 0) {
-            // Fix #2: "Retry Last Dictation" row — shown only when a failed
-            // dictation WAV is saved and no transcription is in flight.
-            if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
-                Button {
-                    PipelineController.shared.retryLastFailedDictation()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise.circle.fill")
-                            .foregroundStyle(.orange).font(.caption)
-                        Text("Retry Last Dictation")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+            // Transient status message (non-error, item 6)
+            if let statusMsg = state.status {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.blue).font(.caption)
+                    Text(statusMsg).font(.caption).foregroundStyle(.blue).lineLimit(1)
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .background(Color.orange.opacity(0.08))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(Color.blue.opacity(0.06))
                 Divider()
             }
 
@@ -130,7 +228,8 @@ struct ContentView: View {
                 } else {
                     Image(systemName: "waveform.circle")
                         .foregroundStyle(.secondary).font(.caption)
-                    Text("Hold ⌘ to record").font(.caption).foregroundStyle(.secondary)
+                    Text("Hold \(HotkeyDisplay.symbol) to record")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
@@ -174,34 +273,65 @@ struct ContentView: View {
 
 struct TranscriptionRow: View {
     let entry: Transcription
+    let onDelete: () -> Void
+
     @State private var copied = false
+    @State private var isHovered = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(entry.timestamp, style: .time)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.tertiary)
-                .frame(width: 60, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.text)
+                    .font(.system(.body, design: .rounded))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(entry.text)
-                .font(.system(.body, design: .rounded))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(entry.text, forType: .string)
-                copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(copied ? .green : .secondary)
+                HStack(spacing: 8) {
+                    Text(entry.timestamp, style: .relative)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                    Text("\(entry.wordCount) words")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
             }
-            .buttonStyle(.plain)
+
+            if isHovered {
+                HStack(spacing: 4) {
+                    // Copy button
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(entry.text, forType: .string)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                            .foregroundStyle(copied ? .green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy")
+
+                    // Delete button
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            onDelete()
+                        }
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.caption2)
+                            .foregroundStyle(.red.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Delete")
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.3)))
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }

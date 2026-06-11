@@ -18,6 +18,10 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
 struct MainView: View {
     @EnvironmentObject var state: AppState
+
+    // Live-updating hotkey symbol for guidance strings
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
+
     @State private var selected: SidebarItem = .history
 
     var body: some View {
@@ -29,7 +33,7 @@ struct MainView: View {
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 200)
         } detail: {
-            ZStack {
+            ZStack(alignment: .top) {
                 switch selected {
                 case .history:
                     ContentView()
@@ -40,55 +44,86 @@ struct MainView: View {
                     UsageView()
                 }
 
-                // Recording overlay on top of everything
-                if state.showOverlay {
-                    recordingOverlay
+                // Item 4: slim non-blocking banner instead of a full-window dim overlay
+                if state.isRecording {
+                    recordingBanner
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: state.isRecording)
         }
     }
 
-    private var recordingOverlay: some View {
-        ZStack {
-            Rectangle().fill(.black.opacity(0.28)).ignoresSafeArea()
-            VStack(spacing: 14) {
-                ZStack {
-                    Circle().fill(.ultraThinMaterial).frame(width: 78, height: 78)
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.red)
-                }
-                Text("Listening…")
-                    .font(.headline).fontWeight(.semibold)
+    // MARK: - Recording Banner (Item 4)
 
-                HStack(spacing: 3) {
-                    ForEach(0..<12, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(.white.opacity(0.9))
-                            .frame(width: 4, height: overlayBarHeight(i))
-                    }
-                }
-                .frame(height: 28)
-                .animation(.easeInOut(duration: 0.08), value: state.audioLevel)
+    private var recordingBanner: some View {
+        HStack(spacing: 10) {
+            // Single shared waveform — same visual language as the orb
+            RecordingBannerWaveform(audioLevel: CGFloat(state.audioLevel))
+                .frame(width: 36, height: 16)
 
-                Text("Release ⌘ to stop")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 28).padding(.vertical, 24)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
-            .shadow(radius: 18)
+            Text("Recording — release \(HotkeyDisplay.symbol) to transcribe")
+                .font(.caption)
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Text(formatDuration(state.recordingDuration))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 0))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
     }
 
-    private func overlayBarHeight(_ i: Int) -> CGFloat {
-        let level = CGFloat(max(state.audioLevel, 0.05))
-        let variation = sin(Double(i) * 0.75) * 0.28 + 0.72
-        return max(6, level * 28 * variation)
+    private func formatDuration(_ d: TimeInterval) -> String {
+        String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
     }
 }
 
-// MARK: - Usage View (extracted from SettingsView)
+// MARK: - Recording Banner Waveform (Item 4, shared visual language)
+
+/// A simple bar waveform used in the banner — same visual language as the orb
+/// ring, but linearized for a horizontal strip.  Zero-dependency on the orb
+/// implementation so each can evolve independently.
+struct RecordingBannerWaveform: View {
+    let audioLevel: CGFloat
+    @State private var phase: Double = 0
+
+    private let barCount = 8
+
+    var body: some View {
+        Canvas { context, size in
+            let barW: CGFloat = 3
+            let gap: CGFloat = (size.width - CGFloat(barCount) * barW) / CGFloat(barCount - 1)
+            let midY = size.height / 2
+
+            for i in 0..<barCount {
+                let x = CGFloat(i) * (barW + gap)
+
+                let freq1 = sin(phase * 1.1 + Double(i) * 0.65) * 0.5 + 0.5
+                let freq2 = cos(phase * 0.7 + Double(i) * 0.45) * 0.3 + 0.5
+                let response = freq1 * 0.6 + freq2 * 0.4
+                let h = max(3, size.height * max(audioLevel, 0.05) * CGFloat(response))
+
+                let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
+                let path = Path(roundedRect: rect, cornerRadius: 1.5)
+                context.fill(path, with: .color(.red.opacity(0.75)))
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 0.016).repeatForever(autoreverses: false)) {
+                phase = .infinity
+            }
+        }
+    }
+}
+
+// MARK: - Usage View
 
 struct UsageView: View {
     var body: some View {
