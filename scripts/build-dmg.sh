@@ -65,3 +65,8 @@ xcrun stapler validate "$DMG_PATH"
 
 echo "==> DMG ready: $DMG_PATH"
 ls -lh "$DMG_PATH"
+
+# Stable-name copy: haynoi.com links to releases/latest/download/Haynoi.dmg,
+# which only resolves if every release carries an asset with this exact name.
+cp "$DMG_PATH" "${ROOT}/Haynoi.dmg"
+echo "==> Stable-name copy: ${ROOT}/Haynoi.dmg"

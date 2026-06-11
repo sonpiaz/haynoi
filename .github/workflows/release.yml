@@ -107,6 +107,7 @@ jobs:
           files: |
             Haynoi-*-universal.zip
             Haynoi-*.dmg
+            Haynoi.dmg
             Haynoi-*-universal.dSYM.zip
 
       - name: Commit updated appcast
