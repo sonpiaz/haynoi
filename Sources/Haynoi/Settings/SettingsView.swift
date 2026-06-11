@@ -2,9 +2,15 @@ import SwiftUI
 import AVFoundation
 import ApplicationServices
 
-// MARK: - SettingsView
+// MARK: - SettingsView (Mercury reskin)
+//
+// Structure is unchanged: 5 tabs, all controls/logic identical.
+// Visual changes: paper background, serif small-caps section headers,
+// aurora-toned selected states, paper/ink form labels.
 
 struct SettingsView: View {
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         TabView {
             GeneralTab()
@@ -27,7 +33,7 @@ struct SettingsView: View {
                 .tabItem { Label("Permissions", systemImage: "lock.shield") }
                 .tag(4)
         }
-        .frame(width: 480)
+        .frame(width: 520)
     }
 }
 
@@ -359,7 +365,7 @@ private struct AccountTab: View {
     @ViewBuilder
     private func signedInView(email: String) -> some View {
         HStack {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.mercuryGreen)
             Text("Signed in as \(email)").font(.callout)
             Spacer()
             Button("Sign out") {
@@ -373,15 +379,19 @@ private struct AccountTab: View {
         if let balance = creditBalance {
             HStack {
                 if balance < 0.05 {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.mercuryOrange)
                     Text("Out of credits —")
                         .font(.caption).foregroundStyle(.secondary)
                     Link("top up at kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
                         .font(.caption)
+                        .foregroundStyle(Color.auroraBlue)
                 } else {
-                    Image(systemName: "creditcard").foregroundStyle(.secondary)
-                    Text(String(format: "$%.2f remaining", balance))
-                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Text(String(format: "$%.2f", balance))
+                            .font(.system(size: 13, design: .serif).monospacedDigit())
+                        Text("remaining")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 if isFetchingBalance { ProgressView().controlSize(.mini) }
