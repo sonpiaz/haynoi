@@ -33,10 +33,17 @@ struct MainView: View {
 
             // Two-column body
             HStack(spacing: 0) {
-                // Left: the ledger
-                ContentView()
-                    .environmentObject(state)
-                    .frame(maxWidth: .infinity)
+                // Left: ledger or insights depending on nav selection
+                Group {
+                    if selectedNav == .insights {
+                        InsightsView()
+                            .environmentObject(state)
+                    } else {
+                        ContentView(onStatStripTap: { selectedNav = .insights })
+                            .environmentObject(state)
+                    }
+                }
+                .frame(maxWidth: .infinity)
 
                 // Vertical divider
                 Rectangle()
@@ -105,10 +112,10 @@ struct MainView: View {
 
             contextLine
 
-            // Nav links — only the ledger row is wired to a panel today.
-            // TODO: wire Dictionary/Snippets panels after extracting views from Settings
+            // Nav links — Ledger and Insights are wired; others are placeholders.
             VStack(alignment: .leading, spacing: 2) {
                 mercuryNavRow(.ledger)
+                mercuryNavRow(.insights)
             }
             .padding(.horizontal, R.r4)
             .padding(.vertical, R.r3)
@@ -264,6 +271,7 @@ struct MainView: View {
 
 enum MercuryNavItem: String, CaseIterable, Identifiable {
     case ledger = "Ledger"
+    case insights = "Insights"
     case dictionary = "Dictionary"
     case snippets = "Snippets"
 
@@ -271,9 +279,10 @@ enum MercuryNavItem: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .ledger: return "list.bullet.rectangle"
+        case .ledger:     return "list.bullet.rectangle"
+        case .insights:   return "chart.bar"
         case .dictionary: return "book.closed"
-        case .snippets: return "text.quote"
+        case .snippets:   return "text.quote"
         }
     }
 }

@@ -11,6 +11,9 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var showClearConfirmation = false
 
+    /// Called when the user taps the stats strip (D24 — click-through to Insights).
+    var onStatStripTap: (() -> Void)? = nil
+
     var body: some View {
         VStack(spacing: 0) {
             if state.transcriptions.isEmpty {
@@ -18,7 +21,11 @@ struct ContentView: View {
             } else {
                 greetingBlock
                 mercuryLine
+                // D24: stat strip is a click-through to the Insights page.
                 statsStrip
+                    .contentShape(Rectangle())
+                    .onTapGesture { onStatStripTap?() }
+                    .help("Open Insights")
                 mercuryLine
                 searchBar
                 mercuryLine
@@ -55,6 +62,12 @@ struct ContentView: View {
                 }
             }
             .font(.mercuryGreetingStat)
+
+            // D15: one-time milestone greeting echo — shown until user opens Insights.
+            if MilestoneTracker.hasUnseenMilestone,
+               let milestone = MilestoneTracker.latestMilestone(for: UsageTracker.totalWords) {
+                milestoneEchoLine(milestone: milestone)
+            }
         }
         .padding(.horizontal, R.r6)
         .padding(.vertical, R.r5)
@@ -314,6 +327,41 @@ struct ContentView: View {
             .padding(.vertical, 10)
             .background(Color.mercuryWarm(for: scheme))
         }
+    }
+
+    // MARK: - Milestone Echo (D15)
+
+    private func milestoneEchoLine(milestone: MilestoneTracker.Milestone) -> some View {
+        let isVi = resolveIsVi()
+        let total = UsageTracker.totalWords
+        let label = milestoneComparisonLabel(total: total, isVi: isVi)
+        let msg = isVi
+            ? "Bạn đã đạt \(formatWords(milestone.threshold)) từ — \(label)."
+            : "You've reached \(formatWords(milestone.threshold)) words — \(label)."
+        return Text(msg)
+            .font(.system(size: 12, design: .serif).italic())
+            .foregroundStyle(Color.auroraBlue)
+            .fixedSize(horizontal: false, vertical: true)
+            .onAppear { MilestoneTracker.clearUnseenFlag() }
+    }
+
+    private func milestoneComparisonLabel(total: Int, isVi: Bool) -> String {
+        switch total {
+        case 1_000_000...: return isVi ? "một kệ sách" : "a library shelf"
+        case 500_000...:   return isVi ? "một tập bách khoa toàn thư" : "an encyclopedia volume"
+        case 250_000...:   return isVi ? "một bộ ba tiểu thuyết" : "a boxed trilogy"
+        case 100_000...:   return isVi ? "hai tiểu thuyết" : "two novels"
+        case 50_000...:    return isVi ? "một tiểu thuyết" : "a novel"
+        case 25_000...:    return isVi ? "một truyện vừa" : "a novella"
+        default:           return isVi ? "một truyện ngắn" : "a short story"
+        }
+    }
+
+    private func resolveIsVi() -> Bool {
+        let hint = UserDefaults.standard.string(forKey: "languageHint") ?? "auto"
+        if hint == "vi" { return true }
+        if hint == "en" { return false }
+        return Locale.current.language.languageCode?.identifier == "vi"
     }
 
     // MARK: - Shared divider
