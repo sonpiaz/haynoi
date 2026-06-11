@@ -16,7 +16,14 @@ enum PKCE {
     /// 32 random bytes → base64url string. RFC 7636 requires 43-128 chars.
     static func generateVerifier() -> String {
         var bytes = [UInt8](repeating: 0, count: 32)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        if status != errSecSuccess {
+            // SecRandomCopyBytes failed (extremely rare — e.g. entropy source not ready).
+            // Fall back to SystemRandomNumberGenerator so the verifier is never all-zeros.
+            NSLog("[Haynoi] SecRandomCopyBytes failed (status %d), falling back to SystemRandomNumberGenerator", status)
+            var rng = SystemRandomNumberGenerator()
+            for i in bytes.indices { bytes[i] = UInt8.random(in: 0...255, using: &rng) }
+        }
         return base64URLEncode(Data(bytes))
     }
 
