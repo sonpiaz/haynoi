@@ -74,7 +74,7 @@ extension Color {
     /// Divider line
     static func mercuryDivider(for scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? Color.white.opacity(0.06)
+            ? Color.mercuryDarkInk.opacity(0.06)   // ivory-based, no pure white
             : Color(hex: "#1C1917").opacity(0.07)
     }
 

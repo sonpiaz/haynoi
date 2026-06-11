@@ -294,7 +294,7 @@ struct ContentView: View {
                         .font(.system(size: 11))
                     Text(error)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.red)
+                        .foregroundStyle(Color.mercuryOrange)
                         .lineLimit(1)
                 } else {
                     Circle()
@@ -358,14 +358,18 @@ struct ContentView: View {
         return state.transcriptions.filter { $0.text.lowercased().contains(q) }
     }
 
+    private static let groupDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM d, yyyy"
+        return f
+    }()
+
     private func groupedFiltered(_ items: [Transcription]) -> [(key: String, value: [Transcription])] {
         let cal = Calendar.current
         let grouped = Dictionary(grouping: items) { entry -> String in
             if cal.isDateInToday(entry.timestamp) { return "Today" }
             if cal.isDateInYesterday(entry.timestamp) { return "Yesterday" }
-            let f = DateFormatter()
-            f.dateFormat = "MMMM d, yyyy"
-            return f.string(from: entry.timestamp)
+            return Self.groupDateFormatter.string(from: entry.timestamp)
         }
         return grouped.sorted { a, b in
             (a.value.first?.timestamp ?? .distantPast) > (b.value.first?.timestamp ?? .distantPast)

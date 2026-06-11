@@ -7,6 +7,7 @@ import ApplicationServices
 // Structure is unchanged: 5 tabs, all controls/logic identical.
 // Visual changes: paper background, serif small-caps section headers,
 // aurora-toned selected states, paper/ink form labels.
+// TODO: full Mercury treatment deferred — system Form colors intentionally kept
 
 struct SettingsView: View {
     @Environment(\.colorScheme) private var scheme
@@ -312,10 +313,9 @@ private struct DictionaryTab: View {
 
 private struct AccountTab: View {
     @ObservedObject private var authState = AuthState.shared
+    @ObservedObject private var balanceManager = BalanceManager.shared
     @State private var isSigningIn = false
     @State private var signInError = ""
-    @State private var creditBalance: Double? = nil
-    @State private var isFetchingBalance = false
 
     var body: some View {
         Form {
@@ -323,10 +323,7 @@ private struct AccountTab: View {
         }
         .formStyle(.grouped)
         .frame(minHeight: 320)
-        .onAppear { refreshBalance() }
-        .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
-            refreshBalance()
-        }
+        .onAppear { BalanceManager.shared.refresh() }
     }
 
     private var accountSection: some View {
@@ -371,12 +368,11 @@ private struct AccountTab: View {
             Button("Sign out") {
                 KymaAuth.signOut()
                 authState.didSignOut()
-                creditBalance = nil
             }
             .buttonStyle(.bordered).controlSize(.small)
         }
 
-        if let balance = creditBalance {
+        if let balance = balanceManager.balance {
             HStack {
                 if balance < 0.05 {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.mercuryOrange)
@@ -394,7 +390,6 @@ private struct AccountTab: View {
                     }
                 }
                 Spacer()
-                if isFetchingBalance { ProgressView().controlSize(.mini) }
             }
         }
     }
@@ -422,7 +417,7 @@ private struct AccountTab: View {
             do {
                 let token = try await KymaAuth.shared.signIn()
                 authState.didSignIn(email: token.email)
-                refreshBalance()
+                BalanceManager.shared.refresh()
             } catch KymaAuth.AuthError.cancelled {
                 // user closed the auth window — no error to show
             } catch {
@@ -431,35 +426,6 @@ private struct AccountTab: View {
         }
     }
 
-    func refreshBalance() {
-        guard let apiKey = KymaAuth.currentApiKey else { return }
-        guard !isFetchingBalance else { return }
-        isFetchingBalance = true
-        Task { @MainActor in
-            defer { isFetchingBalance = false }
-            do {
-                let balance = try await fetchCreditBalance(apiKey: apiKey)
-                creditBalance = balance
-            } catch {
-                NSLog("[Haynoi] Balance fetch failed: %@", error.localizedDescription)
-            }
-        }
-    }
-
-    private func fetchCreditBalance(apiKey: String) async throws -> Double {
-        var req = URLRequest(url: URL(string: "https://api.kymaapi.com/v1/credits/balance")!)
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        req.timeoutInterval = 10
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let balance = json["balance"] as? Double else {
-            throw URLError(.cannotParseResponse)
-        }
-        return balance
-    }
 }
 
 // MARK: - Permissions Tab

@@ -42,12 +42,9 @@ private struct MenuBarContent: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var authState: AuthState
     @ObservedObject private var checker: UpdaterChecker
+    @ObservedObject private var balanceManager = BalanceManager.shared
     @Environment(\.colorScheme) private var scheme
     private let updater: SPUUpdater
-
-    // Balance — fetched once on appear
-    @State private var creditBalance: Double? = nil
-    @State private var isFetchingBalance = false
 
     init(updater: SPUUpdater) {
         self.updater = updater
@@ -55,42 +52,49 @@ private struct MenuBarContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header — app identity + name poem
-            popoverHeader
+        ScrollView {
+            VStack(spacing: 0) {
+                // Header — app identity + name poem
+                popoverHeader
 
-            popoverDivider
-
-            // Last dictation preview
-            if let last = state.transcriptions.first {
-                lastDictationRow(last)
                 popoverDivider
-            }
 
-            // Retry / out-of-credits
-            if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
-                retryRow
+                // Last dictation preview
+                if let last = state.transcriptions.first {
+                    lastDictationRow(last)
+                    popoverDivider
+                }
+
+                // Standalone retry row — shown when there is a failed dictation but no history yet
+                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording
+                    && !isLastErrorOutOfCredits && state.transcriptions.isEmpty {
+                    standaloneRetryRow
+                    popoverDivider
+                }
+
+                // Retry / out-of-credits
+                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
+                    retryRow
+                    popoverDivider
+                }
+
+                // Credits strip
+                creditsStrip
+
                 popoverDivider
+
+                // Actions list
+                actionsSection
+
+                popoverDivider
+
+                // Account footer
+                accountFooter
             }
-
-            // Credits strip
-            creditsStrip
-
-            popoverDivider
-
-            // Actions list
-            actionsSection
-
-            popoverDivider
-
-            // Account footer
-            accountFooter
         }
+        .frame(maxHeight: 520)
         .background(Color.mercuryBackground(for: scheme))
-        .onAppear { refreshBalance() }
-        .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
-            refreshBalance()
-        }
+        .onAppear { BalanceManager.shared.refresh() }
     }
 
     // MARK: - Header
@@ -208,6 +212,38 @@ private struct MenuBarContent: View {
         .background(Color.mercuryBackground(for: scheme))
     }
 
+    // MARK: - Standalone Retry Row (empty history, transient failure)
+
+    /// Shown when the first-ever dictation fails transiently — before any history
+    /// entry exists, so the in-row retry inside lastDictationRow is not visible yet.
+    private var standaloneRetryRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.clockwise.circle.fill")
+                .foregroundStyle(Color.mercuryOrange)
+                .font(.system(size: 11))
+            Text("Dictation failed —")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.mercuryLabel3(for: scheme))
+            Button {
+                PipelineController.shared.retryLastFailedDictation()
+            } label: {
+                Text("Retry")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.mercuryOrange)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.mercuryWarm(for: scheme))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.mercuryOrange.opacity(0.04))
+    }
+
     // MARK: - Retry Row (out-of-credits)
 
     @ViewBuilder
@@ -236,7 +272,7 @@ private struct MenuBarContent: View {
     private var creditsStrip: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                if let balance = creditBalance {
+                if let balance = balanceManager.balance {
                     Text(String(format: "$%.2f", balance))
                         .font(.mercuryPopoverBalance)
                         .foregroundStyle(Color.mercuryLabel(for: scheme))
@@ -277,12 +313,12 @@ private struct MenuBarContent: View {
     }
 
     private var popoverBalanceFraction: CGFloat {
-        guard let b = creditBalance, b > 0 else { return 0 }
+        guard let b = balanceManager.balance, b > 0 else { return 0 }
         return min(CGFloat(b) / 20.0, 1.0)
     }
 
     private var popoverMinutesEstimate: String {
-        guard let b = creditBalance else { return "Sign in to see balance" }
+        guard let b = balanceManager.balance else { return "Sign in to see balance" }
         let mins = Int(b / 0.02)
         return "~\(mins) min remaining"
     }
@@ -413,7 +449,7 @@ private struct MenuBarContent: View {
                         .frame(width: 24, height: 24)
                     Text(avatarInitial)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.mercuryDarkInk)
                 }
 
                 if let email = authState.signedInEmail {
@@ -493,27 +529,8 @@ private struct MenuBarContent: View {
             .frame(height: 1)
     }
 
-    private func refreshBalance() {
-        guard let apiKey = KymaAuth.currentApiKey else { return }
-        guard !isFetchingBalance else { return }
-        isFetchingBalance = true
-        Task { @MainActor in
-            defer { isFetchingBalance = false }
-            do {
-                var req = URLRequest(url: URL(string: "https://api.kymaapi.com/v1/credits/balance")!)
-                req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                req.timeoutInterval = 10
-                let (data, response) = try await URLSession.shared.data(for: req)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let balance = json["balance"] as? Double else { return }
-                creditBalance = balance
-            } catch {
-                NSLog("[Haynoi] Popover balance: %@", error.localizedDescription)
-            }
-        }
-    }
 }
+
 
 // MARK: - Sparkle Checker
 

@@ -15,9 +15,7 @@ struct MainView: View {
 
     @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
 
-    // Balance state — lifted here from AccountTab so context panel can show it
-    @State private var creditBalance: Double? = nil
-    @State private var isFetchingBalance = false
+    @ObservedObject private var balanceManager = BalanceManager.shared
 
     // Context panel nav selection
     @State private var selectedNav: MercuryNavItem = .ledger
@@ -53,10 +51,7 @@ struct MainView: View {
         .frame(minWidth: 680, minHeight: 480)
         .background(Color.mercuryBackground(for: scheme))
         .animation(.easeInOut(duration: 0.2), value: state.isRecording)
-        .onAppear { refreshBalance() }
-        .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
-            refreshBalance()
-        }
+        .onAppear { BalanceManager.shared.refresh() }
     }
 
     // MARK: - Recording Banner (Mercury style)
@@ -110,11 +105,10 @@ struct MainView: View {
 
             contextLine
 
-            // Nav links
+            // Nav links — only the ledger row is wired to a panel today.
+            // TODO: wire Dictionary/Snippets panels after extracting views from Settings
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(MercuryNavItem.allCases) { item in
-                    mercuryNavRow(item)
-                }
+                mercuryNavRow(.ledger)
             }
             .padding(.horizontal, R.r4)
             .padding(.vertical, R.r3)
@@ -166,7 +160,7 @@ struct MainView: View {
 
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let balance = creditBalance {
+            if let balance = balanceManager.balance {
                 Text(String(format: "$%.2f", balance))
                     .font(.mercuryBalance)
                     .foregroundStyle(Color.mercuryLabel(for: scheme))
@@ -206,23 +200,16 @@ struct MainView: View {
             } else {
                 // Loading / signed out state
                 HStack(spacing: 6) {
-                    if isFetchingBalance {
-                        ProgressView().controlSize(.mini)
-                        Text("Fetching balance…")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.mercuryLabel4(for: scheme))
-                    } else {
-                        Text("Sign in to see balance.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.mercuryLabel4(for: scheme))
-                        Spacer()
-                        SettingsLink {
-                            Text("Sign in")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.auroraBlue)
-                        }
-                        .buttonStyle(.plain)
+                    Text("Sign in to see balance.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    Spacer()
+                    SettingsLink {
+                        Text("Sign in")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.auroraBlue)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -236,7 +223,7 @@ struct MainView: View {
     }
 
     private var balanceFraction: CGFloat {
-        guard let b = creditBalance, b > 0 else { return 0 }
+        guard let b = balanceManager.balance, b > 0 else { return 0 }
         // Treat $20 as "full"; cap at 1.0
         return min(CGFloat(b) / 20.0, 1.0)
     }
@@ -267,27 +254,6 @@ struct MainView: View {
     }
 
     // MARK: - Helpers
-
-    private func refreshBalance() {
-        guard let apiKey = KymaAuth.currentApiKey else { return }
-        guard !isFetchingBalance else { return }
-        isFetchingBalance = true
-        Task { @MainActor in
-            defer { isFetchingBalance = false }
-            do {
-                var req = URLRequest(url: URL(string: "https://api.kymaapi.com/v1/credits/balance")!)
-                req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                req.timeoutInterval = 10
-                let (data, response) = try await URLSession.shared.data(for: req)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let balance = json["balance"] as? Double else { return }
-                creditBalance = balance
-            } catch {
-                NSLog("[Haynoi] MainView balance fetch: %@", error.localizedDescription)
-            }
-        }
-    }
 
     private func formatDuration(_ d: TimeInterval) -> String {
         String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
