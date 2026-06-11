@@ -5,5 +5,58 @@
         <link>https://raw.githubusercontent.com/sonpiaz/haynoi/main/appcast.xml</link>
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Thu, 11 Jun 2026 21:08:38 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.1.0</h2>
+
+<p>Initial public release.</p>
+
+<h3>Added</h3>
+<ul>
+<li>Push-to-talk dictation triggered by holding <code>⌘ Command</code> (or <code>⌥</code> / <code>⌃</code> / <code>fn</code>)</li>
+<li>Cloud transcription via Kyma API — Quality (default) and Fast tiers</li>
+<li>Vietnamese + English mixed transcription, with a language preference</li>
+</ul>
+<p>  (Auto-detect / Tiếng Việt / English — Auto by default)</p>
+<ul>
+<li>Sign in with your Kyma account via OAuth (Authorization Code + PKCE) —</li>
+</ul>
+<p>  no manual API key management</p>
+<ul>
+<li>Credit balance display in Settings, with clear out-of-credits guidance</li>
+<li>Failed-dictation recovery: when transcription fails, your recording is</li>
+</ul>
+<p>  saved locally and can be retried with one click — spoken words are never</p>
+<p>  silently lost</p>
+<ul>
+<li>Recording survives microphone changes (AirPods disconnect mid-sentence</li>
+</ul>
+<p>  no longer kills the dictation)</p>
+<ul>
+<li>Clipboard contents are restored after auto-paste, and dictated text is</li>
+</ul>
+<p>  hidden from clipboard-history managers</p>
+<ul>
+<li>Custom dictionary for names and domain terms the model gets wrong</li>
+<li>Snippet triggers: say a word, get expanded text</li>
+<li>Onboarding wizard for first-launch permission setup</li>
+<li>Floating bar with waveform indicator during recording</li>
+<li>Transcription history with date grouping</li>
+<li>4 transcription modes: Normal, Clean (remove fillers), Email (formal rewrite), Auto</li>
+<li>Mute music during dictation toggle</li>
+<li>Launch at login toggle</li>
+<li>Sound feedback themes: Deep Bass, Crystal, Minimal</li>
+<li>Auto-update via Sparkle</li>
+<li>haynoi.com landing page with download and update feed</li>
+</ul>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.0/Haynoi-0.1.0-universal.zip" length="2352210" type="application/octet-stream" sparkle:edSignature="7Saen0alTUMNkNOdpZGsItijT66ZPEEN0iDxbzG7zd6w79Tj68UrPIDmbyveeMolXpl0sMF/WtMfe5f3O9icCg=="/>
+        </item>
     </channel>
 </rss>
