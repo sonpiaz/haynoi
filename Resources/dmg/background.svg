@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <defs>
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3ADCF5"/>
+      <stop offset="0.4" stop-color="#6B7FFF"/>
+      <stop offset="0.7" stop-color="#9B5CF6"/>
+      <stop offset="1" stop-color="#E040B8"/>
+    </linearGradient>
+    <radialGradient id="bloom" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#F4F1EA"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="400" fill="url(#bloom)"/>
+  <text x="300" y="70" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="26" fill="#1C1917">Install Haynoi</text>
+  <text x="300" y="100" text-anchor="middle" font-family="-apple-system, Helvetica, sans-serif" font-size="14" fill="#6B6456">Drag the icon into your Applications folder</text>
+  <!-- aurora arrow from app icon (~150,205) to Applications (~450,205) -->
+  <g stroke="url(#aurora)" stroke-width="4" fill="none" stroke-linecap="round">
+    <line x1="232" y1="205" x2="372" y2="205" stroke-dasharray="2 12"/>
+    <path d="M366 193 L388 205 L366 217" stroke-width="4"/>
+  </g>
+  <text x="300" y="360" text-anchor="middle" font-family="-apple-system, Helvetica, sans-serif" font-size="11" fill="#9C9487" letter-spacing="1.5">HAYNOI.COM  ·  SIGNED &amp; NOTARIZED</text>
+</svg>

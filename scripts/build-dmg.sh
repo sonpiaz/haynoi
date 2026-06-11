@@ -40,13 +40,43 @@ fi
 DMG_PATH="${ROOT}/Haynoi-${MARKETING_VERSION}.dmg"
 rm -f "$DMG_PATH"
 
-echo "==> Creating DMG"
+echo "==> Creating branded DMG (background + arrow + icon layout)"
 STAGE_DIR=$(mktemp -d /tmp/haynoi-dmg.XXXXXX)
 API_KEY_FILE="/tmp/haynoi-dmg-api-key.p8"
-trap 'rm -rf "$STAGE_DIR" "$API_KEY_FILE"' EXIT
+RW_DMG=$(mktemp -u /tmp/haynoi-rw.XXXXXX).dmg
+trap 'rm -rf "$STAGE_DIR" "$API_KEY_FILE" "$RW_DMG"; hdiutil detach "/Volumes/Haynoi" >/dev/null 2>&1 || true' EXIT
 cp -R "$APP_BUNDLE" "$STAGE_DIR/"
 ln -s /Applications "$STAGE_DIR/Applications"
-hdiutil create -volname "Haynoi" -srcfolder "$STAGE_DIR" -ov -format UDZO "$DMG_PATH"
+mkdir -p "$STAGE_DIR/.background"
+cp "${ROOT}/Resources/dmg/background.png" "$STAGE_DIR/.background/background.png"
+
+# Writable image → style via Finder AppleScript → compress to read-only UDZO.
+hdiutil create -volname "Haynoi" -srcfolder "$STAGE_DIR" -ov -format UDRW -fs HFS+ "$RW_DMG" >/dev/null
+hdiutil attach "$RW_DMG" -noautoopen -mountpoint "/Volumes/Haynoi" >/dev/null
+osascript <<'APPLESCRIPT' || true
+tell application "Finder"
+  tell disk "Haynoi"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {400, 180, 1000, 580}
+    set theViewOptions to the icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 112
+    set background picture of theViewOptions to file ".background:background.png"
+    set position of item "Haynoi.app" of container window to {150, 205}
+    set position of item "Applications" of container window to {450, 205}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+APPLESCRIPT
+sync
+hdiutil detach "/Volumes/Haynoi" >/dev/null 2>&1 || true
+hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH" -ov >/dev/null
+rm -f "$RW_DMG"
 
 echo "==> Signing DMG"
 codesign --force --timestamp --sign "$APP_IDENTITY" "$DMG_PATH"
