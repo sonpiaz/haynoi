@@ -2,7 +2,6 @@ import SwiftUI
 
 enum SidebarItem: String, CaseIterable, Identifiable {
     case history = "History"
-    case settings = "Settings"
     case usage = "Usage"
 
     var id: String { rawValue }
@@ -10,7 +9,6 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .history: return "waveform.circle"
-        case .settings: return "gear"
         case .usage: return "chart.bar"
         }
     }
@@ -32,14 +30,20 @@ struct MainView: View {
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 200)
+            Divider()
+            SettingsLink {
+                Label("Settings", systemImage: "gear")
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 8)
         } detail: {
             ZStack(alignment: .top) {
                 switch selected {
                 case .history:
                     ContentView()
                         .environmentObject(state)
-                case .settings:
-                    SettingsView()
                 case .usage:
                     UsageView()
                 }

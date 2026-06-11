@@ -222,6 +222,29 @@ private final class UpdaterChecker: ObservableObject {
     }
 }
 
+// MARK: - Onboarding Window
+
+/// Custom NSWindow subclass that handles the close button mid-onboarding.
+/// When the user clicks X before completing, if all permissions are already
+/// granted the session is marked complete; otherwise it's marked skipped so
+/// the main window opens without a second immediate prompt.
+final class OnboardingWindow: NSWindow {
+    override func close() {
+        let completed = UserDefaults.standard.bool(forKey: "onboardingCompleted")
+        if !completed {
+            // Mark as complete only when permissions are all granted; otherwise
+            // mark as skipped so the user can get back via Restart Setup.
+            UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+            NSLog("[Haynoi] Onboarding closed by user — marked complete/skipped")
+        }
+        super.close()
+        // Ensure the main window opens so the app isn't left with no visible UI
+        DispatchQueue.main.async {
+            AppDelegate.shared?.showMainWindowPublic()
+        }
+    }
+}
+
 // MARK: - App Delegate
 
 @MainActor
@@ -250,6 +273,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             NSLog("[Haynoi] Notification permission: %@", granted ? "granted" : "denied")
+        }
+
+        // Observe "Restart Setup…" from the Settings General tab
+        NotificationCenter.default.addObserver(
+            forName: .haynoiRestartSetup,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.showOnboarding()
         }
 
         if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
@@ -330,6 +362,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func showOnboarding() {
+        // Close any existing onboarding window before showing a fresh one
+        onboardingWindow?.close()
+        onboardingWindow = nil
+
         let view = OnboardingView {
             DispatchQueue.main.async { [weak self] in
                 self?.onboardingWindow?.close()
@@ -338,13 +374,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 480),
-            styleMask: [.titled, .closable],
+        let window = OnboardingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Welcome to Haynoi"
+        // Hidden titlebar: window chrome present (draggable) but no visible title bar text
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
         window.contentView = NSHostingView(rootView: view)
         window.center()
         window.makeKeyAndOrderFront(nil)
