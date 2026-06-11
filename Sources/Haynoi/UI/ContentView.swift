@@ -1,14 +1,13 @@
 import SwiftUI
 import Combine
 
+// MARK: - ContentView (Mercury Ledger)
+
 struct ContentView: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.colorScheme) private var scheme
 
-    // Live hotkey symbol — re-reads when the key changes.
-    // @AppStorage so the view re-renders if the setting changes during a session.
     @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
-
-    // Search field for item 5
     @State private var searchText = ""
     @State private var showClearConfirmation = false
 
@@ -17,84 +16,147 @@ struct ContentView: View {
             if state.transcriptions.isEmpty {
                 emptyState
             } else {
-                statsHeader
-                Divider()
-                if !state.transcriptions.isEmpty {
-                    searchField
-                    Divider()
+                greetingBlock
+                mercuryLine
+                statsStrip
+                mercuryLine
+                searchBar
+                mercuryLine
+                ledgerList
+            }
+            mercuryLine
+            ledgerStatusBar
+        }
+        .background(Color.mercuryBackground(for: scheme))
+    }
+
+    // MARK: - Greeting Block
+
+    private var greetingBlock: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(greetingString)
+                .font(.mercuryGreeting)
+                .foregroundStyle(Color.mercuryLabel2(for: scheme))
+
+            Group {
+                if state.totalWords > 0 {
+                    (
+                        Text("You have spoken ")
+                            .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        + Text("\(formatWords(state.totalWords)) words")
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                        + Text(" — and counting.")
+                            .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    )
+                } else {
+                    Text("Start dictating and your words will appear here.")
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
                 }
-                transcriptionList
             }
-
-            Divider()
-            statusBar
+            .font(.mercuryGreetingStat)
         }
+        .padding(.horizontal, R.r6)
+        .padding(.vertical, R.r5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.mercuryBackground(for: scheme))
     }
 
-    // MARK: - Stats Header
+    // MARK: - Stats Strip
 
-    private var statsHeader: some View {
-        HStack(spacing: 16) {
-            statBadge(systemImage: "flame.fill",
-                      color: .orange,
-                      value: "\(UsageTracker.streakDays)",
-                      label: "day streak")
-            statBadge(systemImage: "text.word.spacing",
-                      color: .blue,
-                      value: formatWords(UsageTracker.totalWords),
-                      label: "words")
-            statBadge(systemImage: "gauge.with.needle",
-                      color: .green,
-                      value: "\(UsageTracker.wordsPerMinute)",
-                      label: "WPM")
+    private var statsStrip: some View {
+        HStack(spacing: 0) {
+            statItem(value: "\(UsageTracker.streakDays)", label: "day streak", style: .orange)
+            statDivider
+            statItem(value: formatWords(UsageTracker.totalWords), label: "total words", style: .aurora)
+            statDivider
+
+            if UsageTracker.wordsPerMinute > 0 {
+                statItem(value: "\(UsageTracker.wordsPerMinute)", label: "avg WPM", style: .ink)
+                statDivider
+            }
+
+            statItem(value: "\(UsageTracker.currentMonthCount)", label: "this month", style: .ink)
             Spacer()
-            Text("\(UsageTracker.currentMonthCount) this month")
-                .font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.horizontal, R.r6)
+        .frame(height: 60)
+        .background(Color.mercuryWarm(for: scheme))
     }
 
-    private func statBadge(systemImage: String, color: Color, value: String, label: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .foregroundStyle(color)
-                .font(.caption)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value).font(.system(.caption, design: .rounded)).fontWeight(.semibold)
-                Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Color.mercuryDivider(for: scheme))
+            .frame(width: 1, height: 28)
+            .padding(.trailing, R.r5)
+    }
+
+    private enum StatStyle { case orange, aurora, ink }
+
+    @ViewBuilder
+    private func statItem(value: String, label: String, style: StatStyle) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            switch style {
+            case .orange:
+                Text(value)
+                    .font(.mercuryStatValue)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.mercuryOrange)
+            case .aurora:
+                Text(value)
+                    .font(.mercuryStatValue)
+                    .monospacedDigit()
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.auroraBlue, .auroraViolet],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            case .ink:
+                Text(value)
+                    .font(.mercuryStatValue)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.mercuryLabel(for: scheme))
             }
+
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(Color.mercuryLabel4(for: scheme))
         }
+        .padding(.trailing, R.r5)
     }
 
-    // MARK: - Search Field
+    // MARK: - Search Bar
 
-    private var searchField: some View {
-        HStack(spacing: 6) {
+    private var searchBar: some View {
+        HStack(spacing: R.r2) {
             Image(systemName: "magnifyingglass")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("Search transcriptions", text: $searchText)
-                .font(.caption)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+
+            TextField("Search your ledger…", text: $searchText)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.mercuryLabel2(for: scheme))
                 .textFieldStyle(.plain)
+
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
                 }
                 .buttonStyle(.plain)
             }
-            // Clear history button
+
             Button {
                 showClearConfirmation = true
             } label: {
                 Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
             }
             .buttonStyle(.plain)
             .help("Clear History")
@@ -109,47 +171,183 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) {}
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
+        .padding(.horizontal, R.r6)
+        .frame(height: 40)
+        .background(Color.mercuryBackground(for: scheme))
     }
 
-    // MARK: - Transcription List
+    // MARK: - Ledger List
 
-    private var transcriptionList: some View {
+    private var ledgerList: some View {
         let filtered = filteredTranscriptions
         return ScrollView {
             if filtered.isEmpty && !searchText.isEmpty {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 28))
-                        .foregroundStyle(.secondary.opacity(0.4))
+                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
                     Text("No results for \"\(searchText)\"")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
+                .padding(.vertical, 40)
             } else {
-                LazyVStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groupedFiltered(filtered), id: \.key) { group in
-                        Text(group.key.uppercased())
-                            .font(.system(.caption2, design: .rounded))
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
-                            .padding(.bottom, 2)
+                        // Date group header — small-caps serif
+                        HStack(spacing: R.r3) {
+                            Text(group.key)
+                                .font(.mercuryGroupLabel)
+                                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                                .textCase(nil)
+
+                            Rectangle()
+                                .fill(Color.mercuryDivider(for: scheme))
+                                .frame(height: 1)
+                        }
+                        .padding(.horizontal, R.r6)
+                        .padding(.top, 14)
+                        .padding(.bottom, 6)
 
                         ForEach(group.value) { entry in
-                            TranscriptionRow(entry: entry) {
+                            LedgerEntryRow(entry: entry, scheme: scheme) {
                                 state.deleteTranscription(id: entry.id)
                             }
-                            .padding(.horizontal, 12)
                         }
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.bottom, R.r3)
+            }
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Color.auroraBlue.opacity(0.06))
+                    .frame(width: 72, height: 72)
+                Image(systemName: "waveform.circle")
+                    .font(.system(size: 36))
+                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+            }
+            VStack(spacing: 6) {
+                Text("Your ledger is empty.")
+                    .font(.system(size: 15, design: .serif).italic())
+                    .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                Text("Hold \(HotkeyDisplay.symbolAndName) and speak — your words appear here.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 280)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.mercuryBackground(for: scheme))
+    }
+
+    // MARK: - Status Bar
+
+    private var ledgerStatusBar: some View {
+        VStack(spacing: 0) {
+            if let statusMsg = state.status {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(Color.auroraBlue)
+                        .font(.system(size: 11))
+                    Text(statusMsg)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.auroraBlue)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, R.r6)
+                .padding(.vertical, 5)
+                .background(Color.auroraBlue.opacity(0.06))
+                mercuryLine
+            }
+
+            HStack(spacing: R.r2) {
+                if state.isRecording {
+                    Circle()
+                        .fill(Color.mercuryOrange)
+                        .frame(width: 6, height: 6)
+                    MercuryLevelBars(audioLevel: CGFloat(state.audioLevel))
+                        .frame(width: 40, height: 14)
+                    Text(formatDuration(state.recordingDuration))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.mercuryOrange)
+                        .monospacedDigit()
+                } else if state.isTranscribing {
+                    ProgressView().controlSize(.small)
+                    Text("Transcribing…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                } else if let error = state.error {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.mercuryOrange)
+                        .font(.system(size: 11))
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.red)
+                        .lineLimit(1)
+                } else {
+                    Circle()
+                        .fill(Color.mercuryLabel5(for: scheme))
+                        .frame(width: 6, height: 6)
+                    (
+                        Text("Hold ")
+                        + Text(HotkeyDisplay.symbol)
+                        + Text(" to record  ·  Powered by Kyma")
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, R.r6)
+            .padding(.vertical, 10)
+            .background(Color.mercuryWarm(for: scheme))
+        }
+    }
+
+    // MARK: - Shared divider
+
+    private var mercuryLine: some View {
+        Rectangle()
+            .fill(Color.mercuryDivider(for: scheme))
+            .frame(height: 1)
+    }
+
+    // MARK: - Helpers
+
+    private var greetingString: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let langHint = UserDefaults.standard.string(forKey: "languageHint") ?? "auto"
+        let isVi: Bool
+        if langHint == "vi" {
+            isVi = true
+        } else if langHint == "en" {
+            isVi = false
+        } else {
+            isVi = Locale.current.language.languageCode?.identifier == "vi"
+        }
+        if isVi {
+            switch hour {
+            case 0..<12:  return "Chào buổi sáng."
+            case 12..<18: return "Chào buổi chiều."
+            default:      return "Chào buổi tối."
+            }
+        } else {
+            switch hour {
+            case 0..<12:  return "Good morning."
+            case 12..<18: return "Good afternoon."
+            default:      return "Good evening."
             }
         }
     }
@@ -174,164 +372,160 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "waveform.circle")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary.opacity(0.5))
-            Text("Hold \(HotkeyDisplay.symbolAndName) and speak")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Text("Your transcriptions will appear here.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Status Bar
-
-    private var statusBar: some View {
-        VStack(spacing: 0) {
-            // Transient status message (non-error, item 6)
-            if let statusMsg = state.status {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.blue).font(.caption)
-                    Text(statusMsg).font(.caption).foregroundStyle(.blue).lineLimit(1)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Color.blue.opacity(0.06))
-                Divider()
-            }
-
-            HStack(spacing: 8) {
-                if state.isRecording {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    levelBars
-                    Text(formatDuration(state.recordingDuration))
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.red)
-                } else if state.isTranscribing {
-                    ProgressView().controlSize(.small)
-                    Text("Transcribing...").font(.caption).foregroundStyle(.secondary)
-                } else if let error = state.error {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange).font(.caption)
-                    Text(error).font(.caption).foregroundStyle(.red).lineLimit(1)
-                } else {
-                    Image(systemName: "waveform.circle")
-                        .foregroundStyle(.secondary).font(.caption)
-                    Text("Hold \(HotkeyDisplay.symbol) to record")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.bar)
-        }
-    }
-
-    private var levelBars: some View {
-        HStack(spacing: 1.5) {
-            ForEach(0..<8, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(.red.opacity(0.8))
-                    .frame(width: 3, height: barHeight(i))
-            }
-        }
-        .frame(height: 16)
-        .animation(.easeInOut(duration: 0.1), value: state.audioLevel)
-    }
-
-    // MARK: - Helpers
-
-    private func barHeight(_ i: Int) -> CGFloat {
-        let level = CGFloat(state.audioLevel)
-        let variation = sin(Double(i) * 0.9) * 0.3 + 0.7
-        return max(3, level * 16 * variation)
+    private func formatWords(_ count: Int) -> String {
+        if count >= 1_000 { return String(format: "%.1fK", Float(count) / 1_000) }
+        return "\(count)"
     }
 
     private func formatDuration(_ d: TimeInterval) -> String {
         String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
     }
-
-    private func formatWords(_ count: Int) -> String {
-        if count >= 1000 { return String(format: "%.1fK", Float(count) / 1000) }
-        return "\(count)"
-    }
 }
 
-// MARK: - Transcription Row
+// MARK: - Ledger Entry Row
 
-struct TranscriptionRow: View {
+struct LedgerEntryRow: View {
     let entry: Transcription
+    let scheme: ColorScheme
     let onDelete: () -> Void
 
     @State private var copied = false
     @State private var isHovered = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: R.r4) {
+            // Main content
+            VStack(alignment: .leading, spacing: 4) {
                 Text(entry.text)
-                    .font(.system(.body, design: .rounded))
-                    .textSelection(.enabled)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
 
-                HStack(spacing: 8) {
-                    Text(entry.timestamp, style: .relative)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                    Text("\(entry.wordCount) words")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
+                // Language tag
+                let lang = detectLanguage(entry.text)
+                Text(lang.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(lang == "vi" ? Color.auroraBlue : Color(hex: "#0F8CA5"))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        lang == "vi"
+                            ? Color.auroraBlue.opacity(0.10)
+                            : Color.auroraCyan.opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 3)
+                    )
             }
 
-            if isHovered {
-                HStack(spacing: 4) {
-                    // Copy button
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(entry.text, forType: .string)
-                        copied = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-                    } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.caption2)
-                            .foregroundStyle(copied ? .green : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Copy")
+            // Meta column
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(entry.timestamp, style: .time)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .monospacedDigit()
 
-                    // Delete button
-                    Button {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            onDelete()
+                Text("\(entry.wordCount) words")
+                    .font(.system(size: 11, design: .serif))
+                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .monospacedDigit()
+
+                if isHovered {
+                    HStack(spacing: 5) {
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(entry.text, forType: .string)
+                            copied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                        } label: {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(copied ? Color.mercuryGreen : Color.mercuryLabel3(for: scheme))
                         }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.caption2)
-                            .foregroundStyle(.red.opacity(0.7))
+                        .buttonStyle(.plain)
+                        .frame(width: 26, height: 26)
+                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                        .help("Copy")
+
+                        Button {
+                            withAnimation(.easeOut(duration: 0.15)) { onDelete() }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(Color.mercuryOrange)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 26, height: 26)
+                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                        .help("Delete")
                     }
-                    .buttonStyle(.plain)
-                    .help("Delete")
+                    .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
+            }
+            .frame(minWidth: 80, alignment: .trailing)
+        }
+        .padding(.horizontal, R.r6)
+        .padding(.vertical, 12)
+        .background(isHovered ? Color.mercuryWarm(for: scheme) : Color.clear)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.mercuryDivider(for: scheme))
+                .frame(height: 1)
+                .padding(.leading, R.r6)
+        }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .animation(.easeInOut(duration: 0.12), value: copied)
+        .onHover { isHovered = $0 }
+    }
+
+    private func detectLanguage(_ text: String) -> String {
+        let viChars = CharacterSet(charactersIn: "àáảãạăắặằẵẳâấậầẫẩđèéẹẻẽêếệềễểìíịỉĩòóọỏõôốộồỗổơớợờỡởùúụủũưứựừữửỳýỵỷỹÀÁẢÃẠĂẮẶẰẴẲÂẤẬẦẪẨĐÈÉẸẺẼÊẾỆỀỄỂÌÍỊỈĨÒÓỌỎÕÔỐỘỒỖỔƠỚỢỜỠỞÙÚỤỦŨƯỨỰỪỮỬỲÝỴỶỸ")
+        for char in text.unicodeScalars {
+            if viChars.contains(char) { return "vi" }
+        }
+        return "en"
+    }
+}
+
+// MARK: - Mercury Level Bars (recording indicator)
+
+struct MercuryLevelBars: View {
+    let audioLevel: CGFloat
+    private let barCount = 8
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let phase = timeline.date.timeIntervalSinceReferenceDate * 2.4
+                let barW: CGFloat = 3
+                let gap: CGFloat = (size.width - CGFloat(barCount) * barW) / CGFloat(barCount - 1)
+                let midY = size.height / 2
+
+                for i in 0..<barCount {
+                    let x = CGFloat(i) * (barW + gap)
+                    let freq1 = sin(phase * 1.1 + Double(i) * 0.65) * 0.5 + 0.5
+                    let freq2 = cos(phase * 0.7 + Double(i) * 0.45) * 0.3 + 0.5
+                    let response = freq1 * 0.6 + freq2 * 0.4
+                    let h = max(2.5, size.height * max(audioLevel, 0.05) * CGFloat(response))
+                    let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
+                    let path = Path(roundedRect: rect, cornerRadius: 1.5)
+                    context.fill(path, with: .color(Color.mercuryOrange.opacity(0.75)))
+                }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.3)))
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
-        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - TranscriptionRow (compatibility alias — not used in Mercury flow)
+
+struct TranscriptionRow: View {
+    let entry: Transcription
+    let onDelete: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        LedgerEntryRow(entry: entry, scheme: scheme, onDelete: onDelete)
     }
 }
