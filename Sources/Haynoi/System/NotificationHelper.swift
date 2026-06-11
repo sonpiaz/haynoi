@@ -6,6 +6,10 @@ extension Notification.Name {
     /// Posted by PipelineController after a successful dictation.
     /// SettingsView listens to this and refreshes the credit balance.
     static let haynoiDictationCompleted = Notification.Name("com.haynoi.dictationCompleted")
+
+    /// Posted when the user taps "Restart Setup…" in Settings.
+    /// AppDelegate observes this and re-opens the onboarding window.
+    static let haynoiRestartSetup = Notification.Name("com.haynoi.restartSetup")
 }
 
 /// Shared notification helpers used by the pipeline and failure-recovery paths.

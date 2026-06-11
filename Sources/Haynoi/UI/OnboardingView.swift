@@ -2,190 +2,494 @@ import SwiftUI
 import AVFoundation
 import ApplicationServices
 
+// MARK: - Onboarding Step Enum
+
+private enum OnboardingStep: Int, CaseIterable {
+    case welcome = 0
+    case microphone
+    case inputMonitoring
+    case accessibility
+    case signIn
+    case tryIt
+
+    var totalCount: Int { OnboardingStep.allCases.count }
+
+    // Steps that show the progress indicator (everything after Welcome)
+    var showsProgress: Bool { self != .welcome }
+
+    // Zero-based index among the progress steps
+    var progressIndex: Int { rawValue - 1 }
+}
+
+// MARK: - OnboardingView
+
 struct OnboardingView: View {
-    @State private var currentStep = 0
+    @State private var step: OnboardingStep = .welcome
     @State private var micGranted = false
     @State private var axGranted = false
     @State private var inputGranted = false
-    @State private var pollTimer: Timer?
-    // Fix #1: after grant we try to arm the tap; if it still fails (macOS
-    // sometimes requires a full relaunch), show a Relaunch button.
     @State private var hotkeyArmFailed = false
+    @State private var pollTimer: Timer?
+
+    // Sign-in step state
+    @ObservedObject private var authState = AuthState.shared
+    @State private var isSigningIn = false
+    @State private var signInError = ""
+
+    // Try It step state
+    @State private var trialText = ""
+    @State private var trialTranscriptionCount = 0
+    @State private var trialCelebrating = false
+
     var onComplete: () -> Void
 
-    private let steps: [(title: String, subtitle: String, icon: String)] = [
-        ("Microphone", "Haynoi needs your mic to hear your voice and convert speech to text.", "mic.fill"),
-        ("Accessibility", "Haynoi needs Accessibility to type text directly into any app you're using.", "hand.raised.fill"),
-        ("Input Monitoring", "Haynoi needs Input Monitoring to detect when you hold the ⌘ key.", "keyboard.fill"),
-    ]
+    // Tracks how many transcriptions existed before Try It step began
+    @State private var baselineTranscriptionCount = 0
+
+    // Number of progress dots (steps after Welcome)
+    private let progressStepCount = OnboardingStep.allCases.count - 1
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header with logo
-            VStack(spacing: 12) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+            appHeader
 
-                Text("Welcome to Haynoi")
-                    .font(.system(size: 24, weight: .bold))
+            progressDots
+                .opacity(step.showsProgress ? 1 : 0)
+                .animation(.easeInOut(duration: 0.3), value: step.showsProgress)
 
-                Text("Let's set up a few things so Haynoi can work its magic.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.top, 32)
-            .padding(.bottom, 28)
-
-            // Progress dots
-            HStack(spacing: 8) {
-                ForEach(0..<3) { i in
-                    Circle()
-                        .fill(stepColor(i))
-                        .frame(width: 8, height: 8)
+            ZStack {
+                switch step {
+                case .welcome:        welcomeStep
+                case .microphone:     microphoneStep
+                case .inputMonitoring: inputMonitoringStep
+                case .accessibility:  accessibilityStep
+                case .signIn:         signInStep
+                case .tryIt:          tryItStep
                 }
             }
-            .padding(.bottom, 24)
-
-            // Step content
-            if currentStep < 3 {
-                permissionStep(index: currentStep)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
-                    .id(currentStep)
-            } else {
-                completionStep
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
+            .transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            ))
+            .id(step.rawValue)
+            .animation(.easeInOut(duration: 0.3), value: step.rawValue)
 
             Spacer()
         }
-        .frame(width: 440, height: 480)
+        .frame(width: 460, height: 520)
         .background(.background)
-        .animation(.easeInOut(duration: 0.3), value: currentStep)
         .onAppear {
             refreshPermissions()
             startPolling()
-            skipGrantedSteps()
         }
         .onDisappear { stopPolling() }
+        .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
+            if step == .tryIt {
+                handleTrialTranscription()
+            }
+        }
     }
 
-    // MARK: - Permission Step
+    // MARK: - Header
 
-    private func permissionStep(index: Int) -> some View {
-        let step = steps[index]
-        let granted = isGranted(index)
+    private var appHeader: some View {
+        VStack(spacing: 10) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+                .padding(.top, 28)
 
-        return VStack(spacing: 20) {
+            Text(headerTitle)
+                .font(.system(size: 20, weight: .semibold))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .padding(.bottom, 16)
+    }
+
+    private var headerTitle: String {
+        switch step {
+        case .welcome:        return "Welcome to Haynoi"
+        case .microphone:     return "Allow Microphone Access"
+        case .inputMonitoring: return "Allow Input Monitoring"
+        case .accessibility:  return "Allow Accessibility"
+        case .signIn:         return "Connect Your Account"
+        case .tryIt:          return "Try Your First Dictation"
+        }
+    }
+
+    // MARK: - Progress Dots
+
+    private var progressDots: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<progressStepCount, id: \.self) { i in
+                Capsule()
+                    .fill(dotColor(for: i))
+                    .frame(width: i == step.progressIndex ? 20 : 7, height: 7)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: step.rawValue)
+            }
+        }
+        .padding(.bottom, 20)
+    }
+
+    private func dotColor(for i: Int) -> Color {
+        guard step.showsProgress else { return .gray.opacity(0.25) }
+        if i < step.progressIndex { return .green }
+        if i == step.progressIndex { return .accentColor }
+        return .gray.opacity(0.25)
+    }
+
+    // MARK: - Step Bodies
+
+    // Step A: Welcome
+    private var welcomeStep: some View {
+        VStack(spacing: 18) {
+            Text("Haynoi lets you dictate into any app by holding \(HotkeyDisplay.symbol). Set up takes about a minute.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 340)
+
+            Button("Get Started") {
+                advance()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .frame(width: 160)
+            .padding(.top, 8)
+        }
+        .padding(.horizontal, 32)
+    }
+
+    // Step B: Microphone
+    private var microphoneStep: some View {
+        permissionStepView(
+            icon: "mic.fill",
+            granted: micGranted,
+            body: "Haynoi needs your microphone to hear your voice and convert speech to text.",
+            troubleHint: "If the system prompt doesn't appear, go to System Settings → Privacy & Security → Microphone and enable Haynoi.",
+            deniedURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+            grantAction: {
+                AVCaptureDevice.requestAccess(for: .audio) { _ in
+                    DispatchQueue.main.async { refreshPermissions() }
+                }
+            }
+        )
+    }
+
+    // Step C: Input Monitoring
+    private var inputMonitoringStep: some View {
+        permissionStepView(
+            icon: "keyboard.fill",
+            granted: inputGranted,
+            body: "Haynoi needs Input Monitoring to detect when you hold the \(HotkeyDisplay.symbol) key.",
+            troubleHint: "Open System Settings → Privacy & Security → Input Monitoring, then toggle Haynoi on.",
+            deniedURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
+            grantAction: {
+                // Register in the system list and open preferences
+                CGRequestListenEventAccess()
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        )
+    }
+
+    // Step D: Accessibility
+    private var accessibilityStep: some View {
+        permissionStepView(
+            icon: "hand.raised.fill",
+            granted: axGranted,
+            body: "Haynoi needs Accessibility to type text directly into any app you're using.",
+            troubleHint: "Open System Settings → Privacy & Security → Accessibility, then toggle Haynoi on.",
+            deniedURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+            grantAction: {
+                let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+                _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
+            }
+        )
+    }
+
+    // Step E: Sign In
+    private var signInStep: some View {
+        VStack(spacing: 18) {
             ZStack {
                 Circle()
-                    .fill(granted ? Color.green.opacity(0.12) : Color.blue.opacity(0.1))
+                    .fill(signInCircleColor)
                     .frame(width: 64, height: 64)
-                Image(systemName: granted ? "checkmark.circle.fill" : step.icon)
+                Image(systemName: signInCircleIcon)
                     .font(.system(size: 28))
-                    .foregroundStyle(granted ? .green : .blue)
+                    .foregroundStyle(signInIconColor)
             }
+            .animation(.easeInOut(duration: 0.2), value: authState.signedInEmail != nil)
 
-            VStack(spacing: 8) {
-                Text("Step \(index + 1): \(step.title)")
-                    .font(.headline)
-                Text(step.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
-            }
+            Text("Connect your Kyma account — free credit included. Dictation needs an account to transcribe.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 340)
 
-            if granted {
-                Label("Granted", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.green)
-                    .padding(.top, 4)
-            } else {
-                Button(action: { grantPermission(index) }) {
-                    Text("Grant Access")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(width: 160, height: 36)
+            if let email = authState.signedInEmail {
+                VStack(spacing: 10) {
+                    Label(email, systemImage: "checkmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.green)
+
+                    Button("Continue") { advance() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(width: 160)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.top, 4)
+            } else {
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Button(isSigningIn ? "Opening browser…" : "Sign in with Kyma") {
+                            signIn()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(isSigningIn)
 
-                if index > 0 {
-                    Text("Haynoi will detect automatically when you grant it")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        if isSigningIn { ProgressView().controlSize(.small) }
+                    }
+
+                    if !signInError.isEmpty {
+                        Text(signInError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 300)
+                    }
+
+                    Button("Skip for now") { advance() }
+                        .buttonStyle(.plain)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
         .padding(.horizontal, 32)
     }
 
-    // MARK: - Completion
+    private var signInCircleColor: Color {
+        authState.signedInEmail != nil ? .green.opacity(0.12) : .blue.opacity(0.1)
+    }
 
-    private var completionStep: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .fill(Color.green.opacity(0.12))
-                    .frame(width: 64, height: 64)
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.green)
+    private var signInCircleIcon: String {
+        authState.signedInEmail != nil ? "checkmark.circle.fill" : "person.crop.circle.fill"
+    }
+
+    private var signInIconColor: Color {
+        authState.signedInEmail != nil ? .green : .blue
+    }
+
+    // Step F: Try It
+    private var tryItStep: some View {
+        VStack(spacing: 16) {
+            if trialCelebrating {
+                ZStack {
+                    Circle()
+                        .fill(Color.green.opacity(0.12))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.green)
+                        .scaleEffect(trialCelebrating ? 1.1 : 1.0)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: trialCelebrating)
+                }
             }
 
-            Text("You're all set!")
-                .font(.title2.weight(.bold))
-
-            Text("Hold **⌘ Command** and speak.\nRelease to transcribe.")
+            Text("Hold **\(HotkeyDisplay.symbol)** and say what you're thinking. Release to transcribe.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 340)
 
-            // Fix #1: if the tap still failed after grant (macOS occasionally
-            // requires a relaunch), surface a Relaunch button instead of the
-            // normal Get Started. After relaunch the tap arms immediately.
-            if hotkeyArmFailed {
-                VStack(spacing: 8) {
-                    Text("Haynoi needs to relaunch to activate the hotkey.")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 280)
+            TextEditor(text: $trialText)
+                .font(.body)
+                .frame(height: 80)
+                .scrollContentBackground(.hidden)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.separator, lineWidth: 0.5)
+                )
+                .padding(.horizontal, 2)
 
-                    Button(action: relaunchApp) {
-                        Text("Relaunch Haynoi")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(width: 160, height: 36)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .controlSize(.large)
-                }
-            } else {
-                Button(action: {
+            VStack(spacing: 8) {
+                Button("Finish") {
                     UserDefaults.standard.set(true, forKey: "onboardingCompleted")
                     onComplete()
-                }) {
-                    Text("Get Started")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(width: 160, height: 36)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .padding(.top, 8)
+                .frame(width: 160)
+
+                Button("Skip") {
+                    UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                    onComplete()
+                }
+                .buttonStyle(.plain)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 32)
+        .onAppear {
+            baselineTranscriptionCount = AppState.shared.transcriptions.count
+        }
+    }
+
+    // MARK: - Shared Permission Step Layout
+
+    @ViewBuilder
+    private func permissionStepView(
+        icon: String,
+        granted: Bool,
+        body: String,
+        troubleHint: String,
+        deniedURL: String,
+        grantAction: @escaping () -> Void
+    ) -> some View {
+        let isDenied = checkDenied(for: icon)
+
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(granted ? Color.green.opacity(0.12) : Color.blue.opacity(0.1))
+                    .frame(width: 64, height: 64)
+                Image(systemName: granted ? "checkmark.circle.fill" : icon)
+                    .font(.system(size: 28))
+                    .foregroundStyle(granted ? .green : .blue)
+            }
+            .animation(.easeInOut(duration: 0.25), value: granted)
+
+            Text(body)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 340)
+
+            if granted {
+                VStack(spacing: 10) {
+                    Label("Granted", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.green)
+
+                    Button("Continue") { advance() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(width: 160)
+                }
+            } else if isDenied {
+                VStack(spacing: 10) {
+                    Button("Open System Settings") {
+                        if let url = URL(string: deniedURL) { NSWorkspace.shared.open(url) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .frame(width: 180)
+
+                    troubleDisclosure(hint: troubleHint)
+                }
+            } else {
+                VStack(spacing: 10) {
+                    Button("Grant Access") { grantAction() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(width: 160)
+
+                    troubleDisclosure(hint: troubleHint)
+                }
+            }
+
+            // Relaunch nudge: surfaces only at Input Monitoring if arm failed
+            if icon == "keyboard.fill" && hotkeyArmFailed && !granted {
+                VStack(spacing: 6) {
+                    Text("Haynoi needs to relaunch to activate the hotkey after granting.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 300)
+                    Button("Relaunch Haynoi") { relaunchApp() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                        .controlSize(.regular)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, 32)
+    }
+
+    @ViewBuilder
+    private func troubleDisclosure(hint: String) -> some View {
+        DisclosureGroup("Having trouble?") {
+            Text(hint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+                .padding(.top, 4)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: 340)
+    }
+
+    // MARK: - Navigation
+
+    private func advance() {
+        guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
+            // Past final step — complete
+            UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+            onComplete()
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.3)) {
+            step = next
+        }
+    }
+
+    // MARK: - Sign-In
+
+    private func signIn() {
+        signInError = ""
+        isSigningIn = true
+        Task { @MainActor in
+            defer { isSigningIn = false }
+            do {
+                let token = try await KymaAuth.shared.signIn()
+                authState.didSignIn(email: token.email)
+                // Auto-advance after successful sign-in
+                advance()
+            } catch KymaAuth.AuthError.cancelled {
+                // user dismissed — no error
+            } catch {
+                signInError = error.localizedDescription
             }
         }
     }
 
-    /// Relaunches Haynoi via `open -a` so the new process has fresh Input
-    /// Monitoring entitlement recognition from TCC, then terminates self.
+    // MARK: - Try It Transcription Observer
+
+    private func handleTrialTranscription() {
+        let newCount = AppState.shared.transcriptions.count
+        guard newCount > baselineTranscriptionCount else { return }
+        // Pull the latest text into the trial text field
+        if let latest = AppState.shared.transcriptions.first {
+            trialText = latest.text
+        }
+        trialCelebrating = true
+        if UserDefaults.standard.bool(forKey: "soundEnabled") {
+            SoundFeedback.shared.playSuccessTone()
+        }
+    }
+
+    // MARK: - Relaunch
+
     private func relaunchApp() {
         UserDefaults.standard.set(true, forKey: "onboardingCompleted")
         let path = Bundle.main.bundleURL.path
@@ -196,45 +500,11 @@ struct OnboardingView: View {
             try task.run()
             NSApp.terminate(nil)
         } catch {
-            // Do not terminate — the user would be left with no running app.
-            // Log the error so it shows up in Console.app.
             NSLog("[Haynoi] relaunchApp: failed to launch — %@", error.localizedDescription)
         }
     }
 
-    // MARK: - Helpers
-
-    private func stepColor(_ i: Int) -> Color {
-        if isGranted(i) { return .green }
-        if i == currentStep { return .blue }
-        return .gray.opacity(0.3)
-    }
-
-    private func isGranted(_ index: Int) -> Bool {
-        switch index {
-        case 0: return micGranted
-        case 1: return axGranted
-        case 2: return inputGranted
-        default: return false
-        }
-    }
-
-    private func grantPermission(_ index: Int) {
-        switch index {
-        case 0:
-            AVCaptureDevice.requestAccess(for: .audio) { _ in
-                DispatchQueue.main.async { refreshPermissions() }
-            }
-        case 1:
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
-            _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
-        case 2:
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-                NSWorkspace.shared.open(url)
-            }
-        default: break
-        }
-    }
+    // MARK: - Permission Helpers
 
     private func refreshPermissions() {
         micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
@@ -242,10 +512,13 @@ struct OnboardingView: View {
         inputGranted = CGPreflightListenEventAccess()
     }
 
-    private func skipGrantedSteps() {
-        // Advance past already-granted permissions
-        while currentStep < 3 && isGranted(currentStep) {
-            currentStep += 1
+    /// Returns true when a permission has been explicitly denied (not undetermined).
+    private func checkDenied(for icon: String) -> Bool {
+        switch icon {
+        case "mic.fill":
+            return AVCaptureDevice.authorizationStatus(for: .audio) == .denied
+        default:
+            return false
         }
     }
 
@@ -254,26 +527,18 @@ struct OnboardingView: View {
             DispatchQueue.main.async {
                 let wasInputGranted = inputGranted
                 refreshPermissions()
-                // Auto-advance when current step gets granted
-                if currentStep < 3 && isGranted(currentStep) {
-                    withAnimation {
-                        currentStep += 1
-                    }
-                    // Keep advancing past any already-granted steps
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        skipGrantedSteps()
-                    }
+                // Auto-advance when the current permission step is granted
+                let currentlyOnPermissionStep = (step == .microphone && micGranted)
+                    || (step == .inputMonitoring && inputGranted)
+                    || (step == .accessibility && axGranted)
+                if currentlyOnPermissionStep {
+                    withAnimation { advance() }
                 }
-                // Fix #1: when Input Monitoring just became granted, try to arm
-                // the tap immediately — the user shouldn't need to relaunch.
+                // Try to arm hotkey once Input Monitoring flips to granted
                 if !wasInputGranted && inputGranted {
                     let armed = HotkeyManager.shared.start()
                     NSLog("[Haynoi] Onboarding: hotkey arm after grant = %d", armed ? 1 : 0)
-                    if !armed {
-                        // macOS sometimes needs a relaunch to honour the new
-                        // TCC grant — surface the Relaunch button at completion.
-                        hotkeyArmFailed = true
-                    }
+                    if !armed { hotkeyArmFailed = true }
                 }
             }
         }

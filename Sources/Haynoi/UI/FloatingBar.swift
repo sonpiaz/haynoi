@@ -2,8 +2,22 @@ import SwiftUI
 import AppKit
 import Combine
 
-/// Floating voice indicator — pure visual, no text.
-/// Design philosophy: a living, breathing ember of sound.
+// MARK: - Orb State
+
+/// Drives the visual state machine of the floating orb.
+/// PipelineController is the only writer; FloatingBarView observes AppState.
+enum OrbState: Equatable {
+    case recording          // mic is hot — animated ember + waveform ring
+    case transcribing       // mic released, waiting for STT response
+    case success            // text inserted — brief tick then fade-out
+    case error              // something went wrong — brief flash then fade-out
+    case idle               // window hidden (intermediate before orderOut)
+}
+
+// MARK: - Controller
+
+/// Floating voice indicator — pure visual, no text, never blocks clicks.
+/// Positioning: bottom-center of the main display, above the Dock.
 class FloatingBarController {
     static let shared = FloatingBarController()
 
@@ -12,7 +26,10 @@ class FloatingBarController {
 
     private init() {}
 
-    func show() {
+    // MARK: - Lifecycle
+
+    /// Shows the orb in recording state.  No-op if already visible.
+    @MainActor func show() {
         guard window == nil else { return }
 
         let view = FloatingBarView()
@@ -33,17 +50,11 @@ class FloatingBarController {
         win.backgroundColor = .clear
         win.level = .floating
         win.hasShadow = false
-        win.isMovableByWindowBackground = true
+        // Pure indicator — must never intercept mouse events from the target app
+        win.ignoresMouseEvents = true
         win.collectionBehavior = [.canJoinAllSpaces, .stationary]
-        win.ignoresMouseEvents = false
 
-        // Position: top-center, tucked under menu bar
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            let x = screenFrame.midX - size.width / 2
-            let y = screenFrame.maxY - 16
-            win.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        repositionWindow(win, size: size)
 
         win.animationBehavior = .none
         win.orderFront(nil)
@@ -51,7 +62,16 @@ class FloatingBarController {
         hostingView = hosting
     }
 
-    func hide() {
+    /// Transitions to a non-recording state (transcribing / success / error).
+    /// Callers should follow up with hide() after the appropriate dwell time
+    /// for success/error states.  No-op if the window is not visible.
+    @MainActor func transition(to newState: OrbState) {
+        guard window != nil else { return }
+        AppState.shared.orbState = newState
+    }
+
+    /// Hides and destroys the orb window.
+    @MainActor func hide() {
         guard let win = window else { return }
         win.orderOut(nil)
 
@@ -62,30 +82,88 @@ class FloatingBarController {
             win.contentView = nil
             _ = hosting
         }
+        // Reset orb state so next show() starts fresh
+        AppState.shared.orbState = .idle
+    }
+
+    // MARK: - Private
+
+    private func repositionWindow(_ win: NSWindow, size: NSSize) {
+        guard let screen = NSScreen.main else { return }
+        let visible = screen.visibleFrame
+        // Bottom-center, 24pt above the bottom edge of the visible frame
+        // (sits neatly above the Dock on default-position configs).
+        let x = visible.midX - size.width / 2
+        let y = visible.minY + 24
+        win.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
 
-// MARK: - The Visual — A Living Sound Orb
+// MARK: - The Visual
 
+/// The floating orb view.  Reads `AppState.orbState` to switch between
+/// recording, transcribing, success, and error visuals.
 struct FloatingBarView: View {
     @EnvironmentObject private var state: AppState
 
-    // Smoothed audio level with momentum — organic, not jumpy
+    // Audio-reactive fields — updated by the display link when recording
     @State private var displayLevel: CGFloat = 0.05
     @State private var phase: Double = 0
     @State private var breathe: Double = 0
-    @State private var displayLink: Timer?
     @State private var levelHistory: [CGFloat] = Array(repeating: 0.05, count: 6)
+    @State private var displayLink: Timer?
+
+    // Transcribing pulse
+    @State private var transcribePulse: Double = 0
+
+    // Success / error — checkmark scale + color injection
+    @State private var successScale: CGFloat = 1.0
+    @State private var successOpacity: Double = 1.0
+    @State private var orbVisible: Bool = true
 
     var body: some View {
         ZStack {
-            // Layer 1: Outer glow pulse — breathes with voice
+            switch state.orbState {
+            case .recording:
+                recordingOrb
+            case .transcribing:
+                transcribingOrb
+            case .success:
+                successOrb
+            case .error:
+                errorOrb
+            case .idle:
+                // Should not be visible in idle; hide is driven externally.
+                Color.clear
+            }
+        }
+        .frame(width: 80, height: 80)
+        .opacity(orbVisible ? 1 : 0)
+        .scaleEffect(orbVisible ? 1 : 0.7)
+        .animation(.easeInOut(duration: 0.2), value: orbVisible)
+        .onChange(of: state.orbState) { _, newState in
+            handleStateChange(newState)
+        }
+        .onAppear {
+            startAnimationLoop()
+            orbVisible = true
+        }
+        .onDisappear {
+            stopAnimationLoop()
+        }
+    }
+
+    // MARK: - Recording Orb (aurora palette)
+
+    private var recordingOrb: some View {
+        ZStack {
+            // Outer glow — aurora-tinted, breathes with voice
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.red.opacity(0.25 * displayLevel + 0.08),
-                            Color(red: 1.0, green: 0.2, blue: 0.1).opacity(0.1 * displayLevel),
+                            Color(red: 0.3, green: 0.85, blue: 0.95).opacity(0.22 * displayLevel + 0.06),
+                            Color(red: 0.45, green: 0.25, blue: 0.85).opacity(0.12 * displayLevel),
                             Color.clear
                         ],
                         center: .center,
@@ -94,45 +172,49 @@ struct FloatingBarView: View {
                     )
                 )
                 .frame(width: 72, height: 72)
-                .scaleEffect(1.0 + displayLevel * 0.5 + breathe * 0.06)
+                .scaleEffect(1.0 + displayLevel * 0.45 + breathe * 0.06)
                 .blur(radius: 2)
 
-            // Layer 2: Mid glow ring — the "aura"
+            // Aurora ring — the aura
             Circle()
                 .stroke(
-                    Color.red.opacity(0.2 + displayLevel * 0.3),
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.3, green: 0.9, blue: 0.95).opacity(0.25 + displayLevel * 0.35),
+                            Color(red: 0.7, green: 0.35, blue: 0.95).opacity(0.2 + displayLevel * 0.25),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
                     lineWidth: 1.5
                 )
                 .frame(width: 38 + displayLevel * 8, height: 38 + displayLevel * 8)
                 .blur(radius: 1)
 
-            // Layer 3: Waveform ring — the voice visualizer
-            WaveformRing(
-                level: displayLevel,
-                phase: phase
-            )
-            .fill(
-                AngularGradient(
-                    colors: [
-                        Color(red: 1.0, green: 0.3, blue: 0.2).opacity(0.9),
-                        Color(red: 0.9, green: 0.15, blue: 0.1).opacity(0.5),
-                        Color(red: 1.0, green: 0.4, blue: 0.3).opacity(0.8),
-                        Color(red: 0.85, green: 0.1, blue: 0.1).opacity(0.6),
-                        Color(red: 1.0, green: 0.3, blue: 0.2).opacity(0.9),
-                    ],
-                    center: .center
+            // Waveform ring — voice visualizer, aurora-colored
+            WaveformRing(level: displayLevel, phase: phase)
+                .fill(
+                    AngularGradient(
+                        colors: [
+                            Color(red: 0.25, green: 0.85, blue: 0.95).opacity(0.9),
+                            Color(red: 0.55, green: 0.3, blue: 0.9).opacity(0.7),
+                            Color(red: 0.85, green: 0.35, blue: 0.75).opacity(0.85),
+                            Color(red: 0.35, green: 0.7, blue: 0.95).opacity(0.75),
+                            Color(red: 0.25, green: 0.85, blue: 0.95).opacity(0.9),
+                        ],
+                        center: .center
+                    )
                 )
-            )
-            .frame(width: 42, height: 42)
+                .frame(width: 42, height: 42)
 
-            // Layer 4: Core — the red ember heart
+            // Core — aurora gem
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 1.0, green: 0.35, blue: 0.25),   // warm bright center
-                            Color(red: 0.95, green: 0.2, blue: 0.15),   // mid
-                            Color(red: 0.75, green: 0.08, blue: 0.1),   // deep crimson edge
+                            Color(red: 0.55, green: 0.9, blue: 1.0),         // bright icy center
+                            Color(red: 0.4, green: 0.5, blue: 0.95),          // deep blue-violet mid
+                            Color(red: 0.3, green: 0.15, blue: 0.65),         // deep violet edge
                         ],
                         center: .center,
                         startRadius: 0,
@@ -140,49 +222,240 @@ struct FloatingBarView: View {
                     )
                 )
                 .frame(width: 16, height: 16)
-                .shadow(color: Color.red.opacity(0.7), radius: 4 + displayLevel * 6)
-                .shadow(color: Color(red: 1.0, green: 0.3, blue: 0.2).opacity(0.4), radius: 10 + displayLevel * 8)
+                .shadow(color: Color(red: 0.3, green: 0.8, blue: 1.0).opacity(0.8),
+                        radius: 4 + displayLevel * 6)
+                .shadow(color: Color(red: 0.6, green: 0.3, blue: 0.95).opacity(0.4),
+                        radius: 10 + displayLevel * 8)
                 .scaleEffect(1.0 + displayLevel * 0.2)
         }
-        .frame(width: 80, height: 80)
-        .onAppear { startAnimationLoop() }
-        .onDisappear { stopAnimationLoop() }
     }
 
-    // MARK: - 60fps Animation Loop
+    // MARK: - Transcribing Orb (muted, pulsing)
+
+    private var transcribingOrb: some View {
+        ZStack {
+            // Desaturated outer glow — reads as "thinking"
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.12 + transcribePulse * 0.06),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 4,
+                        endRadius: 32
+                    )
+                )
+                .frame(width: 64, height: 64)
+                .scaleEffect(0.88 + transcribePulse * 0.06)
+                .blur(radius: 2)
+                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                           value: transcribePulse)
+
+            // Thin ring — desaturated aurora
+            Circle()
+                .stroke(
+                    Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.35 + transcribePulse * 0.15),
+                    lineWidth: 1.5
+                )
+                .frame(width: 34, height: 34)
+                .blur(radius: 0.5)
+                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                           value: transcribePulse)
+
+            // Core — muted, cool
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.55, green: 0.7, blue: 0.85),
+                            Color(red: 0.3, green: 0.4, blue: 0.65),
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 8
+                    )
+                )
+                .frame(width: 13, height: 13)
+                .scaleEffect(0.92 + transcribePulse * 0.08)
+                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                           value: transcribePulse)
+        }
+        .onAppear { transcribePulse = 1.0 }
+    }
+
+    // MARK: - Success Orb
+
+    private var successOrb: some View {
+        ZStack {
+            // Green glow burst
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.green.opacity(0.3),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 4,
+                        endRadius: 36
+                    )
+                )
+                .frame(width: 68, height: 68)
+                .blur(radius: 2)
+
+            // Core
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.4, green: 0.95, blue: 0.65),
+                            Color(red: 0.15, green: 0.75, blue: 0.45),
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 9
+                    )
+                )
+                .frame(width: 22, height: 22)
+                .shadow(color: Color.green.opacity(0.6), radius: 8)
+
+            // Checkmark
+            Image(systemName: "checkmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .scaleEffect(successScale)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: successScale)
+        }
+        .onAppear {
+            successScale = 0.1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                successScale = 1.0
+            }
+        }
+    }
+
+    // MARK: - Error Orb
+
+    private var errorOrb: some View {
+        ZStack {
+            // Warm glow
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.orange.opacity(0.35),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 4,
+                        endRadius: 36
+                    )
+                )
+                .frame(width: 68, height: 68)
+                .blur(radius: 2)
+
+            // Core
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 1.0, green: 0.65, blue: 0.25),
+                            Color(red: 0.9, green: 0.4, blue: 0.1),
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 9
+                    )
+                )
+                .frame(width: 22, height: 22)
+                .shadow(color: Color.orange.opacity(0.6), radius: 8)
+
+            // Exclamation
+            Image(systemName: "exclamationmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+        }
+    }
+
+    // MARK: - State Transitions
+
+    private func handleStateChange(_ newState: OrbState) {
+        switch newState {
+        case .recording:
+            orbVisible = true
+            transcribePulse = 0
+
+        case .transcribing:
+            orbVisible = true
+            // transcribing pulse handled in the view's onAppear
+
+        case .success:
+            orbVisible = true
+            // Fade out after a brief dwell. Bail if a new dictation already
+            // moved the orb to another state — never tear down its window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard state.orbState == .success else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    orbVisible = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    guard state.orbState == .success else { return }
+                    FloatingBarController.shared.hide()
+                }
+            }
+
+        case .error:
+            orbVisible = true
+            // Stay visible for 1.5s then fade — same stale-closure guard.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                guard state.orbState == .error else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    orbVisible = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard state.orbState == .error else { return }
+                    FloatingBarController.shared.hide()
+                }
+            }
+
+        case .idle:
+            break
+        }
+    }
+
+    // MARK: - Animation Loop (recording only)
 
     private func startAnimationLoop() {
-        // Breathing
         withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
             breathe = 1.0
         }
 
-        // Main display link — 60fps smooth updates
-        displayLink = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
-            // Read raw level from audio engine
-            let rawLevel = CGFloat(max(state.audioLevel, 0.03))
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in
+            Task { @MainActor [self] in
+                guard state.orbState == .recording else { return }
 
-            // Push into history for smoothing
-            levelHistory.append(rawLevel)
-            if levelHistory.count > 6 { levelHistory.removeFirst() }
+                let rawLevel = CGFloat(max(state.audioLevel, 0.03))
+                levelHistory.append(rawLevel)
+                if levelHistory.count > 6 { levelHistory.removeFirst() }
 
-            // Weighted moving average — recent values matter more
-            let weights: [CGFloat] = [0.05, 0.08, 0.12, 0.15, 0.25, 0.35]
-            var smoothed: CGFloat = 0
-            for (i, w) in weights.enumerated() {
-                if i < levelHistory.count {
-                    smoothed += levelHistory[i] * w
+                let weights: [CGFloat] = [0.05, 0.08, 0.12, 0.15, 0.25, 0.35]
+                var smoothed: CGFloat = 0
+                for (i, w) in weights.enumerated() {
+                    if i < levelHistory.count { smoothed += levelHistory[i] * w }
                 }
+
+                let target = max(smoothed, 0.05)
+                let speed: CGFloat = target > displayLevel ? 0.35 : 0.12
+                displayLevel += (target - displayLevel) * speed
+
+                phase += 0.04 + Double(displayLevel) * 0.08
             }
-
-            // Ease toward target — fast attack, slow release (natural feel)
-            let target = max(smoothed, 0.05)
-            let speed: CGFloat = target > displayLevel ? 0.35 : 0.12
-            displayLevel += (target - displayLevel) * speed
-
-            // Phase rotation — speed varies with level
-            phase += 0.04 + Double(displayLevel) * 0.08
         }
+        // commonModes so updates survive modal runs
+        RunLoop.main.add(timer, forMode: .common)
+        displayLink = timer
     }
 
     private func stopAnimationLoop() {
@@ -191,7 +464,7 @@ struct FloatingBarView: View {
     }
 }
 
-// MARK: - Waveform Ring — Organic Voice Visualizer
+// MARK: - Waveform Ring Shape (shared with status bar)
 
 struct WaveformRing: Shape {
     var level: CGFloat
@@ -199,10 +472,7 @@ struct WaveformRing: Shape {
 
     var animatableData: AnimatablePair<CGFloat, Double> {
         get { AnimatablePair(level, phase) }
-        set {
-            level = newValue.first
-            phase = newValue.second
-        }
+        set { level = newValue.first; phase = newValue.second }
     }
 
     func path(in rect: CGRect) -> Path {
@@ -216,13 +486,11 @@ struct WaveformRing: Shape {
         for i in 0..<barCount {
             let angle = (Double(i) / Double(barCount)) * 2.0 * .pi - .pi / 2
 
-            // Multi-frequency response per bar — organic, never uniform
             let freq1 = sin(phase * 1.0 + Double(i) * 0.6) * 0.5 + 0.5
             let freq2 = cos(phase * 0.6 + Double(i) * 0.4) * 0.3 + 0.5
             let freq3 = sin(phase * 1.4 + Double(i) * 0.9) * 0.2 + 0.5
             let response = freq1 * 0.45 + freq2 * 0.35 + freq3 * 0.20
 
-            // Bar extension — proportional to level × response
             let maxExtension: CGFloat = 12
             let extension_ = maxExtension * level * CGFloat(response)
             let minBar: CGFloat = 2.0
