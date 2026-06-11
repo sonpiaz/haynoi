@@ -11,6 +11,12 @@
 set -euo pipefail
 
 CONF=${1:-release}
+# macOS ships bash 3.2 — no ${CONF^} uppercase expansion here.
+case "$CONF" in
+  release) CONF_TITLE="Release" ;;
+  debug)   CONF_TITLE="Debug" ;;
+  *)       CONF_TITLE="$CONF" ;;
+esac
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 source "$ROOT/version.env"
@@ -39,7 +45,7 @@ for ARCH in "${ARCH_LIST[@]}"; do
   xcodebuild archive \
     -project "${ROOT}/Haynoi.xcodeproj" \
     -scheme "$SCHEME" \
-    -configuration "${CONF^}" \
+    -configuration "$CONF_TITLE" \
     -archivePath "${ARCHIVE_DIR}/Haynoi-${ARCH}.xcarchive" \
     -arch "$ARCH" \
     ONLY_ACTIVE_ARCH=NO \
@@ -64,8 +70,9 @@ if [[ ${#ARCH_LIST[@]} -gt 1 ]]; then
   echo "  lipo info: $(lipo -info "$BINARY")"
 fi
 
-# Stamp version into Info.plist (xcodebuild already does this via xcconfig,
-# but we re-confirm here for ad-hoc invocations).
+# Stamp version into Info.plist. Info.plist uses $(MARKETING_VERSION) /
+# $(CURRENT_PROJECT_VERSION) placeholders resolved at build time; this stamp
+# is the authoritative backstop so the bundle always matches version.env.
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $MARKETING_VERSION" "$APP_DIR/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_DIR/Contents/Info.plist"
 

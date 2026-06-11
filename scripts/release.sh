@@ -21,22 +21,27 @@ ARCHES="arm64 x86_64" "$ROOT/scripts/package_app.sh" release
 echo "==> Signing + notarizing"
 "$ROOT/scripts/sign-and-notarize.sh"
 
+echo "==> Building signed + notarized DMG"
+"$ROOT/scripts/build-dmg.sh"
+
 echo "==> Generating appcast"
 "$ROOT/scripts/make_appcast.sh" "Haynoi-${VERSION}-universal.zip"
 
 cat <<EOF
 ==> Release artifacts ready:
-    Haynoi-${VERSION}-universal.zip
+    Haynoi-${VERSION}-universal.zip   (Sparkle update archive)
+    Haynoi-${VERSION}.dmg             (haynoi.com download)
     Haynoi-${VERSION}-universal.dSYM.zip
     appcast.xml (updated)
 
 Next steps:
-  1. Commit appcast.xml + push
+  1. Commit appcast.xml + push (haynoi.com serves it at /appcast.xml)
   2. Create GitHub release for tag v${VERSION}
-  3. Upload zip + dSYM as release assets
+  3. Upload zip + DMG + dSYM as release assets
 
   gh release create v${VERSION} \\
     Haynoi-${VERSION}-universal.zip \\
+    Haynoi-${VERSION}.dmg \\
     Haynoi-${VERSION}-universal.dSYM.zip \\
     --notes-from-tag
 EOF

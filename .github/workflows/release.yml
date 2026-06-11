@@ -67,6 +67,14 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: ./scripts/sign-and-notarize.sh
 
+      - name: Build signed + notarized DMG
+        env:
+          APP_IDENTITY: ${{ secrets.APP_IDENTITY }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ./scripts/build-dmg.sh
+
       - name: Generate appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -98,6 +106,7 @@ jobs:
           body: ${{ steps.notes.outputs.html }}
           files: |
             Haynoi-*-universal.zip
+            Haynoi-*.dmg
             Haynoi-*-universal.dSYM.zip
 
       - name: Commit updated appcast

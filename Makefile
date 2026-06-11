@@ -10,11 +10,11 @@ open: generate
 
 # Build via xcodebuild
 build: generate
-	xcodebuild -project Haynoi.xcodeproj -scheme Haynoi -configuration Debug build
+	xcodebuild -project Haynoi.xcodeproj -scheme Haynoi -configuration Debug -derivedDataPath build build
 
 # Run the built app
 run: build
-	open build/Debug/Haynoi.app
+	open build/Build/Products/Debug/Haynoi.app
 
 # Clean
 clean:

@@ -38,8 +38,10 @@ if [[ -z "$GENERATE_APPCAST" ]]; then
   exit 1
 fi
 
+# Update zips download from GitHub release assets; the appcast itself is served
+# at https://haynoi.com/appcast.xml (must match SUFeedURL in Info.plist).
 DOWNLOAD_URL_PREFIX=${SPARKLE_DOWNLOAD_URL_PREFIX:-"https://github.com/sonpiaz/haynoi/releases/download/v${MARKETING_VERSION}/"}
-FEED_URL="https://raw.githubusercontent.com/sonpiaz/haynoi/main/appcast.xml"
+FEED_URL="https://haynoi.com"
 
 WORK_DIR=$(mktemp -d /tmp/haynoi-appcast.XXXXXX)
 trap 'rm -rf "$WORK_DIR"' EXIT

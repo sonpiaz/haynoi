@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.sonpiaz.haynoi</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -22,6 +22,8 @@
     <false/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Haynoi needs microphone access to transcribe your speech.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Haynoi pauses your music apps while you dictate.</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -34,7 +36,7 @@
         </dict>
     </array>
     <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/sonpiaz/haynoi/main/appcast.xml</string>
+    <string>https://haynoi.com/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>bNwy/kIFEdy42wob6UPwd8m08B8UAjTMwAqYJcXrtBw=</string>
     <key>SUEnableAutomaticChecks</key>
