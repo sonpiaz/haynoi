@@ -5,6 +5,10 @@ import ApplicationServices
 struct SettingsView: View {
     @AppStorage("transcriptionMode") private var modeRaw = TranscriptionMode.normal.rawValue
     @AppStorage("sttQuality") private var sttQuality = "quality"  // "quality" (default) | "fast"
+    // Fix #4: "auto" is the new-install default — omits the language field so
+    // Whisper detects freely. Existing users who never set this key also land on
+    // "auto", which is conservative and never worse than the old "vi" hardcode.
+    @AppStorage("languageHint") private var languageHint = "auto"
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "deep"
     @AppStorage("muteMusic") private var muteMusic = false
@@ -16,14 +20,19 @@ struct SettingsView: View {
     @State private var newWord = ""
     @State private var snippetTrigger = ""
     @State private var snippetExpansion = ""
-    @State private var signedInEmail = KymaAuth.currentUserEmail
     @State private var signInError = ""
     @State private var isSigningIn = false
+    // Fix #3: credit balance — fetched on Settings open + after each session.
+    @State private var creditBalance: Double? = nil
+    @State private var isFetchingBalance = false
+    // Fix #1: observe the shared auth state so every surface stays in sync.
+    @ObservedObject private var authState = AuthState.shared
 
     var body: some View {
         Form {
             accountSection
             qualitySection
+            languageSection
             modeSection
             hotkeySection
             dictionarySection
@@ -32,23 +41,74 @@ struct SettingsView: View {
             permissionSection
         }
         .formStyle(.grouped)
-        .onAppear { refreshPermissions() }
+        .onAppear {
+            refreshPermissions()
+            refreshBalance()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
+            // Fix #3: a dictation completed — refresh balance if Settings is open.
+            refreshBalance()
+        }
     }
 
     // MARK: - Sections
 
     private var accountSection: some View {
         Section("Account") {
-            if let email = signedInEmail {
+            if authState.keyInvalid {
+                // Fix #1: key was revoked (401) — show a prominent re-auth prompt.
+                // The keychain has already been cleared by AuthState.handleKeyRevoked().
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text("Session expired").font(.callout).fontWeight(.medium)
+                    }
+                    Text("Your API key was revoked. Please sign in again to continue dictating.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Button(isSigningIn ? "Signing in…" : "Sign in again") { signIn() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isSigningIn)
+                        if isSigningIn { ProgressView().controlSize(.small) }
+                    }
+                    if !signInError.isEmpty {
+                        Text(signInError).font(.caption).foregroundStyle(.red)
+                    }
+                }
+            } else if let email = authState.signedInEmail {
                 HStack {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     Text("Signed in as \(email)").font(.callout)
                     Spacer()
                     Button("Sign out") {
                         KymaAuth.signOut()
-                        signedInEmail = nil
+                        authState.didSignOut()
+                        creditBalance = nil
                     }
                     .buttonStyle(.bordered).controlSize(.small)
+                }
+                // Fix #3: credit balance line — hidden when fetch hasn't returned yet
+                // or if the server returned an unexpected shape (defensive hide).
+                if let balance = creditBalance {
+                    HStack {
+                        if balance < 0.05 {
+                            // Fix #2: out-of-credits UX — clickable top-up link.
+                            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                            Text("Out of credits —")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Link("top up at kymaapi.com",
+                                 destination: URL(string: "https://kymaapi.com")!)
+                                .font(.caption)
+                        } else {
+                            Image(systemName: "creditcard").foregroundStyle(.secondary)
+                            Text(String(format: "$%.2f remaining", balance))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if isFetchingBalance {
+                            ProgressView().controlSize(.mini)
+                        }
+                    }
                 }
             } else {
                 HStack(spacing: 8) {
@@ -68,6 +128,20 @@ struct SettingsView: View {
         }
     }
 
+    private var languageSection: some View {
+        // Fix #4: language preference — global-first default is "auto".
+        Section("Language") {
+            Picker("Language", selection: $languageHint) {
+                Text("Auto-detect").tag("auto")
+                Text("Tiếng Việt").tag("vi")
+                Text("English").tag("en")
+            }
+            .pickerStyle(.segmented)
+            Text(languageHintDescription)
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     private var qualitySection: some View {
         Section("Transcription Quality") {
             Picker("Quality", selection: $sttQuality) {
@@ -75,7 +149,7 @@ struct SettingsView: View {
                 Text("Quality").tag("quality")
             }
             .pickerStyle(.segmented)
-            .disabled(signedInEmail == nil)
+            .disabled(authState.signedInEmail == nil)
 
             Text(sttQuality == "quality"
                 ? "Best accuracy for Vietnamese + English — the default."
@@ -234,6 +308,14 @@ struct SettingsView: View {
         TranscriptionMode(rawValue: modeRaw) ?? .normal
     }
 
+    private var languageHintDescription: String {
+        switch languageHint {
+        case "vi": return "Always transcribe as Vietnamese — fastest for Vi-only speakers."
+        case "en": return "Always transcribe as English."
+        default:   return "Whisper detects the language automatically. Best for mixed or uncertain input."
+        }
+    }
+
     private func addWord() {
         CustomDictionary.add(newWord)
         newWord = ""
@@ -278,13 +360,56 @@ struct SettingsView: View {
             defer { isSigningIn = false }
             do {
                 let token = try await KymaAuth.shared.signIn()
-                signedInEmail = token.email
+                // Fix #1: update shared AuthState so every surface reflects the new email.
+                authState.didSignIn(email: token.email)
+                // Fetch balance immediately after sign-in.
+                refreshBalance()
             } catch KymaAuth.AuthError.cancelled {
                 // user closed the auth window — no error to show
             } catch {
                 signInError = error.localizedDescription
             }
         }
+    }
+
+    // MARK: - Balance Fetch (Fix #3)
+
+    /// Fetches /v1/credits/balance and updates creditBalance.
+    /// Called on Settings open and can be called from PipelineController after
+    /// a successful dictation (lightweight async fire).
+    func refreshBalance() {
+        guard let apiKey = KymaAuth.currentApiKey else { return }
+        guard !isFetchingBalance else { return }
+        isFetchingBalance = true
+        Task { @MainActor in
+            defer { isFetchingBalance = false }
+            do {
+                let balance = try await fetchCreditBalance(apiKey: apiKey)
+                creditBalance = balance
+            } catch {
+                // Defensive: hide the balance line on any parse or network failure.
+                // NSLog detail stays for debugging; UI silently omits the line.
+                NSLog("[Haynoi] Balance fetch failed: %@", error.localizedDescription)
+            }
+        }
+    }
+
+    /// GET https://api.kymaapi.com/v1/credits/balance
+    /// Response shape: { balance: Double, low_balance: Bool, ... }
+    private func fetchCreditBalance(apiKey: String) async throws -> Double {
+        var req = URLRequest(url: URL(string: "https://api.kymaapi.com/v1/credits/balance")!)
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.timeoutInterval = 10
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let balance = json["balance"] as? Double else {
+            throw URLError(.cannotParseResponse)
+        }
+        return balance
     }
 }
 

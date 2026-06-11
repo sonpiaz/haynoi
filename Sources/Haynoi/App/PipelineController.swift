@@ -280,6 +280,11 @@ final class PipelineController {
                 let wordCount = text.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
                 UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
+                // Fix #3: notify that a dictation completed so any open Settings
+                // panel can refresh the credit balance cheaply.
+                NotificationCenter.default.post(
+                    name: .haynoiDictationCompleted, object: nil
+                )
             } catch {
                 await MainActor.run {
                     state.isTranscribing = false
