@@ -274,9 +274,14 @@ final class PipelineController {
                 // Apply snippets
                 let finalText = SnippetManager.applySnippets(to: text)
                 NSLog("[Haynoi] Transcribed: %@", finalText)
+                // Capture attribution from the dictation target app (F2.3 / D17).
+                let attrBundleId = dictationTargetApp?.bundleIdentifier
+                let attrAppName = dictationTargetApp?.localizedName
                 await MainActor.run {
                     state.isTranscribing = false
-                    state.addTranscription(finalText)
+                    state.addTranscription(finalText,
+                                           appBundleId: attrBundleId,
+                                           appName: attrAppName)
                     // Orb: success flash then auto-hide
                     FloatingBarController.shared.transition(to: .success)
                     if UserDefaults.standard.bool(forKey: "soundEnabled") {
@@ -287,7 +292,13 @@ final class PipelineController {
                 await TextInserter.insert(finalText, targetApp: dictationTargetApp)
                 let wordCount = text.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
-                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
+                // Snapshot total BEFORE recording for milestone threshold check (D15)
+                let totalBefore = UsageTracker.totalWords
+                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur,
+                                                 appBundleId: attrBundleId,
+                                                 appName: attrAppName)
+                let totalAfter = UsageTracker.totalWords
+                MilestoneTracker.markUnseenIfNeeded(previousTotal: totalBefore, newTotal: totalAfter)
                 // Notify that a dictation completed so any open Settings panel can
                 // refresh the credit balance. Posted on the main actor: SwiftUI's
                 // .onReceive delivers on the posting thread.
@@ -446,15 +457,25 @@ final class PipelineController {
                 // so the Retry button disappears and a second retry cannot replay
                 // the same recording.
                 FailedDictationStore.deleteNewest()
+                // Capture attribution from retry target app (mirrors primary path).
+                let retryBundleId = retryTargetApp?.bundleIdentifier
+                let retryAppName = retryTargetApp?.localizedName
                 await MainActor.run {
                     state.isTranscribing = false
-                    state.addTranscription(finalText)
+                    state.addTranscription(finalText,
+                                           appBundleId: retryBundleId,
+                                           appName: retryAppName)
                     state.hasFailedDictation = FailedDictationStore.hasAny
                 }
                 await TextInserter.insert(finalText, targetApp: retryTargetApp)
                 let wordCount = finalText.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
-                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur)
+                let totalBefore = UsageTracker.totalWords
+                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur,
+                                                 appBundleId: retryBundleId,
+                                                 appName: retryAppName)
+                let totalAfter = UsageTracker.totalWords
+                MilestoneTracker.markUnseenIfNeeded(previousTotal: totalBefore, newTotal: totalAfter)
             } catch {
                 await MainActor.run {
                     state.isTranscribing = false

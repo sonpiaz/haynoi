@@ -5,11 +5,28 @@ struct Transcription: Identifiable, Codable {
     let id: UUID
     let text: String
     let timestamp: Date
+    /// Bundle identifier of the app that received this dictation (F2 attribution).
+    /// Nil for older entries and clipboard-fallback dictations with no target.
+    let appBundleId: String?
+    /// Localized display name of the destination app (latest wins on re-read).
+    let appName: String?
 
-    init(text: String) {
+    init(text: String, appBundleId: String? = nil, appName: String? = nil) {
         self.id = UUID()
         self.text = text
         self.timestamp = Date()
+        self.appBundleId = appBundleId
+        self.appName = appName
+    }
+
+    // Decode tolerantly — older entries lack attribution fields.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        text = try c.decode(String.self, forKey: .text)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        appBundleId = try c.decodeIfPresent(String.self, forKey: .appBundleId)
+        appName = try c.decodeIfPresent(String.self, forKey: .appName)
     }
 
     var wordCount: Int { text.split(separator: " ").count }
@@ -94,8 +111,11 @@ final class AppState: ObservableObject {
 
     // MARK: - Mutations
 
-    func addTranscription(_ text: String) {
-        transcriptions.insert(Transcription(text: text), at: 0)
+    func addTranscription(_ text: String,
+                          appBundleId: String? = nil,
+                          appName: String? = nil) {
+        let entry = Transcription(text: text, appBundleId: appBundleId, appName: appName)
+        transcriptions.insert(entry, at: 0)
         // Cap at 500 entries
         if transcriptions.count > Self.maxHistoryEntries {
             transcriptions = Array(transcriptions.prefix(Self.maxHistoryEntries))
