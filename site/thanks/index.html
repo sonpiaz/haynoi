@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Haynoi — Your download is starting</title>
+  <meta name="description" content="Three simple steps and Haynoi is in your Dock." />
+  <meta name="theme-color" content="#F7F4EE" />
+  <link rel="icon" href="../icon.png" type="image/png" />
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .thanks-hero { padding: 9rem 0 3rem; text-align: center; }
+    .thanks-hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); }
+    .retry-line { margin-top: 0.9rem; color: var(--ink-3, #6B6456); }
+    .retry-line a { text-decoration: underline; }
+    .steps-wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
+      max-width: 980px; margin: 3rem auto 0; padding: 0 1.5rem; }
+    @media (max-width: 760px) { .steps-wrap { grid-template-columns: 1fr; } }
+    .step-card { border: 1px solid rgba(28,25,23,.12); border-radius: 14px;
+      background: #FFFEFB; padding: 1.6rem 1.4rem 1.5rem; text-align: center; }
+    .step-num { font-family: Lora, Georgia, serif; font-style: italic;
+      color: var(--ember, #C8622A); font-size: 1.05rem; }
+    .step-art { height: 120px; display: flex; align-items: center;
+      justify-content: center; margin: 0.9rem 0 1rem; }
+    .step-card p { font-size: 0.95rem; line-height: 1.55; }
+    .perm-note { max-width: 640px; margin: 3rem auto 0; padding: 0 1.5rem;
+      text-align: center; color: var(--ink-3, #6B6456); font-size: 0.95rem;
+      line-height: 1.6; }
+    .perm-note em { font-family: Lora, Georgia, serif; }
+    .thanks-bottom { padding: 3rem 0 5rem; }
+    .dl-row { background: #EFEDE5; border: 1px solid rgba(28,25,23,.1);
+      border-radius: 10px; padding: 0.55rem 0.9rem; display: inline-flex;
+      gap: 0.5rem; align-items: center; font-size: 0.9rem; }
+    .finder-mock { border: 1px solid rgba(28,25,23,.18); border-radius: 8px;
+      background: #FBFAF6; width: 170px; text-align: left; font-size: 0.72rem;
+      box-shadow: 0 8px 22px rgba(28,25,23,.08); }
+    .finder-bar { display:flex; gap:4px; padding: 6px 8px;
+      border-bottom: 1px solid rgba(28,25,23,.1); }
+    .finder-bar i { width: 7px; height: 7px; border-radius: 50%;
+      background: #D8D5C9; display:block; }
+    .finder-row { padding: 5px 9px; display:flex; gap: 6px; align-items:center; }
+    .finder-row.hl { background: #F0E4D8; }
+    .finder-row img { width: 14px; height: 14px; border-radius: 3px; }
+    .drag-art { display:flex; align-items:center; gap: 0.6rem; }
+    .drag-art img { width: 46px; height: 46px; border-radius: 10px;
+      box-shadow: 0 6px 16px rgba(28,25,23,.15); }
+    .drag-arrow { font-size: 1.3rem; color: var(--ember, #C8622A); }
+    .apps-folder { width: 52px; height: 52px; border-radius: 12px;
+      background: linear-gradient(160deg,#9DB8E8,#5B7FC7); display:flex;
+      align-items:center; justify-content:center; color:#fff; font-size:1.4rem; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../">
+      <img src="../icon.png" alt="Haynoi icon" />
+      Haynoi
+    </a>
+    <ul class="nav-links">
+      <li><a href="../#how">How it works</a></li>
+      <li><a href="../changelog/">Changelog</a></li>
+      <li>
+        <a class="nav-cta" href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi-0.1.0.dmg">
+          Download again
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <section class="thanks-hero">
+    <div class="container">
+      <p class="section-label">Download started</p>
+      <h1 class="serif">Three small steps,<br />then <em>just speak</em>.</h1>
+      <p class="retry-line">Your download should begin automatically.
+        Didn't start? <a href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi-0.1.0.dmg">Download Haynoi again</a>.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="steps-wrap">
+      <div class="step-card">
+        <div class="step-num">Step one</div>
+        <div class="step-art">
+          <div class="finder-mock">
+            <div class="finder-bar"><i></i><i></i><i></i></div>
+            <div class="finder-row">⬇︎&nbsp; Downloads</div>
+            <div class="finder-row hl"><img src="../icon.png" alt="" /> Haynoi-0.1.0.dmg</div>
+            <div class="finder-row" style="color:#9C9487">report-final.pdf</div>
+          </div>
+        </div>
+        <p>Open <strong>Haynoi&#8209;0.1.0.dmg</strong> from your Downloads folder.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">Step two</div>
+        <div class="step-art">
+          <div class="drag-art">
+            <img src="../icon.png" alt="Haynoi app icon" />
+            <span class="drag-arrow">⟶</span>
+            <div class="apps-folder">A</div>
+          </div>
+        </div>
+        <p>Drag <strong>Haynoi</strong> into your <strong>Applications</strong> folder.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">Step three</div>
+        <div class="step-art">
+          <div class="drag-art"><img src="../icon.png" alt="" style="width:56px;height:56px" /></div>
+        </div>
+        <p>Open Haynoi from Applications and hold <strong>⌘</strong> to speak.</p>
+      </div>
+    </div>
+
+    <p class="perm-note">On first run, Haynoi walks you through permissions
+      <em>one card at a time</em> — you'll drag the icon once more, straight
+      into System Settings, and never have to hunt for an app by name.</p>
+
+    <div class="thanks-bottom" style="text-align:center">
+      <span class="dl-row">macOS 14 or later · Apple silicon &amp; Intel · signed and notarized</span>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-left">
+        <img src="../icon.png" alt="" aria-hidden="true" />
+        <span class="footer-brand">Haynoi</span>
+        <span class="mit-badge">MIT</span>
+      </div>
+      <p class="footer-copy" style="margin-top:0.4rem">© 2026 Affitor LLC. All rights reserved.</p>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="../changelog/">Changelog</a></li>
+      <li><a href="https://kymaapi.com" target="_blank" rel="noopener">Powered by Kyma</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+  /* Start the download shortly after arrival; the visible link covers no-JS. */
+  setTimeout(function () {
+    var a = document.createElement("a");
+    a.href = "https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi-0.1.0.dmg";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, 900);
+</script>
+</body>
+</html>

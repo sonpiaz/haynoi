@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Haynoi — Changelog</title>
+  <meta name="description" content="Everything that changes in Haynoi, release by release." />
+  <meta name="theme-color" content="#F7F4EE" />
+  <link rel="icon" href="../icon.png" type="image/png" />
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .log-hero { padding: 9rem 0 1.5rem; text-align: center; }
+    .log-wrap { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.5rem 5rem; }
+    .release { border-top: 1px solid rgba(28,25,23,.12); padding: 2.2rem 0 1rem; }
+    .release-head { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; }
+    .release-version { font-family: Lora, Georgia, serif; font-size: 1.7rem; }
+    .release-date { color: var(--ink-3, #6B6456); font-size: 0.9rem; }
+    .release-tagline { margin-top: 0.5rem; font-family: Lora, Georgia, serif;
+      font-style: italic; color: var(--ember, #C8622A); }
+    .release ul { margin: 1.1rem 0 0; padding-left: 1.1rem; }
+    .release li { margin-bottom: 0.55rem; line-height: 1.6; font-size: 0.98rem; }
+    .release-dl { margin-top: 1.4rem; }
+    .release-dl a { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../">
+      <img src="../icon.png" alt="Haynoi icon" />
+      Haynoi
+    </a>
+    <ul class="nav-links">
+      <li><a href="../#how">How it works</a></li>
+      <li><a href="../#features">Features</a></li>
+      <li>
+        <a class="nav-cta" href="../thanks/">Download</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <section class="log-hero">
+    <div class="container">
+      <p class="section-label">Changelog</p>
+      <h1 class="serif">A ledger of the <em>ledger</em>.</h1>
+    </div>
+  </section>
+
+  <div class="log-wrap">
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.1.0</span>
+        <span class="release-date">June 11, 2026</span>
+      </div>
+      <p class="release-tagline">The first public release.</p>
+      <ul>
+        <li>Push-to-talk dictation: hold ⌘ (or ⌥ / ⌃ / fn), speak, release — polished text lands in whatever app you're using.</li>
+        <li>Vietnamese-first transcription that keeps mixed English intact, with a language preference: auto-detect, Tiếng Việt, or English.</li>
+        <li>Your words are never lost — failed transcriptions save the recording locally and retry with one click.</li>
+        <li>Recording survives real life: AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully.</li>
+        <li>Auto-paste with clipboard restore afterwards, and dictated text stays hidden from clipboard managers.</li>
+        <li>A living status orb: recording, transcribing, success, and error each have their own state.</li>
+        <li>Custom dictionary, spoken snippets, smart modes (Normal, Clean, Email, Auto), and music auto-pause while you dictate.</li>
+        <li>Credit balance in Settings with clear out-of-credits guidance — pay as you go through Kyma, no subscription.</li>
+        <li>Quality and Fast transcription tiers, searchable local history, sound themes, and silent auto-updates via Sparkle.</li>
+        <li>The Mercury interface: a private ledger of everything you've said, on paper and ink, with one aurora hairline.</li>
+      </ul>
+      <p class="release-dl"><a href="https://github.com/sonpiaz/haynoi/releases/tag/v0.1.0">Download 0.1.0 from GitHub Releases</a></p>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-left">
+        <img src="../icon.png" alt="" aria-hidden="true" />
+        <span class="footer-brand">Haynoi</span>
+        <span class="mit-badge">MIT</span>
+      </div>
+      <p class="footer-copy" style="margin-top:0.4rem">© 2026 Affitor LLC. All rights reserved.</p>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="../thanks/">Download</a></li>
+      <li><a href="https://kymaapi.com" target="_blank" rel="noopener">Powered by Kyma</a></li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>
