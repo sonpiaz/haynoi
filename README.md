@@ -10,8 +10,13 @@
 </p>
 
 <p align="center">
+  <a href="https://haynoi.com"><b>haynoi.com</b></a> · <a href="https://github.com/sonpiaz/haynoi/releases/latest"><b>Download for macOS</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/sonpiaz/haynoi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sonpiaz/haynoi" alt="License" /></a>
   <a href="https://github.com/sonpiaz/haynoi/stargazers"><img src="https://img.shields.io/github/stars/sonpiaz/haynoi" alt="Stars" /></a>
+  <a href="https://github.com/sonpiaz/haynoi/releases"><img src="https://img.shields.io/github/v/release/sonpiaz/haynoi?include_prereleases&label=release" alt="Release" /></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14+" />
   <img src="https://img.shields.io/badge/Swift-5.9-orange" alt="Swift 5.9" />
   <img src="https://img.shields.io/badge/100%25-native-blue" alt="Native" />
@@ -47,16 +52,23 @@ That's the whole product. A floating bar shows the waveform while you talk; a la
 ## Features
 
 - **Push-to-talk** — hold `⌘` (or `⌥` / `⌃` / `fn`), release to transcribe
-- **Auto-paste** into the active app, with clipboard fallback
+- **Language preference** — auto-detect by default, or pin Tiếng Việt / English
+- **Your words are never lost** — if the network fails mid-transcription, the recording is saved locally and retried with one click
+- **Survives real life** — AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully instead of eating your dictation
+- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers)
+- **Living status orb** — recording, transcribing, success, and error each have their own state, so you always know where your words are
 - **Custom dictionary** — teach it names and terms once, it spells them right forever
 - **Snippets** — say a trigger word, get expanded text
-- **Transcription history** — unlimited, stored locally, grouped by date
-- **Floating bar** — minimal recording indicator with waveform and timer
-- **Premium sound feedback** — harmonic chords for start / stop / cancel
+- **Transcription history** — searchable, stored locally, grouped by date
+- **Premium sound feedback** — harmonic chords for start / stop / cancel / success
 - **Mute music** — auto-pauses media while you dictate
-- **Menu bar + dock app**, launch at login, onboarding wizard for permissions
+- **Silent auto-updates** via Sparkle, launch at login, guided onboarding
 
 ## Install
+
+**Download** the latest `Haynoi.dmg` from [haynoi.com](https://haynoi.com) or [GitHub Releases](https://github.com/sonpiaz/haynoi/releases/latest), drag it to Applications, and open it. The app is signed and notarized — no security warnings, and updates install themselves.
+
+Prefer building from source?
 
 ```bash
 git clone https://github.com/sonpiaz/haynoi.git
@@ -65,11 +77,11 @@ brew install xcodegen    # if not installed
 make run
 ```
 
-Then:
+First run, either way:
 
 1. The onboarding wizard walks you through Microphone, Accessibility, and Input Monitoring permissions
-2. Sign in with your [Kyma](https://kymaapi.com) account from Settings (`⌘,`) — free credit on signup, nothing to paste
-3. Hold `⌘`, speak, release
+2. Sign in with your [Kyma](https://kymaapi.com) account — free credit on signup, nothing to paste
+3. Hold `⌘`, say something, release — the guided first dictation shows you the loop
 
 ## Quality & cost
 
