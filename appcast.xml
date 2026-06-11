@@ -6,6 +6,36 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.1.1</title>
+            <pubDate>Thu, 11 Jun 2026 22:16:01 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.1.1</h2>
+
+<h3>Added</h3>
+<ul>
+<li>Drag-to-grant permissions: during onboarding, drag the Haynoi icon straight</li>
+</ul>
+<p>  into the System Settings list that opens beside the window — no more hunting</p>
+<p>  for the app by name. Settings → Permissions gains matching Fix buttons.</p>
+<ul>
+<li>Insights: a private scoreboard for your voice — lifetime words with human</li>
+</ul>
+<p>  comparisons, honest words-per-minute, current and longest streaks, a 16-week</p>
+<p>  activity heatmap, where your words go by app, and quiet milestones.</p>
+
+<h3>Fixed</h3>
+<ul>
+<li>Words-per-minute no longer shows impossible numbers when older history</li>
+</ul>
+<p>  predates duration tracking.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.1/Haynoi-0.1.1-universal.zip" length="2576511" type="application/octet-stream" sparkle:edSignature="m9B9EHGn8cwegLdqWMN+AksQJp9Fuwgn+SbsCbBN06sWayXB13odDH28h8BgmTQ7Z6+jvszFLZJxyWnRQXa0Cw=="/>
+        </item>
+        <item>
             <title>0.1.0</title>
             <pubDate>Thu, 11 Jun 2026 21:08:38 +0000</pubDate>
             <link>https://haynoi.com</link>
