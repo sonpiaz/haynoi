@@ -6,6 +6,26 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.1.2</title>
+            <pubDate>Thu, 11 Jun 2026 22:26:34 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.1.2</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>Drag-to-grant now works on the first try: the icon drags like a real</li>
+</ul>
+<p>  Finder item, System Settings accepts the drop, and the step advances the</p>
+<p>  moment you flip the switch. No more double-clicking, no more hunting for</p>
+<p>  the app by hand.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.2/Haynoi-0.1.2-universal.zip" length="2579815" type="application/octet-stream" sparkle:edSignature="kKAO0MVe5j1kZwax6Og2xTxHoIGTOF7uVQTnWrbLBBmUuAfKJIYqXFuWFRdPYWU/1xtxNgjAtBHhMMC21G6ZBQ=="/>
+        </item>
+        <item>
             <title>0.1.1</title>
             <pubDate>Thu, 11 Jun 2026 22:16:01 +0000</pubDate>
             <link>https://haynoi.com</link>
