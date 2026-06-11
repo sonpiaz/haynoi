@@ -8,6 +8,9 @@ struct OnboardingView: View {
     @State private var axGranted = false
     @State private var inputGranted = false
     @State private var pollTimer: Timer?
+    // Fix #1: after grant we try to arm the tap; if it still fails (macOS
+    // sometimes requires a full relaunch), show a Relaunch button.
+    @State private var hotkeyArmFailed = false
     var onComplete: () -> Void
 
     private let steps: [(title: String, subtitle: String, icon: String)] = [
@@ -145,17 +148,57 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button(action: {
-                UserDefaults.standard.set(true, forKey: "onboardingCompleted")
-                onComplete()
-            }) {
-                Text("Get Started")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(width: 160, height: 36)
+            // Fix #1: if the tap still failed after grant (macOS occasionally
+            // requires a relaunch), surface a Relaunch button instead of the
+            // normal Get Started. After relaunch the tap arms immediately.
+            if hotkeyArmFailed {
+                VStack(spacing: 8) {
+                    Text("Haynoi needs to relaunch to activate the hotkey.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 280)
+
+                    Button(action: relaunchApp) {
+                        Text("Relaunch Haynoi")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 160, height: 36)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.large)
+                }
+            } else {
+                Button(action: {
+                    UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+                    onComplete()
+                }) {
+                    Text("Get Started")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 160, height: 36)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(.top, 8)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.top, 8)
+        }
+    }
+
+    /// Relaunches Haynoi via `open -a` so the new process has fresh Input
+    /// Monitoring entitlement recognition from TCC, then terminates self.
+    private func relaunchApp() {
+        UserDefaults.standard.set(true, forKey: "onboardingCompleted")
+        let path = Bundle.main.bundleURL.path
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = ["-a", path]
+        do {
+            try task.run()
+            NSApp.terminate(nil)
+        } catch {
+            // Do not terminate — the user would be left with no running app.
+            // Log the error so it shows up in Console.app.
+            NSLog("[Haynoi] relaunchApp: failed to launch — %@", error.localizedDescription)
         }
     }
 
@@ -209,6 +252,7 @@ struct OnboardingView: View {
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
             DispatchQueue.main.async {
+                let wasInputGranted = inputGranted
                 refreshPermissions()
                 // Auto-advance when current step gets granted
                 if currentStep < 3 && isGranted(currentStep) {
@@ -218,6 +262,17 @@ struct OnboardingView: View {
                     // Keep advancing past any already-granted steps
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         skipGrantedSteps()
+                    }
+                }
+                // Fix #1: when Input Monitoring just became granted, try to arm
+                // the tap immediately — the user shouldn't need to relaunch.
+                if !wasInputGranted && inputGranted {
+                    let armed = HotkeyManager.shared.start()
+                    NSLog("[Haynoi] Onboarding: hotkey arm after grant = %d", armed ? 1 : 0)
+                    if !armed {
+                        // macOS sometimes needs a relaunch to honour the new
+                        // TCC grant — surface the Relaunch button at completion.
+                        hotkeyArmFailed = true
                     }
                 }
             }

@@ -1,3 +1,4 @@
+import Carbon
 import Cocoa
 import CoreGraphics
 
@@ -10,6 +11,19 @@ import CoreGraphics
 ///
 /// Uses .listenOnly tap (not active) for maximum compatibility with macOS
 /// permission system. Events pass through to apps normally.
+///
+/// Fix #1: start() now returns Bool and tracks `isActive` state. When Input
+/// Monitoring is not yet granted, a retry loop fires every 2.5s and also
+/// re-arms on NSApplication.didBecomeActiveNotification so grant-then-switch-
+/// back works without a manual relaunch.
+///
+/// Fix #5: After re-enabling a disabled tap and after the 3s watchdog fires,
+/// we resync isModifierDown against the real hardware key state. If the target
+/// modifier is no longer physically down, we run the release path to end any
+/// stuck recording. The watchdog also checks for secure event input (via the
+/// public Carbon API IsSecureEventInputEnabled()) and sets a flag so
+/// preRecording can reject silently.
+
 final class HotkeyManager {
     static let shared = HotkeyManager()
 
@@ -27,20 +41,35 @@ final class HotkeyManager {
     private var runLoopSource: CFRunLoopSource?
     private var tapCheckTimer: Timer?
 
+    // Fix #1: retry state when permission not yet granted
+    private var retryTimer: Timer?
+    private var appBecameActiveObserver: NSObjectProtocol?
+
     private var isModifierDown = false
     private var isActivated = false
     private var activationWorkItem: DispatchWorkItem?
+
+    // Exposed state for AppState / onboarding
+    private(set) var isActive = false
 
     private init() {}
 
     // MARK: - Setup
 
-    func start() {
+    /// Starts the event tap. Returns true if the tap is now live.
+    /// If Input Monitoring is not yet granted, schedules a retry loop so the
+    /// tap arms automatically once the user grants the permission and returns
+    /// to Haynoi — no relaunch needed.
+    @discardableResult
+    func start() -> Bool {
         stop()
 
         guard CGPreflightListenEventAccess() else {
-            NSLog("[Haynoi] Input Monitoring permission not granted")
-            return
+            NSLog("[Haynoi] Input Monitoring permission not granted — scheduling retry")
+            scheduleRetry()
+            isActive = false
+            DispatchQueue.main.async { AppState.shared.hotkeyActive = false }
+            return false
         }
 
         let mask: CGEventMask =
@@ -54,11 +83,15 @@ final class HotkeyManager {
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 NSLog("[Haynoi] CGEventTap disabled, re-enabling")
                 if let tap = mgr.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+                // Fix #5: resync after re-enable so stuck recording is cleared.
+                // Hop to main so resyncModifierState's precondition is satisfied.
+                DispatchQueue.main.async { mgr.resyncModifierState() }
                 return Unmanaged.passUnretained(event)
             }
 
             if type == .flagsChanged {
-                mgr.handleFlagsChanged(event.flags.rawValue)
+                let rawFlags = event.flags.rawValue
+                DispatchQueue.main.async { mgr.handleFlagsChanged(rawFlags) }
             } else if type == .keyDown {
                 // Just for diagnostics — verify tap is alive
                 let _ = event.getIntegerValueField(.keyboardEventKeycode)
@@ -77,7 +110,12 @@ final class HotkeyManager {
             userInfo: refcon
         ) else {
             NSLog("[Haynoi] Failed to create CGEventTap")
-            return
+            isActive = false
+            DispatchQueue.main.async { AppState.shared.hotkeyActive = false }
+            // Tap create can fail even after preflight passes (macOS timing) —
+            // keep retrying
+            scheduleRetry()
+            return false
         }
 
         eventTap = tap
@@ -89,20 +127,48 @@ final class HotkeyManager {
         NSLog("[Haynoi] CGEventTap started (listenOnly, modifier 0x%llx, delay %.0fms)",
               targetModifier.rawValue, activationDelay * 1000)
 
+        isActive = true
+        DispatchQueue.main.async { AppState.shared.hotkeyActive = true }
+
+        // Cancel any pending retry — tap is live
+        cancelRetry()
+
         DispatchQueue.main.async {
             self.tapCheckTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
                 guard let self, let tap = self.eventTap else { return }
+
+                // Fix #5: check secure input in the watchdog via the public Carbon
+                // API IsSecureEventInputEnabled() (available since macOS 10.4).
+                // When a password field or screensaver is active, key events are
+                // routed away — starting a recording would capture silence.
+                // Reading AppState on main actor; the Timer runs on the main
+                // RunLoop so this is safe. Wrapped in Task @MainActor to satisfy
+                // the Swift concurrency checker.
+                let secureInput = Bool(IsSecureEventInputEnabled())
+                Task { @MainActor in
+                    if secureInput != AppState.shared.secureInputActive {
+                        if secureInput {
+                            NSLog("[Haynoi] Secure event input is active — recordings will be blocked")
+                        }
+                        AppState.shared.secureInputActive = secureInput
+                    }
+                }
+
                 if !CGEvent.tapIsEnabled(tap: tap) {
                     NSLog("[Haynoi] Re-enabling disabled tap")
                     CGEvent.tapEnable(tap: tap, enable: true)
+                    // Fix #5: resync after watchdog re-enables the tap
+                    self.resyncModifierState()
                 }
             }
         }
+        return true
     }
 
     func stop() {
         tapCheckTimer?.invalidate()
         tapCheckTimer = nil
+        cancelRetry()
         activationWorkItem?.cancel()
         activationWorkItem = nil
         if let src = runLoopSource {
@@ -115,11 +181,74 @@ final class HotkeyManager {
         }
         isModifierDown = false
         isActivated = false
+        isActive = false
+    }
+
+    // MARK: - Retry (Fix #1)
+
+    private func scheduleRetry() {
+        cancelRetry()
+
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            NSLog("[Haynoi] Retrying HotkeyManager.start() (permission poll)")
+            let ok = self.start()
+            if ok { NSLog("[Haynoi] Event tap armed on retry (no relaunch needed)") }
+        }
+
+        // Also retry whenever the app comes back to the foreground — the user
+        // may have just granted Input Monitoring and switched back
+        if appBecameActiveObserver == nil {
+            appBecameActiveObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self, !self.isActive else { return }
+                NSLog("[Haynoi] App became active — retrying event tap")
+                self.start()
+            }
+        }
+    }
+
+    private func cancelRetry() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+        if let obs = appBecameActiveObserver {
+            NotificationCenter.default.removeObserver(obs)
+            appBecameActiveObserver = nil
+        }
+    }
+
+    // MARK: - Modifier Resync (Fix #5)
+
+    /// Reads the ACTUAL hardware modifier state and reconciles with our
+    /// internal isModifierDown flag. If we think the modifier is held but it
+    /// isn't (e.g. release event was lost during tap disable), synthetically
+    /// fire the release path to clear stuck recording state.
+    private func resyncModifierState() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard isModifierDown else { return }
+        guard let event = CGEvent(source: nil) else { return }
+        let actuallyDown = event.flags.contains(targetModifier)
+        if !actuallyDown {
+            NSLog("[Haynoi] Resync: modifier no longer held — firing synthetic release")
+            isModifierDown = false
+            activationWorkItem?.cancel()
+            activationWorkItem = nil
+            if isActivated {
+                isActivated = false
+                DispatchQueue.main.async { self.onKeyUp?() }
+            } else {
+                DispatchQueue.main.async { self.onCancelled?() }
+            }
+        }
     }
 
     // MARK: - Event Handling
 
     private func handleFlagsChanged(_ rawFlags: UInt64) {
+        dispatchPrecondition(condition: .onQueue(.main))
         let targetRaw = targetModifier.rawValue
         let isDown = (rawFlags & targetRaw) != 0
 
