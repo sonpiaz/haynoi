@@ -35,14 +35,30 @@ if [[ -z "${APP_STORE_CONNECT_API_KEY_P8:-}" || -z "${APP_STORE_CONNECT_KEY_ID:-
   exit 1
 fi
 
+echo "==> Signing nested Sparkle components (inner → outer, per Sparkle docs)"
+SPARKLE_FW="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+if [[ -d "$SPARKLE_FW" ]]; then
+  for XPC in "$SPARKLE_FW"/Versions/B/XPCServices/*.xpc; do
+    [[ -e "$XPC" ]] || continue
+    codesign --force --timestamp --options runtime \
+      --preserve-metadata=entitlements \
+      --sign "$APP_IDENTITY" "$XPC"
+  done
+  for INNER in "$SPARKLE_FW/Versions/B/Autoupdate" "$SPARKLE_FW/Versions/B/Updater.app"; do
+    [[ -e "$INNER" ]] || continue
+    codesign --force --timestamp --options runtime --sign "$APP_IDENTITY" "$INNER"
+  done
+  codesign --force --timestamp --options runtime --sign "$APP_IDENTITY" "$SPARKLE_FW"
+fi
+
 echo "==> Signing $APP_NAME.app with: $APP_IDENTITY"
 codesign --force --timestamp --options runtime \
   --entitlements "${ROOT}/Resources/Haynoi.entitlements" \
   --sign "$APP_IDENTITY" \
   "$APP_BUNDLE"
 
-echo "==> Verifying signature"
-codesign --verify --strict --verbose=2 "$APP_BUNDLE"
+echo "==> Verifying signature (deep + strict — fail fast before notary)"
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 spctl --assess --type execute --verbose "$APP_BUNDLE" || true  # warns until notarized
 
 echo "==> Preparing notarization zip"
@@ -55,11 +71,22 @@ trap 'rm -f "$API_KEY_FILE" "$NOTARIZE_ZIP"' EXIT
 echo "$APP_STORE_CONNECT_API_KEY_P8" | sed 's/\\n/\n/g' > "$API_KEY_FILE"
 
 echo "==> Submitting to Apple notary (this can take 1-10 min)"
-xcrun notarytool submit "$NOTARIZE_ZIP" \
+# notarytool can exit 0 even when the verdict is Invalid — parse the status
+# ourselves and fail loudly with the notary log instead of stapling garbage.
+SUBMIT_OUT=$(xcrun notarytool submit "$NOTARIZE_ZIP" \
   --key "$API_KEY_FILE" \
   --key-id "$APP_STORE_CONNECT_KEY_ID" \
   --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
-  --wait
+  --wait 2>&1 | tee /dev/stderr)
+SUBMISSION_ID=$(echo "$SUBMIT_OUT" | awk '/id: /{print $2; exit}')
+if ! echo "$SUBMIT_OUT" | grep -q "status: Accepted"; then
+  echo "ERROR: notarization was NOT accepted — fetching notary log:" >&2
+  xcrun notarytool log "$SUBMISSION_ID" \
+    --key "$API_KEY_FILE" \
+    --key-id "$APP_STORE_CONNECT_KEY_ID" \
+    --issuer "$APP_STORE_CONNECT_ISSUER_ID" >&2 || true
+  exit 1
+fi
 
 echo "==> Stapling notarization ticket to app"
 xcrun stapler staple "$APP_BUNDLE"
