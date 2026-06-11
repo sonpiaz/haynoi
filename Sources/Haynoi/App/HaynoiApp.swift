@@ -63,7 +63,7 @@ private final class UpdaterChecker: ObservableObject {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var mainWindow: NSWindow?
     private var onboardingWindow: NSWindow?
 
@@ -83,7 +83,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         PipelineController.shared.setup()
 
-        // Request notification permission (for insertion fallback)
+        // Request notification permission (for insertion fallback + failure alerts)
+        // Register as delegate so notification clicks are routed here.
+        UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
             NSLog("[Haynoi] Notification permission: %@", granted ? "granted" : "denied")
         }
@@ -92,6 +94,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
             showOnboarding()
         }
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate (Fix #2)
+
+    /// Called when the user clicks a Haynoi notification while the app is running.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let action = response.notification.request.content.userInfo["action"] as? String
+        NSLog("[Haynoi] Notification action: %@", action ?? "none")
+
+        switch action {
+        case "retryLastDictation":
+            // User tapped "Couldn't transcribe — recording saved. Click to retry."
+            Task { @MainActor in
+                PipelineController.shared.retryLastFailedDictation()
+            }
+        case "openMicSettings":
+            // User tapped the mic-revoked notification — deep-link to prefs
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+        default:
+            break
+        }
+        completionHandler()
+    }
+
+    /// Allow notifications to appear as banners while Haynoi is frontmost.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 
     /// Click dock icon → open main window

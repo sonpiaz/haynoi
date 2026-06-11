@@ -90,30 +90,54 @@ struct ContentView: View {
     // MARK: - Status Bar
 
     private var statusBar: some View {
-        HStack(spacing: 8) {
-            if state.isRecording {
-                Circle().fill(.red).frame(width: 8, height: 8)
-                levelBars
-                Text(formatDuration(state.recordingDuration))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.red)
-            } else if state.isTranscribing {
-                ProgressView().controlSize(.small)
-                Text("Transcribing...").font(.caption).foregroundStyle(.secondary)
-            } else if let error = state.error {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange).font(.caption)
-                Text(error).font(.caption).foregroundStyle(.red).lineLimit(1)
-            } else {
-                Image(systemName: "waveform.circle")
-                    .foregroundStyle(.secondary).font(.caption)
-                Text("Hold ⌘ to record").font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            // Fix #2: "Retry Last Dictation" row — shown only when a failed
+            // dictation WAV is saved and no transcription is in flight.
+            if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
+                Button {
+                    PipelineController.shared.retryLastFailedDictation()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise.circle.fill")
+                            .foregroundStyle(.orange).font(.caption)
+                        Text("Retry Last Dictation")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .background(Color.orange.opacity(0.08))
+                Divider()
             }
-            Spacer()
+
+            HStack(spacing: 8) {
+                if state.isRecording {
+                    Circle().fill(.red).frame(width: 8, height: 8)
+                    levelBars
+                    Text(formatDuration(state.recordingDuration))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.red)
+                } else if state.isTranscribing {
+                    ProgressView().controlSize(.small)
+                    Text("Transcribing...").font(.caption).foregroundStyle(.secondary)
+                } else if let error = state.error {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).font(.caption)
+                    Text(error).font(.caption).foregroundStyle(.red).lineLimit(1)
+                } else {
+                    Image(systemName: "waveform.circle")
+                        .foregroundStyle(.secondary).font(.caption)
+                    Text("Hold ⌘ to record").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.bar)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 
     private var levelBars: some View {

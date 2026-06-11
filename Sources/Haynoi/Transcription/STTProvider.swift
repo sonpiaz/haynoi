@@ -66,7 +66,9 @@ enum STTProvider {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        // Fix #2: raised from 30 → 90s — long audio or congested networks
+        // were hitting the old limit and discarding the recording entirely.
+        request.timeoutInterval = 90
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
@@ -94,31 +96,44 @@ enum STTProvider {
 
         var lastError: Error = STTError.networkError
         for attempt in 0..<3 {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw STTError.networkError
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    throw STTError.networkError
+                }
+                if http.statusCode == 401 {
+                    throw STTError.notSignedIn
+                }
+                if http.statusCode == 429 {
+                    let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
+                        .flatMap(Double.init) ?? pow(2.0, Double(attempt + 1))
+                    let delay = min(retryAfter, 30.0)
+                    NSLog("[Haynoi] Rate limited (transcription), retrying in %.0fs (%d/3)", delay, attempt + 1)
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    lastError = STTError.apiError(429, "Rate limited")
+                    continue
+                }
+                guard http.statusCode == 200 else {
+                    let msg = String(data: data, encoding: .utf8) ?? "Unknown"
+                    throw STTError.apiError(http.statusCode, msg)
+                }
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let text = json["text"] as? String else {
+                    throw STTError.parseError
+                }
+                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            } catch let urlErr as URLError {
+                // Fix #2: transport errors (offline, DNS, timeout) were not
+                // retried — the WAV was lost silently. The audio is in memory;
+                // retrying costs nothing but a short backoff.
+                let backoff = pow(2.0, Double(attempt + 1)) // 2s, 4s
+                NSLog("[Haynoi] Transport error (transcription, attempt %d/3): %@ — retrying in %.0fs",
+                      attempt + 1, urlErr.localizedDescription, backoff)
+                lastError = urlErr
+                if attempt < 2 {
+                    try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
+                }
             }
-            if http.statusCode == 401 {
-                throw STTError.notSignedIn
-            }
-            if http.statusCode == 429 {
-                let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
-                    .flatMap(Double.init) ?? pow(2.0, Double(attempt + 1))
-                let delay = min(retryAfter, 30.0)
-                NSLog("[Haynoi] Rate limited (transcription), retrying in %.0fs (%d/3)", delay, attempt + 1)
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                lastError = STTError.apiError(429, "Rate limited")
-                continue
-            }
-            guard http.statusCode == 200 else {
-                let msg = String(data: data, encoding: .utf8) ?? "Unknown"
-                throw STTError.apiError(http.statusCode, msg)
-            }
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let text = json["text"] as? String else {
-                throw STTError.parseError
-            }
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         throw lastError
     }
