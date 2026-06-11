@@ -96,32 +96,31 @@ struct MainView: View {
 /// implementation so each can evolve independently.
 struct RecordingBannerWaveform: View {
     let audioLevel: CGFloat
-    @State private var phase: Double = 0
 
     private let barCount = 8
 
     var body: some View {
-        Canvas { context, size in
-            let barW: CGFloat = 3
-            let gap: CGFloat = (size.width - CGFloat(barCount) * barW) / CGFloat(barCount - 1)
-            let midY = size.height / 2
+        // TimelineView drives the redraw; phase derives from wall-clock time so
+        // there is no unbounded animated value losing float precision.
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let phase = timeline.date.timeIntervalSinceReferenceDate * 2.4
+                let barW: CGFloat = 3
+                let gap: CGFloat = (size.width - CGFloat(barCount) * barW) / CGFloat(barCount - 1)
+                let midY = size.height / 2
 
-            for i in 0..<barCount {
-                let x = CGFloat(i) * (barW + gap)
+                for i in 0..<barCount {
+                    let x = CGFloat(i) * (barW + gap)
 
-                let freq1 = sin(phase * 1.1 + Double(i) * 0.65) * 0.5 + 0.5
-                let freq2 = cos(phase * 0.7 + Double(i) * 0.45) * 0.3 + 0.5
-                let response = freq1 * 0.6 + freq2 * 0.4
-                let h = max(3, size.height * max(audioLevel, 0.05) * CGFloat(response))
+                    let freq1 = sin(phase * 1.1 + Double(i) * 0.65) * 0.5 + 0.5
+                    let freq2 = cos(phase * 0.7 + Double(i) * 0.45) * 0.3 + 0.5
+                    let response = freq1 * 0.6 + freq2 * 0.4
+                    let h = max(3, size.height * max(audioLevel, 0.05) * CGFloat(response))
 
-                let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
-                let path = Path(roundedRect: rect, cornerRadius: 1.5)
-                context.fill(path, with: .color(.red.opacity(0.75)))
-            }
-        }
-        .onAppear {
-            withAnimation(.linear(duration: 0.016).repeatForever(autoreverses: false)) {
-                phase = .infinity
+                    let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
+                    let path = Path(roundedRect: rect, cornerRadius: 1.5)
+                    context.fill(path, with: .color(Color(red: 0.35, green: 0.78, blue: 0.98).opacity(0.8)))
+                }
             }
         }
     }

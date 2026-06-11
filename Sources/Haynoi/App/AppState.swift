@@ -138,14 +138,19 @@ final class AppState: ObservableObject {
     // MARK: - Persistence
 
     private func setupDebouncedSave() {
+        // Debounce on the main run loop so the array snapshot happens on the
+        // main actor; only the encode + atomic write hop to a utility queue.
         saveCancellable = saveSubject
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.global(qos: .utility))
-            .sink { [weak self] in self?.persistHistoryToDisk() }
-    }
-
-    private func persistHistoryToDisk() {
-        guard let data = try? JSONEncoder().encode(transcriptions) else { return }
-        try? data.write(to: Self.historyFileURL, options: .atomic)
+            .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                let snapshot = self.transcriptions
+                let url = Self.historyFileURL
+                DispatchQueue.global(qos: .utility).async {
+                    guard let data = try? JSONEncoder().encode(snapshot) else { return }
+                    try? data.write(to: url, options: .atomic)
+                }
+            }
     }
 
     private func loadHistory() {

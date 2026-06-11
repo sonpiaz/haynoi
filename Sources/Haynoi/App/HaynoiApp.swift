@@ -85,37 +85,41 @@ private struct MenuBarContent: View {
 
     @ViewBuilder
     private var retryRow: some View {
-        let isOutOfCredits = isLastErrorOutOfCredits
-        Button {
-            if !isOutOfCredits {
-                PipelineController.shared.retryLastFailedDictation()
-            }
-        } label: {
+        if isLastErrorOutOfCredits {
+            // Not a button: the link must stay tappable, and there is nothing
+            // useful to retry until the account has credits again.
             HStack(spacing: 6) {
-                Image(systemName: isOutOfCredits
-                      ? "exclamationmark.circle.fill"
-                      : "arrow.clockwise.circle.fill")
-                    .foregroundStyle(isOutOfCredits ? .orange : .orange)
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.red)
                     .font(.caption)
-
-                if isOutOfCredits {
-                    Text("Add credits first")
-                        .font(.caption).foregroundStyle(.orange)
-                    Link("kymaapi.com",
-                         destination: URL(string: "https://kymaapi.com")!)
-                        .font(.caption)
-                } else {
-                    Text("Retry Last Dictation")
-                        .font(.caption).foregroundStyle(.orange)
-                }
+                Text("Add credits first")
+                    .font(.caption).foregroundStyle(.secondary)
+                Link("kymaapi.com",
+                     destination: URL(string: "https://kymaapi.com")!)
+                    .font(.caption)
                 Spacer()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            .background(Color.red.opacity(0.06))
+        } else {
+            Button {
+                PipelineController.shared.retryLastFailedDictation()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.caption)
+                    Text("Retry Last Dictation")
+                        .font(.caption).foregroundStyle(.orange)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background(Color.orange.opacity(0.08))
         }
-        .buttonStyle(.plain)
-        .disabled(isOutOfCredits)
-        .background(Color.orange.opacity(0.08))
     }
 
     private var accountChip: some View {
@@ -225,17 +229,15 @@ private final class UpdaterChecker: ObservableObject {
 // MARK: - Onboarding Window
 
 /// Custom NSWindow subclass that handles the close button mid-onboarding.
-/// When the user clicks X before completing, if all permissions are already
-/// granted the session is marked complete; otherwise it's marked skipped so
-/// the main window opens without a second immediate prompt.
+/// Closing onboarding early counts as done: the main window always opens so
+/// the app is never invisible, and Settings → General → Restart Setup… (plus
+/// the Permissions tab) covers anyone who bailed before granting access.
 final class OnboardingWindow: NSWindow {
     override func close() {
         let completed = UserDefaults.standard.bool(forKey: "onboardingCompleted")
         if !completed {
-            // Mark as complete only when permissions are all granted; otherwise
-            // mark as skipped so the user can get back via Restart Setup.
             UserDefaults.standard.set(true, forKey: "onboardingCompleted")
-            NSLog("[Haynoi] Onboarding closed by user — marked complete/skipped")
+            NSLog("[Haynoi] Onboarding closed early — marked done; Restart Setup remains available")
         }
         super.close()
         // Ensure the main window opens so the app isn't left with no visible UI

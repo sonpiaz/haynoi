@@ -101,7 +101,7 @@ final class PipelineController {
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         guard micStatus == .authorized else {
             NSLog("[Haynoi] Microphone access not authorized (status %d)", micStatus.rawValue)
-            state.error = "Microphone access revoked — click the Haynoi icon then open System Settings"
+            state.setTransientError("Microphone access revoked — click the Haynoi icon then open System Settings")
             NotificationHelper.postMicPermissionRevoked()
             return
         }
@@ -110,7 +110,7 @@ final class PipelineController {
         // is active (the tap can't read key events reliably).
         if state.secureInputActive {
             NSLog("[Haynoi] Secure event input is active — skipping recording")
-            state.error = "Secure input field focused — switch focus and try again"
+            state.setTransientError("Secure input field focused — switch focus and try again")
             return
         }
 
@@ -141,7 +141,7 @@ final class PipelineController {
             try recorder.startRecording()
         } catch {
             isPreRecording = false
-            state.error = "Mic error: \(error.localizedDescription)"
+            state.setTransientError("Mic error: \(error.localizedDescription)")
         }
     }
 
@@ -164,7 +164,7 @@ final class PipelineController {
 
         if recorder.isRunning == false {
             do { try recorder.startRecording() } catch {
-                state.error = "Mic error: \(error.localizedDescription)"
+                state.setTransientError("Mic error: \(error.localizedDescription)")
                 return
             }
         }

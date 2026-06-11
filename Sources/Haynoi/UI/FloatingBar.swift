@@ -393,24 +393,29 @@ struct FloatingBarView: View {
 
         case .success:
             orbVisible = true
-            // Fade out after a brief dwell
+            // Fade out after a brief dwell. Bail if a new dictation already
+            // moved the orb to another state — never tear down its window.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard state.orbState == .success else { return }
                 withAnimation(.easeOut(duration: 0.25)) {
                     orbVisible = false
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    guard state.orbState == .success else { return }
                     FloatingBarController.shared.hide()
                 }
             }
 
         case .error:
             orbVisible = true
-            // Stay visible for 1.5s then fade
+            // Stay visible for 1.5s then fade — same stale-closure guard.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                guard state.orbState == .error else { return }
                 withAnimation(.easeOut(duration: 0.3)) {
                     orbVisible = false
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard state.orbState == .error else { return }
                     FloatingBarController.shared.hide()
                 }
             }
