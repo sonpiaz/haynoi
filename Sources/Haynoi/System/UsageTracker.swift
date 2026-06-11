@@ -8,6 +8,11 @@ enum UsageTracker {
     private static let dailyKey = "usageDay_"
     private static let wordsKey = "totalWordsAllTime"
     private static let totalSecondsKey = "totalDictationSeconds"
+    // WPM uses its own paired counters: legacy builds accumulated words for
+    // months before duration tracking existed, so words/totalSeconds is
+    // poisoned (54K words over ~14 tracked minutes read as ~4000 WPM).
+    private static let wpmWordsKey = "wpmTrackedWords"
+    private static let wpmSecondsKey = "wpmTrackedSeconds"
     private static let lastActiveDayKey = "lastActiveDay"
     private static let streakKey = "currentStreak"
 
@@ -24,6 +29,13 @@ enum UsageTracker {
         // Total dictation seconds
         defaults.set(defaults.double(forKey: totalSecondsKey) + durationSeconds, forKey: totalSecondsKey)
 
+        // WPM pair — only count entries that carry BOTH words and duration,
+        // so the average can never divide fresh words by missing time.
+        if wordCount > 0, durationSeconds > 0 {
+            defaults.set(defaults.integer(forKey: wpmWordsKey) + wordCount, forKey: wpmWordsKey)
+            defaults.set(defaults.double(forKey: wpmSecondsKey) + durationSeconds, forKey: wpmSecondsKey)
+        }
+
         // Streak
         updateStreak()
     }
@@ -38,11 +50,12 @@ enum UsageTracker {
         defaults.integer(forKey: wordsKey)
     }
 
-    /// Average words per minute across all dictation time
+    /// Average words per minute across dictations that tracked duration.
+    /// Returns 0 (UI shows a dash) until at least 30s of paired data exists.
     static var wordsPerMinute: Int {
-        let totalMin = defaults.double(forKey: totalSecondsKey) / 60.0
-        guard totalMin > 0.1 else { return 0 }
-        return Int(Double(defaults.integer(forKey: wordsKey)) / totalMin)
+        let totalMin = defaults.double(forKey: wpmSecondsKey) / 60.0
+        guard totalMin >= 0.5 else { return 0 }
+        return Int(Double(defaults.integer(forKey: wpmWordsKey)) / totalMin)
     }
 
     static var streakDays: Int {
