@@ -49,8 +49,13 @@ struct OnboardingView: View {
     // Number of progress dots (steps after Welcome)
     private let progressStepCount = OnboardingStep.allCases.count - 1
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         VStack(spacing: 0) {
+            // Aurora hairline — aligns with the main window
+            AuroraHairline()
+
             appHeader
 
             progressDots
@@ -77,7 +82,7 @@ struct OnboardingView: View {
             Spacer()
         }
         .frame(width: 460, height: 520)
-        .background(.background)
+        .background(Color.mercuryBackground(for: scheme))
         .onAppear {
             refreshPermissions()
             startPolling()
@@ -90,7 +95,7 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Header (Mercury paper/ink + serif title)
 
     private var appHeader: some View {
         VStack(spacing: 10) {
@@ -98,11 +103,12 @@ struct OnboardingView: View {
                 .resizable()
                 .frame(width: 64, height: 64)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+                .shadow(color: .black.opacity(0.14), radius: 6, y: 3)
                 .padding(.top, 28)
 
             Text(headerTitle)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold, design: .serif))
+                .foregroundStyle(Color.mercuryLabel2(for: scheme))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
@@ -135,10 +141,10 @@ struct OnboardingView: View {
     }
 
     private func dotColor(for i: Int) -> Color {
-        guard step.showsProgress else { return .gray.opacity(0.25) }
-        if i < step.progressIndex { return .green }
-        if i == step.progressIndex { return .accentColor }
-        return .gray.opacity(0.25)
+        guard step.showsProgress else { return Color.mercuryMid(for: scheme) }
+        if i < step.progressIndex { return Color.mercuryGreen }
+        if i == step.progressIndex { return Color.auroraViolet }
+        return Color.mercuryMid(for: scheme)
     }
 
     // MARK: - Step Bodies
