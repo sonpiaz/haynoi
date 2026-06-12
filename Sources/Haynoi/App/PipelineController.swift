@@ -82,9 +82,10 @@ final class PipelineController {
 
         // Sync initial state from store
         state.hasFailedDictation = FailedDictationStore.hasAny
-        NSLog("[Haynoi] Pipeline ready. AX=%d InputMon=%d",
-              AXIsProcessTrusted() ? 1 : 0,
-              CGPreflightListenEventAccess() ? 1 : 0)
+        // Accessibility gates both text insertion and the NSEvent hotkey
+        // monitors, so it is the only permission worth logging now.
+        NSLog("[Haynoi] Pipeline ready. AX=%d",
+              AXIsProcessTrusted() ? 1 : 0)
     }
 
     // MARK: - Recording
