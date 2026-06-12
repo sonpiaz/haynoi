@@ -387,22 +387,25 @@ private struct AccountTab: View {
             .buttonStyle(.bordered).controlSize(.small)
         }
 
-        if let balance = balanceManager.balance, balance > 0 {
-            HStack {
-                HStack(spacing: 4) {
-                    Text(String(format: "$%.2f", balance))
-                        .font(.system(size: 13).monospacedDigit())
-                    Text("remaining")
-                        .font(.caption).foregroundStyle(.secondary)
+        if let balance = balanceManager.balance {
+            if balance > 0 {
+                HStack {
+                    HStack(spacing: 4) {
+                        Text(String(format: "$%.2f", balance))
+                            .font(.system(size: 13).monospacedDigit())
+                        Text("remaining")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
-                Spacer()
+            } else {
+                // Confirmed zero — a brand-new account's free credit stays
+                // locked until the email is verified, so point them at the inbox.
+                verifyEmailCard
             }
-        } else {
-            // Balance is 0 (or still nil right after sign-in): for a brand-new
-            // account the free credit stays locked until the email is verified,
-            // so the calmest, most accurate thing to say is to check the inbox.
-            verifyEmailCard
         }
+        // balance == nil → still loading; show nothing rather than flash the
+        // verify-email card at a funded user before the first fetch returns.
     }
 
     @ViewBuilder

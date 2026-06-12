@@ -472,12 +472,18 @@ struct OnboardingView: View {
                     // email is verified. If the balance reads 0 (or nil right
                     // after sign-in), calmly point the user to their inbox so
                     // their first dictation doesn't fail out of nowhere.
-                    if let balance = balanceManager.balance, balance > 0 {
-                        Text(String(format: "$%.2f credit ready — you're set.", balance))
+                    if let balance = balanceManager.balance {
+                        if balance > 0 {
+                            Text(String(format: "$%.2f credit ready — you're set.", balance))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.calmLabel3(for: scheme))
+                        } else {
+                            verifyEmailNote
+                        }
+                    } else {
+                        Text("Checking your balance…")
                             .font(.system(size: 12))
                             .foregroundStyle(Color.calmLabel3(for: scheme))
-                    } else {
-                        verifyEmailNote
                     }
 
                     calmPrimaryButton("Continue") { advance() }
