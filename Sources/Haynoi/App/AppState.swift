@@ -46,6 +46,9 @@ final class AppState: ObservableObject {
 
     // Floating orb state machine
     @Published var orbState: OrbState = .idle
+    /// Word count of the most recent successful dictation — shown by the
+    /// floating orb's "N words" success chip.
+    @Published var lastDictationWordCount: Int = 0
 
     // Fix #1: hotkey tap liveness
     @Published var hotkeyActive: Bool = false

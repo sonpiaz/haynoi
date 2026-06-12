@@ -44,7 +44,8 @@ private struct GeneralTab: View {
     @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
     @AppStorage("appTheme") private var appTheme = "light"
     @AppStorage("soundEnabled") private var soundEnabled = true
-    @AppStorage("soundTheme") private var soundTheme = "deep"
+    @AppStorage("soundTheme") private var soundTheme = "chime"
+    @AppStorage("successDinkEnabled") private var successDinkEnabled = true
     @AppStorage("muteMusic") private var muteMusic = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
 
@@ -94,6 +95,7 @@ private struct GeneralTab: View {
             Toggle("Sound feedback", isOn: $soundEnabled)
             if soundEnabled {
                 Picker("Sound theme", selection: $soundTheme) {
+                    Text("Chime").tag("chime")
                     Text("Deep Bass").tag("deep")
                     Text("Crystal").tag("crystal")
                     Text("Minimal").tag("minimal")
@@ -102,6 +104,7 @@ private struct GeneralTab: View {
                     SoundFeedback.shared.reloadTheme()
                     SoundFeedback.shared.playStartTone()
                 }
+                Toggle("Subtle chime when text lands", isOn: $successDinkEnabled)
             }
             Toggle("Mute music while dictating", isOn: $muteMusic)
         }

@@ -279,15 +279,23 @@ final class PipelineController {
                 // Capture attribution from the dictation target app (F2.3 / D17).
                 let attrBundleId = dictationTargetApp?.bundleIdentifier
                 let attrAppName = dictationTargetApp?.localizedName
+                let dictWordCount = finalText.split(whereSeparator: \.isWhitespace).count
                 await MainActor.run {
                     state.isTranscribing = false
                     state.addTranscription(finalText,
                                            appBundleId: attrBundleId,
                                            appName: attrAppName)
-                    // Orb: brief success flash then auto-hide. No "done" tone —
-                    // the stop tone on release is the only end-of-dictation cue
-                    // (a second tone after transcription felt like a double beep).
+                    // Orb: "N words" success chip then auto-hide. The optional
+                    // dink is quieter and tonally distinct from the stop tone
+                    // (founder pick from the 2026-06-12 sound contest) and can
+                    // be turned off in Settings → Sounds.
+                    state.lastDictationWordCount = dictWordCount
                     FloatingBarController.shared.transition(to: .success)
+                    let defaults = UserDefaults.standard
+                    if defaults.bool(forKey: "soundEnabled"),
+                       defaults.bool(forKey: "successDinkEnabled") {
+                        SoundFeedback.shared.playSuccessTone()
+                    }
                 }
                 // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
                 await TextInserter.insert(finalText, targetApp: dictationTargetApp)

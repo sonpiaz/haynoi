@@ -41,7 +41,8 @@ class FloatingBarController {
             .environmentObject(AppState.shared)
         let hosting = NSHostingView(rootView: view)
 
-        let size = NSSize(width: 80, height: 80)
+        // Wide enough for the Trail waveform strip + the "N words" success chip.
+        let size = NSSize(width: 180, height: 80)
         hosting.frame = NSRect(origin: .zero, size: size)
 
         let win = NSWindow(
@@ -113,9 +114,9 @@ struct FloatingBarView: View {
 
     // Audio-reactive fields — updated by the display link when recording
     @State private var displayLevel: CGFloat = 0.05
-    @State private var phase: Double = 0
-    @State private var breathe: Double = 0
-    @State private var levelHistory: [CGFloat] = Array(repeating: 0.05, count: 6)
+    @State private var levelHistory: [CGFloat] = Array(repeating: 0, count: 6)
+    /// Scrolling level history for the Trail waveform — newest sample last.
+    @State private var trailHistory: [CGFloat] = Array(repeating: 0, count: 40)
     @State private var displayLink: Timer?
 
     // Transcribing pulse
@@ -142,7 +143,7 @@ struct FloatingBarView: View {
                 Color.clear
             }
         }
-        .frame(width: 80, height: 80)
+        .frame(width: 180, height: 80)
         .opacity(orbVisible ? 1 : 0)
         .scaleEffect(orbVisible ? 1 : 0.7)
         .animation(.easeInOut(duration: 0.2), value: orbVisible)
@@ -158,107 +159,70 @@ struct FloatingBarView: View {
         }
     }
 
-    // MARK: - Recording Orb — Concept C (aurora waveform + pinging ring)
+    // MARK: - Recording Orb — "Trail" (founder pick, 2026-06-12 contest)
     //
-    // Founder-approved "I'm listening + it's voice" hybrid:
-    //   • 5 aurora bars (cyan→pink) bounce in the center, each staggered
-    //     so they ripple like a small voice meter (~0.9s ease-in-out cycle).
-    //   • 2 soft pink rings ping outward around the bars (scale 0.9→2.1,
-    //     opacity .55→0, ~2s, the second offset by half a cycle).
-    // Everything is driven by TimelineView(.animation) so it animates
-    // continuously without .repeatForever / phase=.infinity. The bars also
-    // lean into live mic level so the orb reacts to the voice it hears.
+    // Voice-Memos style scrolling history: the newest level sample lands on
+    // the right and older bars march left, dimming with age — the last second
+    // of your voice stays visible. HONEST by construction: silence appends
+    // zero-height samples, so a quiet trail is a flat line of dashes — there
+    // is no time-driven motion of bar amplitude at all.
 
-    private let auroraBarCount = 5
-
-    // Per-bar phase offsets (symmetric ripple, like the CSS staggered delays).
-    private let auroraBarDelays: [Double] = [0.0, 0.18, 0.36, 0.18, 0.05]
+    private let trailBarCount = 40
+    private let trailBarWidth: CGFloat = 2.6
+    private let trailBarGap: CGFloat = 1.2
+    private let trailMaxBarHeight: CGFloat = 30
 
     private var recordingOrb: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            // Voice IS the amplitude: silence → bars near-flat, speech → bars
-            // rise. No floor — `displayLevel` (smoothed mic RMS) is the driver.
-            let energy = displayLevel
-
-            ZStack {
-                // Soft aurora glow behind everything — breathes with the voice.
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.calmAuroraViolet.opacity(0.16 + displayLevel * 0.18),
-                                Color.calmAuroraCyan.opacity(0.06 + displayLevel * 0.08),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 4,
-                            endRadius: 34
-                        )
+        ZStack {
+            // Soft aurora glow that swells only with the voice (no idle breathing).
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.calmAuroraViolet.opacity(0.12 + displayLevel * 0.20),
+                            Color.calmAuroraCyan.opacity(0.04 + displayLevel * 0.08),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 4,
+                        endRadius: 84
                     )
-                    .frame(width: 64, height: 64)
-                    .scaleEffect(0.92 + displayLevel * 0.3 + breathe * 0.05)
-                    .blur(radius: 2)
+                )
+                .frame(width: 170, height: 58)
+                .scaleEffect(0.95 + displayLevel * 0.12)
+                .blur(radius: 3)
 
-                // Pinging rings — two soft pink rings expanding outward.
-                auroraRing(at: t, cycle: 2.0, delay: 0.0)
-                auroraRing(at: t, cycle: 2.0, delay: 1.0)
-
-                // The voice bars — 5 aurora bars bouncing in the center.
-                HStack(alignment: .center, spacing: 3) {
-                    ForEach(0..<auroraBarCount, id: \.self) { i in
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.calmAuroraCyan, .calmAuroraPink],
-                                    startPoint: .bottom,
-                                    endPoint: .top
-                                )
-                            )
-                            .frame(width: 3.5, height: barHeight(index: i, at: t, energy: energy))
+            Canvas { context, size in
+                let stride = trailBarWidth + trailBarGap
+                let total = CGFloat(trailHistory.count) * stride - trailBarGap
+                let x0 = (size.width - total) / 2
+                let midY = size.height / 2
+                for (i, v) in trailHistory.enumerated() {
+                    let h = max(1.8, min(v, 1) * trailMaxBarHeight)
+                    let rect = CGRect(x: x0 + CGFloat(i) * stride,
+                                      y: midY - h / 2,
+                                      width: trailBarWidth,
+                                      height: h)
+                    let path = Path(roundedRect: rect, cornerRadius: trailBarWidth / 2)
+                    let age = CGFloat(i) / CGFloat(max(trailHistory.count - 1, 1)) // 0 old → 1 new
+                    if v < 0.05 {
+                        // Quiet dash — brand violet so it reads on light AND dark desktops.
+                        context.fill(path, with: .color(Color.calmAuroraViolet.opacity(0.28 + 0.24 * age)))
+                    } else {
+                        var bar = context
+                        bar.opacity = 0.35 + 0.65 * age
+                        bar.fill(path, with: .linearGradient(
+                            Gradient(colors: [.calmAuroraCyan, .calmAuroraPink]),
+                            startPoint: CGPoint(x: rect.midX, y: rect.maxY),
+                            endPoint: CGPoint(x: rect.midX, y: rect.minY)
+                        ))
                     }
                 }
-                .frame(height: 26)
-                .shadow(color: Color.calmAuroraViolet.opacity(0.45), radius: 4)
             }
-            .frame(width: 76, height: 76)
+            .frame(width: 170, height: 44)
+            .shadow(color: Color.calmAuroraViolet.opacity(0.35), radius: 4)
         }
-    }
-
-    /// Height of bar `index`. AMPLITUDE comes from `energy` (= displayLevel);
-    /// the time term is only a subtle ±12% per-bar shimmer so the bars don't
-    /// move in lockstep — it never bobs the bars on its own when energy is low.
-    private func barHeight(index: Int, at t: Double, energy: CGFloat) -> CGFloat {
-        let cycle = 0.9                              // ~0.9s ripple
-        let delay = auroraBarDelays[index % auroraBarDelays.count]
-        // Normalized phase in [0,1) for this bar, offset by its stagger delay.
-        let p = ((t - delay) / cycle).truncatingRemainder(dividingBy: 1.0)
-        let phase = p < 0 ? p + 1.0 : p
-        // ease-in-out 0→1 over the cycle (subtle per-bar variation only).
-        let eased = (1 - cos(phase * 2 * .pi)) / 2   // 0 at ends, 1 at mid
-
-        let minH: CGFloat = 4                         // calm floor — silence sits low & still
-        let maxH: CGFloat = 24
-        // Voice drives the bulk of the height; the shimmer is weighted to ~12%
-        // and itself scales with energy so it vanishes at silence (no metronome).
-        let amp = min(max(energy, 0), 1)
-        let shimmer = 0.12 * amp * CGFloat(eased)
-        let drive = amp * 0.88 + shimmer
-        let span = (maxH - minH) * drive
-        return minH + span
-    }
-
-    /// One expanding ring: scale 0.9→2.1, opacity .55→0 over `cycle` seconds.
-    @ViewBuilder
-    private func auroraRing(at t: Double, cycle: Double, delay: Double) -> some View {
-        let raw = ((t - delay) / cycle).truncatingRemainder(dividingBy: 1.0)
-        let p = raw < 0 ? raw + 1.0 : raw            // progress in [0,1)
-        let scale = 0.9 + (2.1 - 0.9) * CGFloat(p)
-        let opacity = 0.55 * (1 - p)                 // fades out as it grows
-        Circle()
-            .stroke(Color.calmAuroraPink.opacity(opacity), lineWidth: 2)
-            .frame(width: 40, height: 40)
-            .scaleEffect(scale)
+        .frame(width: 176, height: 76)
     }
 
     // MARK: - Transcribing Orb (calm indigo, pulsing — matches status-dot language)
@@ -316,48 +280,50 @@ struct FloatingBarView: View {
         .onAppear { transcribePulse = 1.0 }
     }
 
-    // MARK: - Success Orb (calm success green)
+    // MARK: - Success — "N words" chip (founder pick, 2026-06-12 contest)
+    //
+    // A small green capsule springs in with the word count of the dictation
+    // that just landed — confirmation + a tiny reward in one beat. Falls back
+    // to the plain check orb if the count is somehow unknown.
 
     private var successOrb: some View {
-        ZStack {
-            // Green glow burst
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmSuccess.opacity(0.32),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 4,
-                        endRadius: 36
-                    )
-                )
-                .frame(width: 68, height: 68)
-                .blur(radius: 2)
-
-            // Core
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmSuccess.opacity(0.95),
-                            Color.calmSuccess,
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 9
-                    )
-                )
-                .frame(width: 22, height: 22)
-                .shadow(color: Color.calmSuccess.opacity(0.6), radius: 8)
-
-            // Checkmark
-            Image(systemName: "checkmark")
-                .font(.system(size: 11, weight: .bold))
+        Group {
+            if state.lastDictationWordCount > 0 {
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(wordsLabel(state.lastDictationWordCount))
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                }
                 .foregroundStyle(.white)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(Color.calmSuccess)
+                        .shadow(color: Color.calmSuccess.opacity(0.45), radius: 8, y: 2)
+                )
                 .scaleEffect(successScale)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: successScale)
+                .animation(.spring(response: 0.32, dampingFraction: 0.62), value: successScale)
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.calmSuccess.opacity(0.95), Color.calmSuccess],
+                                center: .center, startRadius: 0, endRadius: 9
+                            )
+                        )
+                        .frame(width: 22, height: 22)
+                        .shadow(color: Color.calmSuccess.opacity(0.6), radius: 8)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .scaleEffect(successScale)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: successScale)
+                }
+            }
         }
         .onAppear {
             successScale = 0.1
@@ -365,6 +331,10 @@ struct FloatingBarView: View {
                 successScale = 1.0
             }
         }
+    }
+
+    private func wordsLabel(_ n: Int) -> String {
+        n == 1 ? "1 word" : "\(n) words"
     }
 
     // MARK: - Error Orb (calm warn amber)
@@ -417,6 +387,8 @@ struct FloatingBarView: View {
         case .recording:
             orbVisible = true
             transcribePulse = 0
+            // Fresh dictation — the trail starts flat.
+            trailHistory = Array(repeating: 0, count: trailBarCount)
 
         case .transcribing:
             orbVisible = true
@@ -424,9 +396,9 @@ struct FloatingBarView: View {
 
         case .success:
             orbVisible = true
-            // Fade out after a brief dwell. Bail if a new dictation already
-            // moved the orb to another state — never tear down its window.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Dwell long enough to read the "N words" chip. Bail if a new
+            // dictation already moved the orb on — never tear down its window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
                 guard state.orbState == .success else { return }
                 withAnimation(.easeOut(duration: 0.25)) {
                     orbVisible = false
@@ -459,10 +431,6 @@ struct FloatingBarView: View {
     // MARK: - Animation Loop (recording only)
 
     private func startAnimationLoop() {
-        withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-            breathe = 1.0
-        }
-
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in
             Task { @MainActor [self] in
                 guard state.orbState == .recording else { return }
@@ -490,7 +458,12 @@ struct FloatingBarView: View {
                 let speed = target > displayLevel ? attack : release
                 displayLevel += (target - displayLevel) * speed
 
-                phase += 0.04 + Double(displayLevel) * 0.08
+                // Trail: newest sample lands on the right; silence appends ~0,
+                // which renders as a flat dash — no synthetic motion ever.
+                trailHistory.append(smoothed)
+                if trailHistory.count > trailBarCount {
+                    trailHistory.removeFirst(trailHistory.count - trailBarCount)
+                }
             }
         }
         // commonModes so updates survive modal runs

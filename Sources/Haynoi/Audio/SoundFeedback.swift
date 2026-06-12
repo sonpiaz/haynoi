@@ -21,12 +21,12 @@ final class SoundFeedback {
     private var currentTheme: String
 
     private init() {
-        currentTheme = UserDefaults.standard.string(forKey: "soundTheme") ?? "deep"
+        currentTheme = UserDefaults.standard.string(forKey: "soundTheme") ?? "chime"
         preloadAll()
     }
 
     func reloadTheme() {
-        currentTheme = UserDefaults.standard.string(forKey: "soundTheme") ?? "deep"
+        currentTheme = UserDefaults.standard.string(forKey: "soundTheme") ?? "chime"
         preloadAll()
     }
 
