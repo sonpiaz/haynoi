@@ -388,24 +388,42 @@ private struct AccountTab: View {
         }
 
         if let balance = balanceManager.balance {
-            HStack {
-                if balance < 0.05 {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.calmWarn)
-                    Text("Out of credits —")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Link("top up at kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
-                        .font(.caption)
-                        .foregroundStyle(Color.calmAccent)
-                } else {
+            if balance > 0 {
+                HStack {
                     HStack(spacing: 4) {
                         Text(String(format: "$%.2f", balance))
                             .font(.system(size: 13).monospacedDigit())
                         Text("remaining")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    Spacer()
                 }
-                Spacer()
+            } else {
+                // Confirmed zero — a brand-new account's free credit stays
+                // locked until the email is verified, so point them at the inbox.
+                verifyEmailCard
             }
+        }
+        // balance == nil → still loading; show nothing rather than flash the
+        // verify-email card at a funded user before the first fetch returns.
+    }
+
+    @ViewBuilder
+    private var verifyEmailCard: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "envelope.badge")
+                .foregroundStyle(Color.calmAccent)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Almost there — check your inbox and verify your email to unlock your free $0.50, then you're ready to dictate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link("Open kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
+                    .font(.caption)
+                    .foregroundStyle(Color.calmAccent)
+            }
+            Spacer()
         }
     }
 

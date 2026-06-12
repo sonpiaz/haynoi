@@ -2,46 +2,48 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Haynoi</string>
-    <key>CFBundleDisplayName</key>
-    <string>Haynoi</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.sonpiaz.haynoi</string>
-    <key>CFBundleVersion</key>
-    <string>$(CURRENT_PROJECT_VERSION)</string>
-    <key>CFBundleShortVersionString</key>
-    <string>$(MARKETING_VERSION)</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleExecutable</key>
-    <string>Haynoi</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <false/>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Haynoi needs microphone access to transcribe your speech.</string>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Haynoi pauses your music apps while you dictate.</string>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.sonpiaz.haynoi.oauth</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>haynoi</string>
-            </array>
-        </dict>
-    </array>
-    <key>SUFeedURL</key>
-    <string>https://haynoi.com/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>bNwy/kIFEdy42wob6UPwd8m08B8UAjTMwAqYJcXrtBw=</string>
-    <key>SUEnableAutomaticChecks</key>
-    <true/>
-    <key>SUScheduledCheckInterval</key>
-    <integer>86400</integer>
+	<key>CFBundleDisplayName</key>
+	<string>Haynoi</string>
+	<key>CFBundleExecutable</key>
+	<string>Haynoi</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.sonpiaz.haynoi</string>
+	<key>CFBundleName</key>
+	<string>Haynoi</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.sonpiaz.haynoi.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>haynoi</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<false/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Haynoi pauses your music apps while you dictate.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Haynoi needs microphone access to transcribe your speech.</string>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://haynoi.com/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>bNwy/kIFEdy42wob6UPwd8m08B8UAjTMwAqYJcXrtBw=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
 </dict>
 </plist>
