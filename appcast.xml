@@ -6,6 +6,39 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.1.8</title>
+            <pubDate>Fri, 12 Jun 2026 04:38:25 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>0.1.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.1.8</h2>
+
+<h3>Added</h3>
+<ul>
+<li>A livelier listening indicator: while you speak, the floating orb shows</li>
+</ul>
+<p>  aurora voice bars that react to your voice, with a soft ring pulsing outward.</p>
+<ul>
+<li>New users are guided to unlock their free credit — if you sign up and</li>
+</ul>
+<p>  haven't verified your email yet, Haynoi tells you to check your inbox</p>
+<p>  instead of failing your first dictation. Tip: signing in with Google</p>
+<p>  activates your free credit instantly.</p>
+
+<h3>Changed</h3>
+<ul>
+<li>Updates now install silently in the background and check hourly, so fixes</li>
+</ul>
+<p>  reach you without any prompts.</p>
+<ul>
+<li>The credit balance refreshes when you open the menu so it's never stale.</li>
+</ul>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.8/Haynoi-0.1.8-universal.zip" length="2769084" type="application/octet-stream" sparkle:edSignature="I/qbReR1Ioswe3Oz9DDGdrI/9o+A22fDwx/13wR3QznBf7dJA2NL9yB+kEhFe7jKeyQgf/2YR+qIp2xCuqWlBA=="/>
+        </item>
+        <item>
             <title>0.1.7</title>
             <pubDate>Fri, 12 Jun 2026 03:43:20 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -46,30 +79,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.6/Haynoi-0.1.6-universal.zip" length="2762906" type="application/octet-stream" sparkle:edSignature="L/rHNgS1BbD+9olNALDd7B0qCP1PHHL/SnXKiLPhsP1HQJRQC+QMMFuaeQioSJVrZXc4XI/yKlaxpR/TPtyDBg=="/>
-        </item>
-        <item>
-            <title>0.1.5</title>
-            <pubDate>Fri, 12 Jun 2026 02:36:49 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>6</sparkle:version>
-            <sparkle:shortVersionString>0.1.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.1.5</h2>
-
-<h3>Changed</h3>
-<ul>
-<li>The interface is now light and white-gray by default, with a clean left</li>
-</ul>
-<p>  sidebar (History, Insights, Recent, Modes, About), a row of at-a-glance</p>
-<p>  stats, and a tidy history list that shows which app each dictation went to.</p>
-<p>  Prefer dark? A new Theme setting (System / Light / Dark) is in Settings.</p>
-<ul>
-<li>The default push-to-talk key is now the left Option (⌥) key — hold it and</li>
-</ul>
-<p>  speak. You can still pick Command, Control, or Fn in Settings.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.5/Haynoi-0.1.5-universal.zip" length="2762222" type="application/octet-stream" sparkle:edSignature="D4vkduD1b8+6OYU/5GQKHnDMMsCsLEIHf02C18PLvttZ94mt0vBshHFwy782LI3EGmu2vMCr9wslpwVSggVgBQ=="/>
         </item>
     </channel>
 </rss>
