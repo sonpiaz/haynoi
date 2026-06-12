@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-11
+
+### Changed
+- A calmer, lighter interface: Haynoi moves to a clean white-gray design with
+  a single accent color, keeping the aurora only for the recording orb. The
+  menubar popover is now the heart of the app — start a dictation, see your
+  balance, and grab your last result without opening a window.
+
+### Added
+- Onboarding that teaches as it goes: a side-by-side guide shows you exactly
+  where to flip each permission switch, a live microphone test, and a hotkey
+  tryout before your first real dictation.
+- A one-click Relaunch step if macOS needs a restart to finish granting
+  Accessibility.
+
+### Fixed
+- A branded installer window with an arrow showing where to drag Haynoi.
+
 ## [0.1.2] - 2026-06-11
 
 ### Fixed
