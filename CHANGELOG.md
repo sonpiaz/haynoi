@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-06-11
+
+### Changed
+- The interface is now light and white-gray by default, with a clean left
+  sidebar (History, Insights, Recent, Modes, About), a row of at-a-glance
+  stats, and a tidy history list that shows which app each dictation went to.
+  Prefer dark? A new Theme setting (System / Light / Dark) is in Settings.
+- The default push-to-talk key is now the left Option (⌥) key — hold it and
+  speak. You can still pick Command, Control, or Fn in Settings.
+
 ## [0.1.4] - 2026-06-11
 
 ### Changed
