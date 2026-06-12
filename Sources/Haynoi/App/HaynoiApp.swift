@@ -806,8 +806,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
+        // Size the window for the resume step: the Input Monitoring /
+        // Accessibility split-screen teaching steps are wide (Onboarding v3).
+        let initialSize = resumeStep.isWide
+            ? NSSize(width: 920, height: 600)
+            : NSSize(width: 460, height: 580)
+
         let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 580),
+            contentRect: NSRect(origin: .zero, size: initialSize),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
