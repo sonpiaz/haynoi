@@ -274,25 +274,11 @@ struct HistoryRow: View {
     let scheme: ColorScheme
     let onDelete: () -> Void
 
-    @State private var copied = false
-    @State private var isHovered = false
-
     var body: some View {
+        // Founder feedback 2026-06-12: rows stay simple and STILL — no language
+        // badge (the speaker knows what they spoke), no hover re-layout. Copy
+        // and Delete live in the right-click menu instead.
         HStack(alignment: .top, spacing: 11) {
-            // Language badge
-            let lang = detectLanguage(entry.text)
-            Text(lang.uppercased())
-                .font(.system(size: 9, weight: .bold))
-                .kerning(0.4)
-                .foregroundStyle(lang == "vi" ? Color.calmWarn : Color.calmAccent(for: scheme))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(
-                    lang == "vi" ? Color.calmWarnBg : Color.calmAccentWash(for: scheme),
-                    in: RoundedRectangle(cornerRadius: 4)
-                )
-                .padding(.top, 1)
-
             // Body: transcript + meta line
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.text)
@@ -315,54 +301,23 @@ struct HistoryRow: View {
                 .foregroundStyle(Color.calmLabel4(for: scheme))
             }
 
-            // Hover actions — copy (board) + delete (engine affordance)
-            if isHovered {
-                HStack(spacing: 5) {
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(entry.text, forType: .string)
-                        copied = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-                    } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(copied ? Color.calmSuccess : Color.calmLabel3(for: scheme))
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: 28, height: 28)
-                    .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
-                    .help("Copy")
-
-                    Button {
-                        withAnimation(.easeOut(duration: 0.15)) { onDelete() }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(Color.calmWarn)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: 28, height: 28)
-                    .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
-                    .help("Delete")
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
-                .padding(.top, 1)
-            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
-        .background(isHovered ? Color.calmHover(for: scheme) : Color.clear)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.calmDivider(for: scheme))
                 .frame(height: 1)
                 .padding(.leading, 14)
         }
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
-        .animation(.easeInOut(duration: 0.12), value: copied)
-        .onHover { isHovered = $0 }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Copy") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(entry.text, forType: .string)
+            }
+            Button("Delete", role: .destructive) { onDelete() }
+        }
     }
 
     private var metaDot: some View {
