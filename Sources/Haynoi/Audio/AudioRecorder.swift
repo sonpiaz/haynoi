@@ -483,14 +483,17 @@ final class AudioRecorder {
         // (warm, idle). Fire the one-shot captureLive callback on the first live
         // buffer after beginCapture. Keep work under the lock allocation-light.
         var fireCaptureLive: (() -> Void)?
+        let capturingNow: Bool
         lock.lock()
         if isCapturing {
+            capturingNow = true
             buffer.append(contentsOf: samples)
             if let cb = captureLiveCallback {
                 fireCaptureLive = cb
                 captureLiveCallback = nil
             }
         } else {
+            capturingNow = false
             ringBuffer.append(contentsOf: samples)
             let overflow = ringBuffer.count - AudioRecorder.ringCapacitySamples
             if overflow > 0 {
@@ -503,7 +506,11 @@ final class AudioRecorder {
             DispatchQueue.main.async { fire() }
         }
 
-        // RMS for level meter
+        // RMS for the level meter — published ONLY while capturing. In warm
+        // ring-buffer mode this used to fire ~47×/s (1024-frame buffers) and
+        // re-rendered every AppState observer (main window, menubar popover)
+        // for the whole 60s warm window — the "everything feels slow" bug.
+        guard capturingNow else { return }
         let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / max(Float(count), 1))
         DispatchQueue.main.async { [weak self] in
             self?.audioLevel = min(1.0, rms * 10)

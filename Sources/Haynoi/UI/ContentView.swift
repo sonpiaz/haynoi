@@ -182,7 +182,9 @@ struct ContentView: View {
                     .padding(.top, index == 0 ? 0 : 22)
                     .padding(.bottom, 8)
 
-                VStack(spacing: 0) {
+                // Lazy: only visible rows are built — with hundreds of entries
+                // an eager VStack made scrolling and section switches crawl.
+                LazyVStack(spacing: 0) {
                     ForEach(group.value) { entry in
                         HistoryRow(entry: entry, scheme: scheme) {
                             state.deleteTranscription(id: entry.id)
@@ -274,10 +276,12 @@ struct HistoryRow: View {
     let scheme: ColorScheme
     let onDelete: () -> Void
 
+    @State private var copied = false
+
     var body: some View {
         // Founder feedback 2026-06-12: rows stay simple and STILL — no language
-        // badge (the speaker knows what they spoke), no hover re-layout. Copy
-        // and Delete live in the right-click menu instead.
+        // badge, no hover re-layout. One always-present copy button (fixed slot,
+        // so nothing ever shifts); Delete lives in the right-click menu.
         HStack(alignment: .top, spacing: 11) {
             // Body: transcript + meta line
             VStack(alignment: .leading, spacing: 3) {
@@ -301,6 +305,21 @@ struct HistoryRow: View {
                 .foregroundStyle(Color.calmLabel4(for: scheme))
             }
 
+            // Always-visible copy — fixed slot, the row never re-flows.
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(entry.text, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(copied ? Color.calmSuccess : Color.calmLabel4(for: scheme))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Copy")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)

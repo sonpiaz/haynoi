@@ -19,7 +19,6 @@ import SwiftUI
 enum SidebarSection: String, CaseIterable, Identifiable {
     case history  = "History"
     case insights = "Insights"
-    case recent   = "Recent"
     case modes    = "Modes"
     case about    = "About"
 
@@ -30,7 +29,6 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         switch self {
         case .history:  return "list.bullet"
         case .insights: return "chart.bar"
-        case .recent:   return "clock"
         case .modes:    return "lightbulb"
         case .about:    return "info.circle"
         }
@@ -223,9 +221,6 @@ struct MainView: View {
                         .environmentObject(state)
                 case .insights:
                     InsightsView()
-                        .environmentObject(state)
-                case .recent:
-                    ContentView(mode: .recent)
                         .environmentObject(state)
                 case .modes:
                     ModesPage()
