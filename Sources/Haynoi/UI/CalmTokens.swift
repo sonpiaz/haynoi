@@ -281,6 +281,51 @@ struct CalmHairline: View {
     }
 }
 
+// MARK: - App theme (System / Light / Dark)
+//
+// The founder's design is LIGHT white-gray by default. macOS would otherwise
+// render the app in dark mode on a dark Mac, which is why the light board went
+// unrecognized. We resolve the user's `appTheme` choice into an explicit
+// ColorScheme and apply it at every UI root via `.haynoiTheme()`.
+
+enum AppTheme: String, CaseIterable {
+    case system
+    case light
+    case dark
+
+    /// The explicit color scheme to force, or nil to follow the system.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+
+    /// Current stored choice — defaults to LIGHT (the founder's white-gray look).
+    static var current: AppTheme {
+        AppTheme(rawValue: UserDefaults.standard.string(forKey: "appTheme") ?? "light") ?? .light
+    }
+}
+
+private struct HaynoiThemeModifier: ViewModifier {
+    @AppStorage("appTheme") private var appThemeRaw = "light"
+
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(
+            (AppTheme(rawValue: appThemeRaw) ?? .light).colorScheme
+        )
+    }
+}
+
+extension View {
+    /// Applies the user's theme choice (System / Light / Dark) at a UI root.
+    /// Light is the default so the app always opens in the white-gray board look.
+    func haynoiTheme() -> some View {
+        modifier(HaynoiThemeModifier())
+    }
+}
+
 // MARK: - Aurora status dot (shared menubar / popover / orb language)
 
 /// Small dot that renders the aurora gradient for "live" states and a quiet

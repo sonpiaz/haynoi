@@ -41,7 +41,8 @@ struct SettingsView: View {
 // MARK: - General Tab
 
 private struct GeneralTab: View {
-    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
+    @AppStorage("appTheme") private var appTheme = "light"
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "deep"
     @AppStorage("muteMusic") private var muteMusic = false
@@ -49,6 +50,7 @@ private struct GeneralTab: View {
 
     var body: some View {
         Form {
+            appearanceSection
             hotkeySection
             soundSection
             systemSection
@@ -58,18 +60,31 @@ private struct GeneralTab: View {
         .frame(minHeight: 320)
     }
 
+    private var appearanceSection: some View {
+        Section("Appearance") {
+            Picker("Theme", selection: $appTheme) {
+                Text("System").tag("system")
+                Text("Light").tag("light")
+                Text("Dark").tag("dark")
+            }
+            .pickerStyle(.segmented)
+            Text("Haynoi defaults to the light white-gray look. Choose System to follow macOS.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     private var hotkeySection: some View {
         Section("Hotkey") {
             Picker("Push-to-talk key", selection: $hotkeyChoice) {
+                Text("⌥ left Option").tag("option")
                 Text("⌘ Command").tag("command")
-                Text("⌥ Option").tag("option")
                 Text("⌃ Control").tag("control")
                 Text("fn Globe").tag("fn")
             }
             .onChange(of: hotkeyChoice) { _, newValue in
                 applyHotkey(newValue)
             }
-            Text("Hold to record, release to transcribe.")
+            Text("Hold to record, release to transcribe. The right Option key stays free for accents.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -117,10 +132,10 @@ private struct GeneralTab: View {
     private func applyHotkey(_ choice: String) {
         let mgr = HotkeyManager.shared
         switch choice {
-        case "option": mgr.targetModifier = .maskAlternate
+        case "command": mgr.targetModifier = .maskCommand
         case "control": mgr.targetModifier = .maskControl
         case "fn": mgr.targetModifier = .maskSecondaryFn
-        default: mgr.targetModifier = .maskCommand
+        default: mgr.targetModifier = .maskAlternate
         }
         mgr.start()
         NSLog("[Haynoi] Hotkey changed to: %@", choice)
