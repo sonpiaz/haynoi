@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-12
+
+### Changed
+- The press registers almost immediately: the hold-confirmation window
+  dropped from 200ms to 100ms, and the start chime now fires within a
+  few hundredths of a second of the microphone going live.
+- The indicator moved to the top-center of the screen and wears a new
+  dark cosmic capsule — deep-space gradient, hairline border, and an
+  aurora halo that swells only with your voice.
+- Quieter by default: exactly two tones per dictation (press and
+  release). The "N words" chip still appears — silently. The success
+  chime is now opt-in in Settings → Sounds.
+
+### Removed
+- The violet dot while transcribing. Release is quiet until the words
+  chip springs in.
+
 ## [0.2.0] - 2026-06-12
 
 ### Changed
