@@ -6,6 +6,26 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.1.6</title>
+            <pubDate>Fri, 12 Jun 2026 03:02:40 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>0.1.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.1.6</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>Fixed a crash that could happen the moment a dictation was inserted: the</li>
+</ul>
+<p>  keyboard-layout lookup now runs on the main thread, so paste no longer</p>
+<p>  trips a system assertion. Dictation now reliably types your words into the</p>
+<p>  active app.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.6/Haynoi-0.1.6-universal.zip" length="2762906" type="application/octet-stream" sparkle:edSignature="L/rHNgS1BbD+9olNALDd7B0qCP1PHHL/SnXKiLPhsP1HQJRQC+QMMFuaeQioSJVrZXc4XI/yKlaxpR/TPtyDBg=="/>
+        </item>
+        <item>
             <title>0.1.5</title>
             <pubDate>Fri, 12 Jun 2026 02:36:49 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -48,42 +68,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.4/Haynoi-0.1.4-universal.zip" length="2752031" type="application/octet-stream" sparkle:edSignature="Un2SJoeUI0lSSx00YC456BuLAp4aYPVJ5BEn1COGXOl6DU/JW3EkG178BDDR/WR3jcmU6W7b7BAt8nIIrF2xAA=="/>
-        </item>
-        <item>
-            <title>0.1.3</title>
-            <pubDate>Fri, 12 Jun 2026 00:49:50 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>4</sparkle:version>
-            <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.1.3</h2>
-
-<h3>Changed</h3>
-<ul>
-<li>A calmer, lighter interface: Haynoi moves to a clean white-gray design with</li>
-</ul>
-<p>  a single accent color, keeping the aurora only for the recording orb. The</p>
-<p>  menubar popover is now the heart of the app — start a dictation, see your</p>
-<p>  balance, and grab your last result without opening a window.</p>
-
-<h3>Added</h3>
-<ul>
-<li>Onboarding that teaches as it goes: a side-by-side guide shows you exactly</li>
-</ul>
-<p>  where to flip each permission switch, a live microphone test, and a hotkey</p>
-<p>  tryout before your first real dictation.</p>
-<ul>
-<li>A one-click Relaunch step if macOS needs a restart to finish granting</li>
-</ul>
-<p>  Accessibility.</p>
-
-<h3>Fixed</h3>
-<ul>
-<li>A branded installer window with an arrow showing where to drag Haynoi.</li>
-</ul>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.3/Haynoi-0.1.3-universal.zip" length="2760477" type="application/octet-stream" sparkle:edSignature="GNaGegiKweHwCwEoEJQItbNMqsXNnfNAKP1xVbxPrw0W78WTZi4a00J7Tuzu3iNDIbwLF0tBoy7bg3MPOIUxDQ=="/>
         </item>
     </channel>
 </rss>
