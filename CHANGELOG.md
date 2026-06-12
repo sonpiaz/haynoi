@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-06-11
+
+### Added
+- A livelier listening indicator: while you speak, the floating orb shows
+  aurora voice bars that react to your voice, with a soft ring pulsing outward.
+- New users are guided to unlock their free credit — if you sign up and
+  haven't verified your email yet, Haynoi tells you to check your inbox
+  instead of failing your first dictation. Tip: signing in with Google
+  activates your free credit instantly.
+
+### Changed
+- Updates now install silently in the background and check hourly, so fixes
+  reach you without any prompts.
+- The credit balance refreshes when you open the menu so it's never stale.
+
 ## [0.1.7] - 2026-06-11
 
 ### Fixed
