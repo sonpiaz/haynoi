@@ -405,7 +405,23 @@ enum TextInserter {
 
     /// Resolves the CGKeyCode for the character 'v' in the current keyboard layout.
     /// Result is cached; falls back to 0x09 if resolution fails.
-    private static func resolveVKeyCode() -> CGKeyCode {
+    /// Resolve the keycode for 'v' on the current layout. TIS/TSM input-source
+    /// APIs assert they run on the main thread (they SIGTRAP otherwise), but the
+    /// paste path runs inside a background Task — so always hop to main.
+    /// Call `prewarmKeyCode()` once at launch so the paste path hits the cache.
+    static func resolveVKeyCode() -> CGKeyCode {
+        if let cached = cachedVKeyCode { return cached }
+        if Thread.isMainThread { return resolveVKeyCodeOnMain() }
+        return DispatchQueue.main.sync { resolveVKeyCodeOnMain() }
+    }
+
+    /// Warm the keycode cache on the main thread (call from app launch).
+    static func prewarmKeyCode() {
+        if Thread.isMainThread { _ = resolveVKeyCodeOnMain() }
+        else { DispatchQueue.main.async { _ = resolveVKeyCodeOnMain() } }
+    }
+
+    private static func resolveVKeyCodeOnMain() -> CGKeyCode {
         if let cached = cachedVKeyCode { return cached }
 
         guard let inputSource = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),

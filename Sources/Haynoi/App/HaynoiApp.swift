@@ -748,6 +748,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
         ])
         NSLog("[Haynoi] App launched")
+        // Warm the layout keycode cache on the main thread now, so the paste
+        // path (which runs in a background Task) never calls TIS off-main.
+        TextInserter.prewarmKeyCode()
         NSApplication.shared.setActivationPolicy(.regular)
 
         let choice = UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "option"

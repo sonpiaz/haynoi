@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-11
+
+### Fixed
+- Fixed a crash that could happen the moment a dictation was inserted: the
+  keyboard-layout lookup now runs on the main thread, so paste no longer
+  trips a system assertion. Dictation now reliably types your words into the
+  active app.
+
 ## [0.1.5] - 2026-06-11
 
 ### Changed
