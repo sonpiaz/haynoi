@@ -11,7 +11,7 @@ enum HotkeyDisplay {
 
     /// The single Unicode modifier glyph, e.g. "⌘", "⌥", "⌃", "fn".
     static var symbol: String {
-        switch UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "command" {
+        switch UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "option" {
         case "option":  return "⌥"
         case "control": return "⌃"
         case "fn":      return "fn"
@@ -19,10 +19,10 @@ enum HotkeyDisplay {
         }
     }
 
-    /// A short prose name, e.g. "Command", "Option", "Control", "Globe".
+    /// A short prose name, e.g. "left Option", "Command", "Control", "Globe".
     static var name: String {
-        switch UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "command" {
-        case "option":  return "Option"
+        switch UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "option" {
+        case "option":  return "left Option"
         case "control": return "Control"
         case "fn":      return "Globe"
         default:        return "Command"
