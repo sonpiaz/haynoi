@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-06-11
+
+### Changed
+- Setup is now simpler: Haynoi no longer asks for Input Monitoring. The hotkey
+  is detected through Accessibility, the same permission Haynoi already uses to
+  type for you — so first-run needs just Microphone and Accessibility, and both
+  take effect immediately with no app restart.
+
 ## [0.1.3] - 2026-06-11
 
 ### Changed
