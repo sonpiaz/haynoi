@@ -30,14 +30,10 @@ final class PipelineController {
     // waits for N's insertion to finish (prevents targetApp static race).
     private var activeInsertion: Task<Void, Never>?
 
-    // Fix #10: delay before actually starting the audio engine.
-    // Bare Cmd presses (Cmd+C, Cmd+Tab) release within 90ms and should NEVER
-    // spin up the microphone — that reads as spyware.
-    private static let preRecordingEngineDelayNs: UInt64 = 90_000_000 // 90ms
-
-    // Fix #10: task handle for the delayed engine-start, so it can be cancelled
-    // if the key is released or a chord is detected before the delay elapses.
-    private var preRecordingDelayTask: Task<Void, Never>?
+    // Pre-roll duration spliced into the recording at confirmRecording. Covers
+    // the 200ms grace period + the user's reaction time so first words are never
+    // lost, even on a cold Bluetooth mic.
+    private static let preRollMs = 300
 
     // Fix #5 (AudioRecorder): observer for self-abort notifications.
     private var abortObserver: NSObjectProtocol?
@@ -86,13 +82,23 @@ final class PipelineController {
         // monitors, so it is the only permission worth logging now.
         NSLog("[Haynoi] Pipeline ready. AX=%d",
               AXIsProcessTrusted() ? 1 : 0)
+
+        // Warm the engine once on launch if mic permission is already granted so
+        // the very first dictation is also instant. The 60s cooldown releases the
+        // mic shortly after if the user doesn't dictate right away.
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .authorized {
+            recorder.ensureWarm()
+            recorder.endCapture() // schedules cooldown without capturing
+        }
     }
 
     // MARK: - Recording
 
-    /// Step 1: Command pressed — schedule mic start after a short delay.
-    /// Fix #10: actual engine start is deferred 90ms so bare Cmd presses (chords)
-    /// never spin up the microphone. The pre-buffer semantics survive for real holds.
+    /// Step 1: Modifier pressed (t=0) — warm the audio engine IMMEDIATELY.
+    /// The engine starts in ring-buffer mode (no capture yet), so warming on a
+    /// chord is harmless: the cooldown reclaims the mic if the press doesn't
+    /// become a real hold. This kills the cold-start delay (50–300ms built-in,
+    /// 1–3s Bluetooth) so capture is live the instant the grace period passes.
     private var isPreRecording = false
 
     func preRecording() {
@@ -118,32 +124,11 @@ final class PipelineController {
         // Capture target app NOW — before any Haynoi UI appears or steals focus.
         // Fix #9: stored locally; will be passed through to insert() explicitly.
         let capturedTargetApp = NSWorkspace.shared.frontmostApplication
-
-        // Fix #10: delay actual engine start by 90ms. Chord releases < 90ms skip audio.
-        isPreRecording = true
-        preRecordingDelayTask = Task {
-            try? await Task.sleep(nanoseconds: PipelineController.preRecordingEngineDelayNs)
-            guard !Task.isCancelled else {
-                NSLog("[Haynoi] pre-recording delay cancelled (chord or fast release)")
-                return
-            }
-            await MainActor.run {
-                self.startEngineForPreRecording(capturedTargetApp: capturedTargetApp)
-            }
-        }
-    }
-
-    /// Called after the 90ms chord-filter delay to actually start the audio engine.
-    private func startEngineForPreRecording(capturedTargetApp: NSRunningApplication?) {
-        guard isPreRecording, !state.isRecording else { return }
-        // Store target app for this dictation (Fix #9: per-dictation, not static).
         currentDictationTargetApp = capturedTargetApp
-        do {
-            try recorder.startRecording()
-        } catch {
-            isPreRecording = false
-            state.setTransientError("Mic error: \(error.localizedDescription)")
-        }
+
+        // Warm the engine right now (ring-buffer mode, off the main actor).
+        isPreRecording = true
+        recorder.ensureWarm()
     }
 
     // Fix #9: per-dictation target app — set in preRecording, consumed in stopRecording.
@@ -158,17 +143,21 @@ final class PipelineController {
         guard isPreRecording, !state.isRecording else { return }
         isPreRecording = false
 
-        // If engine hasn't started yet (pre-recording delay still in flight),
-        // cancel the delay task and start immediately now.
-        preRecordingDelayTask?.cancel()
-        preRecordingDelayTask = nil
-
-        if recorder.isRunning == false {
-            do { try recorder.startRecording() } catch {
-                state.setTransientError("Mic error: \(error.localizedDescription)")
-                return
+        // Begin capture: splice the last preRollMs of ring buffer into the
+        // recording so the 200ms grace + reaction time is never lost, then
+        // switch the tap to record mode. ensureWarm() inside beginCapture is a
+        // no-op when the engine is already warm from preRecording().
+        // Play the start tone ONLY when capture actually goes live (first live
+        // tap buffer). When warm this fires within ~1 frame, so the cue is both
+        // honest (mic is truly capturing) AND fast. Registered BEFORE
+        // beginCapture so the very first live buffer can consume it.
+        if UserDefaults.standard.bool(forKey: "soundEnabled") {
+            recorder.onCaptureLive {
+                SoundFeedback.shared.playStartTone()
             }
         }
+
+        recorder.beginCapture(preRollMs: PipelineController.preRollMs)
 
         state.isRecording = true
         state.showOverlay = true
@@ -177,10 +166,6 @@ final class PipelineController {
         MediaController.pauseIfPlaying()
         state.error = nil
         recordingStartTime = Date()
-
-        if UserDefaults.standard.bool(forKey: "soundEnabled") {
-            SoundFeedback.shared.playStartTone()
-        }
 
         // Fix #6: always invalidate before reassigning to prevent leaking a
         // repeating timer if confirmRecording is somehow called twice.
@@ -205,12 +190,24 @@ final class PipelineController {
     func stopRecording() {
         guard state.isRecording else { return }
 
-        let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
         recordingStartTime = nil
         durationTimer?.invalidate()
         durationTimer = nil
 
-        let samples = recorder.stopRecording()
+        let samples = recorder.endCapture()
+
+        // Measure duration from the actual captured samples (pre-roll included)
+        // rather than wall-clock from confirmRecording: this is what the user
+        // actually said, and it stays correct even if the start tone was slightly
+        // late on a cold mic.
+        let duration = Double(samples.count) / 16000.0
+
+        // Fix #5: the pre-roll (preRollMs) is spliced into the buffer at
+        // beginCapture, so even a near-instant release yields ~preRollMs of audio.
+        // Gate the minimum-duration check on the user's ACTUAL hold time (total
+        // captured minus the pre-roll) so a 0ms hold + 300ms pre-roll does not
+        // sneak past as "speech" and burn an STT API call on non-speech audio.
+        let actualDuration = max(0, duration - Double(PipelineController.preRollMs) / 1000.0)
 
         // Capture per-dictation target app before the next preRecording can overwrite it.
         // Fix #9: snapshot and pass through, do not use a shared static.
@@ -224,15 +221,19 @@ final class PipelineController {
         state.showOverlay = false
         MediaController.resumeIfPaused()
 
-        // Too short — cancel silently, just hide the orb
-        if duration < minimumDuration {
-            NSLog("[Haynoi] Recording too short (%.2fs), cancelled", duration)
+        // Too short — cancel silently, just hide the orb. Gate on actualDuration
+        // (pre-roll removed) so a tap that captured only pre-roll is dropped.
+        if actualDuration < minimumDuration {
+            NSLog("[Haynoi] Recording too short (%.2fs actual, %.2fs total), cancelled",
+                  actualDuration, duration)
             FloatingBarController.shared.hide()
             return
         }
 
-        // Need at least 0.5s of audio (8000 samples at 16kHz)
-        guard samples.count > 8000 else {
+        // Secondary guard: need at least 0.5s of REAL speech on top of the
+        // pre-roll. 8000 samples (0.5s) + the pre-roll padding (preRollMs).
+        let minSamples = 8000 + (PipelineController.preRollMs * 16000) / 1000
+        guard samples.count > minSamples else {
             FloatingBarController.shared.transition(to: .error)
             state.setTransientError("Too short to transcribe")
             return
@@ -339,16 +340,16 @@ final class PipelineController {
     }
 
     func cancelRecording() {
-        // Fix #10: cancel delayed engine-start if key is released before delay elapses.
-        preRecordingDelayTask?.cancel()
-        preRecordingDelayTask = nil
-
+        // Pre-recording only warmed the engine (ring-buffer mode); nothing was
+        // captured yet. The engine stays warm — cooldown reclaims it if unused.
         if isPreRecording {
-            _ = recorder.stopRecording()
             isPreRecording = false
+            // Schedule cooldown so a chord that never became a hold still
+            // releases the mic after the idle window.
+            recorder.endCapture()
         }
         guard state.isRecording else { return }
-        _ = recorder.stopRecording()
+        _ = recorder.endCapture()
         state.isRecording = false
         state.showOverlay = false
         // On cancel: just hide — no success/error feedback needed
