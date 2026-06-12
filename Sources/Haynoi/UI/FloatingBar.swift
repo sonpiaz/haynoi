@@ -230,16 +230,16 @@ struct FloatingBarView: View {
         }
     }
 
-    // MARK: - Transcribing Orb (muted, pulsing)
+    // MARK: - Transcribing Orb (calm indigo, pulsing — matches status-dot language)
 
     private var transcribingOrb: some View {
         ZStack {
-            // Desaturated outer glow — reads as "thinking"
+            // Indigo outer glow — reads as "thinking", same hue as the menubar dot
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.white.opacity(0.12 + transcribePulse * 0.06),
+                            Color.calmAccent.opacity(0.18 + transcribePulse * 0.08),
                             Color.clear
                         ],
                         center: .center,
@@ -253,10 +253,10 @@ struct FloatingBarView: View {
                 .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
                            value: transcribePulse)
 
-            // Thin ring — desaturated aurora
+            // Thin indigo ring
             Circle()
                 .stroke(
-                    Color(red: 0.4, green: 0.6, blue: 0.8).opacity(0.35 + transcribePulse * 0.15),
+                    Color.calmAccent.opacity(0.40 + transcribePulse * 0.18),
                     lineWidth: 1.5
                 )
                 .frame(width: 34, height: 34)
@@ -264,13 +264,13 @@ struct FloatingBarView: View {
                 .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
                            value: transcribePulse)
 
-            // Core — muted, cool
+            // Core — calm indigo
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 0.55, green: 0.7, blue: 0.85),
-                            Color(red: 0.3, green: 0.4, blue: 0.65),
+                            Color.calmAccent.opacity(0.9),
+                            Color.calmAccentHover,
                         ],
                         center: .center,
                         startRadius: 0,
@@ -285,7 +285,7 @@ struct FloatingBarView: View {
         .onAppear { transcribePulse = 1.0 }
     }
 
-    // MARK: - Success Orb
+    // MARK: - Success Orb (calm success green)
 
     private var successOrb: some View {
         ZStack {
@@ -294,7 +294,7 @@ struct FloatingBarView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.green.opacity(0.3),
+                            Color.calmSuccess.opacity(0.32),
                             Color.clear
                         ],
                         center: .center,
@@ -310,8 +310,8 @@ struct FloatingBarView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 0.4, green: 0.95, blue: 0.65),
-                            Color(red: 0.15, green: 0.75, blue: 0.45),
+                            Color.calmSuccess.opacity(0.95),
+                            Color.calmSuccess,
                         ],
                         center: .center,
                         startRadius: 0,
@@ -319,7 +319,7 @@ struct FloatingBarView: View {
                     )
                 )
                 .frame(width: 22, height: 22)
-                .shadow(color: Color.green.opacity(0.6), radius: 8)
+                .shadow(color: Color.calmSuccess.opacity(0.6), radius: 8)
 
             // Checkmark
             Image(systemName: "checkmark")
@@ -336,7 +336,7 @@ struct FloatingBarView: View {
         }
     }
 
-    // MARK: - Error Orb
+    // MARK: - Error Orb (calm warn amber)
 
     private var errorOrb: some View {
         ZStack {
@@ -345,7 +345,7 @@ struct FloatingBarView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.orange.opacity(0.35),
+                            Color.calmWarn.opacity(0.35),
                             Color.clear
                         ],
                         center: .center,
@@ -361,8 +361,8 @@ struct FloatingBarView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 1.0, green: 0.65, blue: 0.25),
-                            Color(red: 0.9, green: 0.4, blue: 0.1),
+                            Color.calmWarn.opacity(0.95),
+                            Color.calmWarn,
                         ],
                         center: .center,
                         startRadius: 0,
@@ -370,7 +370,7 @@ struct FloatingBarView: View {
                     )
                 )
                 .frame(width: 22, height: 22)
-                .shadow(color: Color.orange.opacity(0.6), radius: 8)
+                .shadow(color: Color.calmWarn.opacity(0.6), radius: 8)
 
             // Exclamation
             Image(systemName: "exclamationmark")

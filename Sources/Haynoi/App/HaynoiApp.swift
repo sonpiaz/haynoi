@@ -35,15 +35,18 @@ struct HaynoiApp: App {
     }
 }
 
-// MARK: - Menu Bar Content (Mercury)
+// MARK: - Menu Bar Content (Calm)
 
-/// Mercury-styled menu bar popover — paper ground, ink text, serif name poem.
+/// Calm-styled menu bar popover — the most-used consumer surface.
+/// Layout per the approved board: aurora orb + status, hold-key chips,
+/// indigo record button, last dictation, aurora credit-balance bar, footer.
 private struct MenuBarContent: View {
     @EnvironmentObject private var state: AppState
     @EnvironmentObject private var authState: AuthState
     @ObservedObject private var checker: UpdaterChecker
     @ObservedObject private var balanceManager = BalanceManager.shared
     @Environment(\.colorScheme) private var scheme
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
     private let updater: SPUUpdater
 
     init(updater: SPUUpdater) {
@@ -51,13 +54,38 @@ private struct MenuBarContent: View {
         self.checker = UpdaterChecker(updater: updater)
     }
 
+    private var status: CalmStatus {
+        if state.isRecording { return .recording }
+        if state.isTranscribing { return .transcribing }
+        if state.hasFailedDictation && !isLastErrorOutOfCredits { return .error }
+        return .idle
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Header — app identity + name poem
+                // Header — aurora orb + app identity + live status
                 popoverHeader
 
                 popoverDivider
+
+                // Hold-to-dictate hotkey chips
+                hotkeySection
+
+                popoverDivider
+
+                // Standalone retry row — failed dictation, no history yet
+                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording
+                    && !isLastErrorOutOfCredits && state.transcriptions.isEmpty {
+                    standaloneRetryRow
+                    popoverDivider
+                }
+
+                // Out-of-credits banner
+                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
+                    retryRow
+                    popoverDivider
+                }
 
                 // Last dictation preview
                 if let last = state.transcriptions.first {
@@ -65,129 +93,137 @@ private struct MenuBarContent: View {
                     popoverDivider
                 }
 
-                // Standalone retry row — shown when there is a failed dictation but no history yet
-                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording
-                    && !isLastErrorOutOfCredits && state.transcriptions.isEmpty {
-                    standaloneRetryRow
-                    popoverDivider
-                }
-
-                // Retry / out-of-credits
-                if state.hasFailedDictation && !state.isTranscribing && !state.isRecording {
-                    retryRow
-                    popoverDivider
-                }
-
-                // Credits strip
+                // Credit-balance bar (aurora) + actions
                 creditsStrip
 
                 popoverDivider
 
-                // Actions list
+                // Quiet actions (ledger / mode / updates / settings)
                 actionsSection
 
                 popoverDivider
 
-                // Account footer
+                // Account footer (account / settings / quit)
                 accountFooter
             }
         }
-        .frame(maxHeight: 520)
-        .background(Color.mercuryBackground(for: scheme))
+        .frame(maxHeight: 560)
+        .background(Color.calmBackground(for: scheme))
         .onAppear { BalanceManager.shared.refresh() }
     }
 
-    // MARK: - Header
+    // MARK: - Header (orb + identity + status)
 
     private var popoverHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // App icon
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+        HStack(alignment: .center, spacing: 13) {
+            // Aurora orb — the saturated hero motif (mirrors app icon)
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(LinearGradient(
+                        colors: [Color(hex: "#0F1220"), Color(hex: "#1A1E34")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 44, height: 44)
+                    .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+                CalmOrbBars(active: status == .recording || status == .transcribing)
+            }
 
-            // Name + tagline poem
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Haynoi")
-                    .font(.mercuryPopoverName)
-                    .foregroundStyle(Color.mercuryLabel(for: scheme))
+                    .font(.calmPopoverName)
+                    .foregroundStyle(Color.calmLabel(for: scheme))
 
-                Text("hãy nói  ·  hay nói  ·  Hà Nội")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                HStack(spacing: 6) {
+                    CalmStatusDot(status: status)
+                    Text(status.label)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.calmLabel3(for: scheme))
+                }
             }
 
             Spacer()
-
-            // Orb mini indicator
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle()
-                        .fill(Color.auroraBlue.opacity(0.07))
-                        .frame(width: 28, height: 28)
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    Color(red: 0.55, green: 0.9, blue: 1.0),
-                                    Color(red: 0.3, green: 0.15, blue: 0.65)
-                                ],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 5
-                            )
-                        )
-                        .frame(width: 10, height: 10)
-                        .shadow(color: Color.auroraCyan.opacity(0.6), radius: 3)
-                }
-                Text(orbStatusLabel)
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
-            }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
-        .padding(.bottom, 16)
-        .background(Color.mercuryWarm(for: scheme))
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .padding(.bottom, 15)
+        .background(Color.calmSurface(for: scheme))
     }
 
-    private var orbStatusLabel: String {
-        if state.isRecording { return "recording" }
-        if state.isTranscribing { return "thinking" }
-        return "ready"
+    // MARK: - Hotkey chips
+
+    private var hotkeySection: some View {
+        HStack {
+            Text("Hold to dictate anywhere")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Spacer()
+            HStack(spacing: 4) {
+                calmKey(hotkeySymbol)
+                calmKey("Space")
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 13)
+        .background(Color.calmSurface(for: scheme))
+    }
+
+    private func calmKey(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color.calmLabel(for: scheme))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 3)
+            .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.calmHairline(for: scheme), lineWidth: 1)
+            )
+    }
+
+    private var hotkeySymbol: String {
+        switch hotkeyChoice {
+        case "option":  return "⌥"
+        case "control": return "⌃"
+        case "fn":      return "fn"
+        default:        return "⌘"
+        }
     }
 
     // MARK: - Last Dictation
 
     private func lastDictationRow(_ entry: Transcription) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             Text("Last dictation")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                .font(.calmSectionLabel)
+                .foregroundStyle(Color.calmLabel4(for: scheme))
                 .kerning(0.7)
                 .textCase(.uppercase)
 
             Text(entry.text)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                .font(.system(size: 13))
+                .foregroundStyle(Color.calmLabel(for: scheme))
                 .lineLimit(2)
+
+            Text(lastMeta(entry))
+                .font(.system(size: 11))
+                .foregroundStyle(Color.calmLabel4(for: scheme))
 
             HStack(spacing: 6) {
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(entry.text, forType: .string)
                 } label: {
-                    Text("Copy")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                    Text("Copy again")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.calmAccent(for: scheme))
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.mercuryWarm(for: scheme))
+                .padding(.horizontal, 11)
+                .padding(.vertical, 5)
+                .background(Color.calmAccentWash(for: scheme))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmAccent(for: scheme).opacity(0.12), lineWidth: 1))
                 .help("Copy last dictation")
 
                 if state.hasFailedDictation {
@@ -195,21 +231,36 @@ private struct MenuBarContent: View {
                         PipelineController.shared.retryLastFailedDictation()
                     } label: {
                         Text("Retry")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.mercuryOrange)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.calmWarn)
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.mercuryWarm(for: scheme))
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 5)
+                    .background(Color.calmWarnBg)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmWarn.opacity(0.2), lineWidth: 1))
                 }
             }
+            .padding(.top, 1)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(Color.mercuryBackground(for: scheme))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+        .background(Color.calmSurface(for: scheme))
+    }
+
+    private func lastMeta(_ entry: Transcription) -> String {
+        let mins = Int(Date().timeIntervalSince(entry.timestamp) / 60)
+        let when: String
+        switch mins {
+        case ..<1:   when = "Just now"
+        case 1:      when = "1 min ago"
+        case 2..<60: when = "\(mins) min ago"
+        default:     when = "\(mins / 60)h ago"
+        }
+        return "\(when)  ·  \(entry.wordCount) words"
     }
 
     // MARK: - Standalone Retry Row (empty history, transient failure)
@@ -219,29 +270,29 @@ private struct MenuBarContent: View {
     private var standaloneRetryRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.clockwise.circle.fill")
-                .foregroundStyle(Color.mercuryOrange)
-                .font(.system(size: 11))
+                .foregroundStyle(Color.calmWarn)
+                .font(.system(size: 12))
             Text("Dictation failed —")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                .font(.system(size: 12))
+                .foregroundStyle(Color.calmLabel3(for: scheme))
             Button {
                 PipelineController.shared.retryLastFailedDictation()
             } label: {
                 Text("Retry")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.mercuryOrange)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.calmWarn)
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 9)
             .padding(.vertical, 3)
-            .background(Color.mercuryWarm(for: scheme))
+            .background(Color.calmSurface(for: scheme))
             .clipShape(RoundedRectangle(cornerRadius: 5))
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.calmWarn.opacity(0.25), lineWidth: 1))
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .background(Color.mercuryOrange.opacity(0.04))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 9)
+        .background(Color.calmWarnBg)
     }
 
     // MARK: - Retry Row (out-of-credits)
@@ -251,65 +302,84 @@ private struct MenuBarContent: View {
         if isLastErrorOutOfCredits {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(Color.mercuryOrange)
-                    .font(.system(size: 11))
+                    .foregroundStyle(Color.calmWarn)
+                    .font(.system(size: 12))
                 Text("Add credits to continue —")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.calmLabel3(for: scheme))
                 Link("kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.auroraBlue)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.calmAccent(for: scheme))
                 Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            .background(Color.mercuryOrange.opacity(0.06))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 9)
+            .background(Color.calmWarnBg)
         }
     }
 
-    // MARK: - Credits Strip
+    // MARK: - Credits Strip (aurora balance bar + actions)
 
     private var creditsStrip: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 10) {
+            // Balance value + label
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
                 if let balance = balanceManager.balance {
                     Text(String(format: "$%.2f", balance))
-                        .font(.mercuryPopoverBalance)
-                        .foregroundStyle(Color.mercuryLabel(for: scheme))
+                        .font(.calmPopoverBalance)
+                        .foregroundStyle(Color.calmLabel(for: scheme))
                         .monospacedDigit()
                 } else {
                     Text("—")
-                        .font(.mercuryPopoverBalance)
-                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                        .font(.calmPopoverBalance)
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                }
+                Text("pay as you go  ·  powered by Kyma")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
+                Spacer()
+            }
+
+            // Aurora balance bar — the ONLY saturated element down here
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.calmHairline(for: scheme))
+                        .frame(height: 3)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(LinearGradient.calmAuroraBar)
+                        .frame(width: geo.size.width * popoverBalanceFraction, height: 3)
+                }
+            }
+            .frame(height: 3)
+
+            // Actions — History / Add funds / appearance
+            HStack(spacing: 6) {
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.sendAction(#selector(NSApplicationDelegate.applicationShouldHandleReopen(_:hasVisibleWindows:)),
+                                     to: nil, from: nil)
+                } label: {
+                    Text("History")
+                        .calmFooterChip(scheme)
+                }
+                .buttonStyle(.plain)
+
+                Link(destination: URL(string: "https://kymaapi.com")!) {
+                    Text("Add funds")
+                        .calmFooterChip(scheme)
                 }
 
-                // Mini bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.mercuryMid(for: scheme))
-                            .frame(height: 3)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(colors: [.auroraCyan, .auroraViolet], startPoint: .leading, endPoint: .trailing))
-                            .frame(width: geo.size.width * popoverBalanceFraction, height: 3)
-                    }
-                }
-                .frame(height: 3)
+                Spacer()
 
                 Text(popoverMinutesEstimate)
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
-
-            Spacer()
-
-            Link("Top up ↗", destination: URL(string: "https://kymaapi.com")!)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.auroraBlue)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(Color.mercuryWarm(for: scheme))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 13)
+        .background(Color.calmSubtle(for: scheme))
     }
 
     private var popoverBalanceFraction: CGFloat {
@@ -326,14 +396,12 @@ private struct MenuBarContent: View {
     // MARK: - Actions Section
 
     private var actionsSection: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 1) {
             // Open Ledger
             popoverActionRow(
                 iconSystem: "list.bullet.rectangle",
-                iconBg: Color.auroraBlue.opacity(0.12),
-                iconFg: Color.auroraBlue,
                 label: "Open Ledger",
-                sub: "View your full dictation history",
+                sub: "Your full dictation history",
                 trailing: "⌘O"
             ) {
                 NSApp.activate(ignoringOtherApps: true)
@@ -344,8 +412,6 @@ private struct MenuBarContent: View {
             // Mode indicator
             popoverActionRow(
                 iconSystem: "square.grid.2x2",
-                iconBg: Color.mercuryMid(for: scheme),
-                iconFg: Color.mercuryLabel3(for: scheme),
                 label: "Mode: \(TranscriptionMode.current.rawValue)",
                 sub: TranscriptionMode.current.shortDescription,
                 trailing: nil
@@ -357,8 +423,6 @@ private struct MenuBarContent: View {
             // Check for updates
             popoverActionRow(
                 iconSystem: "arrow.clockwise",
-                iconBg: Color.mercuryMid(for: scheme),
-                iconFg: Color.mercuryLabel3(for: scheme),
                 label: "Check for updates",
                 sub: "Powered by Kyma",
                 trailing: nil
@@ -370,8 +434,6 @@ private struct MenuBarContent: View {
             // Settings
             popoverActionRow(
                 iconSystem: "gear",
-                iconBg: Color.mercuryMid(for: scheme),
-                iconFg: Color.mercuryLabel3(for: scheme),
                 label: "Settings",
                 sub: "Hotkey, sound, language",
                 trailing: "⌘,"
@@ -381,16 +443,14 @@ private struct MenuBarContent: View {
             }
             .keyboardShortcut(",", modifiers: .command)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color.mercuryBackground(for: scheme))
+        .padding(.vertical, 7)
+        .padding(.horizontal, 10)
+        .background(Color.calmBackground(for: scheme))
     }
 
     @ViewBuilder
     private func popoverActionRow(
         iconSystem: String,
-        iconBg: Color,
-        iconFg: Color,
         label: String,
         sub: String,
         trailing: String?,
@@ -400,20 +460,20 @@ private struct MenuBarContent: View {
             HStack(spacing: 10) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 7)
-                        .fill(iconBg)
+                        .fill(Color.calmSubtle(for: scheme))
                         .frame(width: 28, height: 28)
                     Image(systemName: iconSystem)
                         .font(.system(size: 13))
-                        .foregroundStyle(iconFg)
+                        .foregroundStyle(Color.calmLabel3(for: scheme))
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(label)
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                        .foregroundStyle(Color.calmLabel(for: scheme))
                     Text(sub)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
 
                 Spacer()
@@ -421,41 +481,40 @@ private struct MenuBarContent: View {
                 if let key = trailing {
                     Text(key)
                         .font(.system(size: 10))
-                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 4))
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                        .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(Color.clear)
-        .onHover { h in /* hover highlight handled by button */ _ = h }
     }
 
     // MARK: - Account Footer
 
     private var accountFooter: some View {
         HStack(spacing: 10) {
-            // Avatar + email chip
-            HStack(spacing: 6) {
+            // Avatar + email chip — aurora avatar is a sanctioned aurora moment
+            HStack(spacing: 7) {
                 ZStack {
                     Circle()
-                        .fill(LinearGradient(colors: [.auroraViolet, .auroraCyan], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: [.calmAuroraCyan, .calmAuroraViolet], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 24, height: 24)
                     Text(avatarInitial)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.mercuryDarkInk)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
                 }
 
                 if let email = authState.signedInEmail {
                     Text(shortenEmail(email))
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .foregroundStyle(Color.calmLabel3(for: scheme))
                         .lineLimit(1)
                 } else {
                     Button {
@@ -463,8 +522,8 @@ private struct MenuBarContent: View {
                         NSApp.activate(ignoringOtherApps: true)
                     } label: {
                         Text("Sign in")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.auroraBlue)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.calmAccent(for: scheme))
                     }
                     .buttonStyle(.plain)
                 }
@@ -479,11 +538,10 @@ private struct MenuBarContent: View {
             } label: {
                 Image(systemName: "gear")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
             .buttonStyle(.plain)
             .frame(width: 28, height: 28)
-            .background(Color.mercuryMid(for: scheme).opacity(0), in: RoundedRectangle(cornerRadius: 6))
             .help("Open Settings")
 
             // Quit
@@ -492,16 +550,16 @@ private struct MenuBarContent: View {
             } label: {
                 Image(systemName: "power")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
             .buttonStyle(.plain)
             .frame(width: 28, height: 28)
             .help("Quit Haynoi")
             .keyboardShortcut("q", modifiers: .command)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .background(Color.mercuryWarm(for: scheme))
+        .background(Color.calmSubtle(for: scheme))
     }
 
     // MARK: - Helpers
@@ -525,10 +583,63 @@ private struct MenuBarContent: View {
 
     private var popoverDivider: some View {
         Rectangle()
-            .fill(Color.mercuryDivider(for: scheme))
+            .fill(Color.calmDivider(for: scheme))
             .frame(height: 1)
     }
 
+}
+
+// MARK: - Calm footer chip style
+
+private extension Text {
+    /// Quiet outlined chip used for History / Add funds in the credit strip.
+    func calmFooterChip(_ scheme: ColorScheme) -> some View {
+        self
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.calmLabel3(for: scheme))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Color.calmSurface(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmBorder, lineWidth: 1))
+    }
+}
+
+// MARK: - Calm Orb Bars (popover header micro-waveform)
+
+/// The aurora micro-waveform that sits inside the dark popover orb tile.
+/// Mirrors the board's three-bar orb. Saturated aurora gradient is sanctioned
+/// here — the orb is one of the four approved aurora surfaces.
+private struct CalmOrbBars: View {
+    let active: Bool
+    @State private var phase: Double = 0
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(LinearGradient(
+                        colors: [.calmAuroraCyan, .calmAuroraViolet, .calmAuroraPink],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ))
+                    .frame(width: 3, height: barHeight(i))
+            }
+        }
+        .frame(height: 18)
+        .onAppear {
+            guard active else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                phase = 1
+            }
+        }
+    }
+
+    private func barHeight(_ i: Int) -> CGFloat {
+        let base: [CGFloat] = [10, 16, 8]
+        guard active else { return base[i] * 0.6 }
+        let wobble = sin(Double(i) * 1.3 + phase * .pi) * 4
+        return base[i] + CGFloat(wobble)
+    }
 }
 
 
@@ -695,8 +806,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             }
         }
 
+        // Size the window for the resume step: the Input Monitoring /
+        // Accessibility split-screen teaching steps are wide (Onboarding v3).
+        let initialSize = resumeStep.isWide
+            ? NSSize(width: 920, height: 600)
+            : NSSize(width: 460, height: 580)
+
         let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 580),
+            contentRect: NSRect(origin: .zero, size: initialSize),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
