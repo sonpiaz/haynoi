@@ -30,6 +30,11 @@ class FloatingBarController {
 
     /// Shows the orb in recording state.  No-op if already visible.
     @MainActor func show() {
+        // The orb must read as "recording" the instant it appears so the user
+        // sees it's listening — without this it renders the empty .idle state
+        // until the first transition() and only becomes visible after speaking.
+        AppState.shared.orbState = .recording
+
         guard window == nil else { return }
 
         let view = FloatingBarView()

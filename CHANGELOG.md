@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-11
+
+### Fixed
+- The listening orb now appears the instant you hold the key, so you can see
+  Haynoi is hearing you — previously it only showed up after you finished.
+- Removed the extra "done" sound after transcription; releasing the key now
+  plays a single tone instead of two.
+
 ## [0.1.6] - 2026-06-11
 
 ### Fixed

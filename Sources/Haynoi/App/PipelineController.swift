@@ -283,11 +283,10 @@ final class PipelineController {
                     state.addTranscription(finalText,
                                            appBundleId: attrBundleId,
                                            appName: attrAppName)
-                    // Orb: success flash then auto-hide
+                    // Orb: brief success flash then auto-hide. No "done" tone —
+                    // the stop tone on release is the only end-of-dictation cue
+                    // (a second tone after transcription felt like a double beep).
                     FloatingBarController.shared.transition(to: .success)
-                    if UserDefaults.standard.bool(forKey: "soundEnabled") {
-                        SoundFeedback.shared.playSuccessTone()
-                    }
                 }
                 // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
                 await TextInserter.insert(finalText, targetApp: dictationTargetApp)
