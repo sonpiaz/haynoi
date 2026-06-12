@@ -74,6 +74,7 @@ struct OnboardingView: View {
 
     // Sign-in step state
     @ObservedObject private var authState = AuthState.shared
+    @ObservedObject private var balanceManager = BalanceManager.shared
     @State private var isSigningIn = false
     @State private var signInError = ""
 
@@ -466,7 +467,25 @@ struct OnboardingView: View {
                     Label(email, systemImage: "checkmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(Color.calmSuccess)
+
+                    // A brand-new account's free credit stays locked until the
+                    // email is verified. If the balance reads 0 (or nil right
+                    // after sign-in), calmly point the user to their inbox so
+                    // their first dictation doesn't fail out of nowhere.
+                    if let balance = balanceManager.balance, balance > 0 {
+                        Text(String(format: "$%.2f credit ready — you're set.", balance))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.calmLabel3(for: scheme))
+                    } else {
+                        verifyEmailNote
+                    }
+
                     calmPrimaryButton("Continue") { advance() }
+                }
+                .onAppear {
+                    // Resume path: user lands here already signed in — pull the
+                    // balance so we show the credit or the verify-email note.
+                    if authState.signedInEmail != nil { balanceManager.refresh() }
                 }
             } else {
                 VStack(spacing: 10) {
@@ -475,6 +494,11 @@ struct OnboardingView: View {
                             .disabled(isSigningIn)
                         if isSigningIn { ProgressView().controlSize(.small) }
                     }
+                    Text("Tip: continuing with Google activates your free credit instantly.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 300)
                     if !signInError.isEmpty {
                         Text(signInError)
                             .font(.caption)
@@ -490,6 +514,22 @@ struct OnboardingView: View {
             }
         }
         .padding(.horizontal, 32)
+    }
+
+    /// Calm verify-email hint shown after sign-in when the free credit is still
+    /// locked behind email verification (balance 0 or not yet loaded).
+    private var verifyEmailNote: some View {
+        VStack(spacing: 6) {
+            Text("Almost there — check your inbox and verify your email to unlock your free $0.50, then you're ready to dictate.")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.calmLabel3(for: scheme))
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .frame(maxWidth: 320)
+            Link("Open kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.calmAccent(for: scheme))
+        }
     }
 
     // MARK: - Step G: Try It
@@ -938,7 +978,16 @@ struct OnboardingView: View {
             do {
                 let token = try await KymaAuth.shared.signIn()
                 authState.didSignIn(email: token.email)
-                advance()
+                // Refresh the balance so the sign-in step can either confirm the
+                // credit is ready (then advance) or surface the verify-email note
+                // when a brand-new account's free credit is still locked.
+                balanceManager.refresh()
+                if let balance = token.balance, balance > 0 {
+                    // Google sign-in (pre-verified email) — credit is live, move on.
+                    advance()
+                }
+                // Otherwise stay on the step: verifyEmailNote guides the user to
+                // their inbox; they tap Continue when ready.
             } catch KymaAuth.AuthError.cancelled {
                 // user dismissed — no error
             } catch {

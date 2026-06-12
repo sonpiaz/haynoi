@@ -387,25 +387,40 @@ private struct AccountTab: View {
             .buttonStyle(.bordered).controlSize(.small)
         }
 
-        if let balance = balanceManager.balance {
+        if let balance = balanceManager.balance, balance > 0 {
             HStack {
-                if balance < 0.05 {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.calmWarn)
-                    Text("Out of credits —")
+                HStack(spacing: 4) {
+                    Text(String(format: "$%.2f", balance))
+                        .font(.system(size: 13).monospacedDigit())
+                    Text("remaining")
                         .font(.caption).foregroundStyle(.secondary)
-                    Link("top up at kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
-                        .font(.caption)
-                        .foregroundStyle(Color.calmAccent)
-                } else {
-                    HStack(spacing: 4) {
-                        Text(String(format: "$%.2f", balance))
-                            .font(.system(size: 13).monospacedDigit())
-                        Text("remaining")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
                 }
                 Spacer()
             }
+        } else {
+            // Balance is 0 (or still nil right after sign-in): for a brand-new
+            // account the free credit stays locked until the email is verified,
+            // so the calmest, most accurate thing to say is to check the inbox.
+            verifyEmailCard
+        }
+    }
+
+    @ViewBuilder
+    private var verifyEmailCard: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "envelope.badge")
+                .foregroundStyle(Color.calmAccent)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Almost there — check your inbox and verify your email to unlock your free $0.50, then you're ready to dictate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link("Open kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
+                    .font(.caption)
+                    .foregroundStyle(Color.calmAccent)
+            }
+            Spacer()
         }
     }
 

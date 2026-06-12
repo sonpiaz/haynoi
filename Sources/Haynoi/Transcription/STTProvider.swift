@@ -322,7 +322,7 @@ enum STTError: LocalizedError {
         case .sessionExpired:
             return "Session expired — please sign in again"
         case .outOfCredits:
-            return "Out of credits — top up at kymaapi.com"
+            return "Out of credits — if you just signed up, verify your email to unlock your free credit, or top up at kymaapi.com."
         case .rateLimited:
             return "Servers are busy — try again in a moment"
         case .noConnection:
