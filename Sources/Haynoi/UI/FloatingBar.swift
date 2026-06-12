@@ -158,81 +158,98 @@ struct FloatingBarView: View {
         }
     }
 
-    // MARK: - Recording Orb (aurora palette)
+    // MARK: - Recording Orb — Concept C (aurora waveform + pinging ring)
+    //
+    // Founder-approved "I'm listening + it's voice" hybrid:
+    //   • 5 aurora bars (cyan→pink) bounce in the center, each staggered
+    //     so they ripple like a small voice meter (~0.9s ease-in-out cycle).
+    //   • 2 soft pink rings ping outward around the bars (scale 0.9→2.1,
+    //     opacity .55→0, ~2s, the second offset by half a cycle).
+    // Everything is driven by TimelineView(.animation) so it animates
+    // continuously without .repeatForever / phase=.infinity. The bars also
+    // lean into live mic level so the orb reacts to the voice it hears.
+
+    private let auroraBarCount = 5
+
+    // Per-bar phase offsets (symmetric ripple, like the CSS staggered delays).
+    private let auroraBarDelays: [Double] = [0.0, 0.18, 0.36, 0.18, 0.05]
 
     private var recordingOrb: some View {
-        ZStack {
-            // Outer glow — aurora-tinted, breathes with voice
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.3, green: 0.85, blue: 0.95).opacity(0.22 * displayLevel + 0.06),
-                            Color(red: 0.45, green: 0.25, blue: 0.85).opacity(0.12 * displayLevel),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 6,
-                        endRadius: 38
-                    )
-                )
-                .frame(width: 72, height: 72)
-                .scaleEffect(1.0 + displayLevel * 0.45 + breathe * 0.06)
-                .blur(radius: 2)
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            // Mic-driven energy: idle bars still breathe, loud speech taller.
+            let energy = 0.4 + displayLevel * 0.6
 
-            // Aurora ring — the aura
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.3, green: 0.9, blue: 0.95).opacity(0.25 + displayLevel * 0.35),
-                            Color(red: 0.7, green: 0.35, blue: 0.95).opacity(0.2 + displayLevel * 0.25),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-                .frame(width: 38 + displayLevel * 8, height: 38 + displayLevel * 8)
-                .blur(radius: 1)
-
-            // Waveform ring — voice visualizer, aurora-colored
-            WaveformRing(level: displayLevel, phase: phase)
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            Color(red: 0.25, green: 0.85, blue: 0.95).opacity(0.9),
-                            Color(red: 0.55, green: 0.3, blue: 0.9).opacity(0.7),
-                            Color(red: 0.85, green: 0.35, blue: 0.75).opacity(0.85),
-                            Color(red: 0.35, green: 0.7, blue: 0.95).opacity(0.75),
-                            Color(red: 0.25, green: 0.85, blue: 0.95).opacity(0.9),
-                        ],
-                        center: .center
+            ZStack {
+                // Soft aurora glow behind everything — breathes with the voice.
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.calmAuroraViolet.opacity(0.16 + displayLevel * 0.18),
+                                Color.calmAuroraCyan.opacity(0.06 + displayLevel * 0.08),
+                                Color.clear
+                            ],
+                            center: .center,
+                            startRadius: 4,
+                            endRadius: 34
+                        )
                     )
-                )
-                .frame(width: 42, height: 42)
+                    .frame(width: 64, height: 64)
+                    .scaleEffect(0.92 + displayLevel * 0.3 + breathe * 0.05)
+                    .blur(radius: 2)
 
-            // Core — aurora gem
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.55, green: 0.9, blue: 1.0),         // bright icy center
-                            Color(red: 0.4, green: 0.5, blue: 0.95),          // deep blue-violet mid
-                            Color(red: 0.3, green: 0.15, blue: 0.65),         // deep violet edge
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 9
-                    )
-                )
-                .frame(width: 16, height: 16)
-                .shadow(color: Color(red: 0.3, green: 0.8, blue: 1.0).opacity(0.8),
-                        radius: 4 + displayLevel * 6)
-                .shadow(color: Color(red: 0.6, green: 0.3, blue: 0.95).opacity(0.4),
-                        radius: 10 + displayLevel * 8)
-                .scaleEffect(1.0 + displayLevel * 0.2)
+                // Pinging rings — two soft pink rings expanding outward.
+                auroraRing(at: t, cycle: 2.0, delay: 0.0)
+                auroraRing(at: t, cycle: 2.0, delay: 1.0)
+
+                // The voice bars — 5 aurora bars bouncing in the center.
+                HStack(alignment: .center, spacing: 3) {
+                    ForEach(0..<auroraBarCount, id: \.self) { i in
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.calmAuroraCyan, .calmAuroraPink],
+                                    startPoint: .bottom,
+                                    endPoint: .top
+                                )
+                            )
+                            .frame(width: 3.5, height: barHeight(index: i, at: t, energy: energy))
+                    }
+                }
+                .frame(height: 26)
+                .shadow(color: Color.calmAuroraViolet.opacity(0.45), radius: 4)
+            }
+            .frame(width: 76, height: 76)
         }
+    }
+
+    /// Height of bar `index` at time `t`, easing 7→24pt with a staggered phase.
+    private func barHeight(index: Int, at t: Double, energy: CGFloat) -> CGFloat {
+        let cycle = 0.9                              // ~0.9s, matches the CSS bb2
+        let delay = auroraBarDelays[index % auroraBarDelays.count]
+        // Normalized phase in [0,1) for this bar, offset by its stagger delay.
+        let p = ((t - delay) / cycle).truncatingRemainder(dividingBy: 1.0)
+        let phase = p < 0 ? p + 1.0 : p
+        // ease-in-out 0→1→0 over the cycle (sine gives the smooth bounce).
+        let eased = (1 - cos(phase * 2 * .pi)) / 2   // 0 at ends, 1 at mid
+        let minH: CGFloat = 7
+        let maxH: CGFloat = 24
+        let span = (maxH - minH) * energy
+        return minH + span * CGFloat(eased)
+    }
+
+    /// One expanding ring: scale 0.9→2.1, opacity .55→0 over `cycle` seconds.
+    @ViewBuilder
+    private func auroraRing(at t: Double, cycle: Double, delay: Double) -> some View {
+        let raw = ((t - delay) / cycle).truncatingRemainder(dividingBy: 1.0)
+        let p = raw < 0 ? raw + 1.0 : raw            // progress in [0,1)
+        let scale = 0.9 + (2.1 - 0.9) * CGFloat(p)
+        let opacity = 0.55 * (1 - p)                 // fades out as it grows
+        Circle()
+            .stroke(Color.calmAuroraPink.opacity(opacity), lineWidth: 2)
+            .frame(width: 40, height: 40)
+            .scaleEffect(scale)
     }
 
     // MARK: - Transcribing Orb (calm indigo, pulsing — matches status-dot language)
