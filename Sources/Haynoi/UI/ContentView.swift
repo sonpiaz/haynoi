@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-// MARK: - ContentView (Mercury Ledger)
+// MARK: - ContentView (Calm Ledger)
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
@@ -20,21 +20,21 @@ struct ContentView: View {
                 emptyState
             } else {
                 greetingBlock
-                mercuryLine
+                calmLine
                 // D24: stat strip is a click-through to the Insights page.
                 statsStrip
                     .contentShape(Rectangle())
                     .onTapGesture { onStatStripTap?() }
                     .help("Open Insights")
-                mercuryLine
+                calmLine
                 searchBar
-                mercuryLine
+                calmLine
                 ledgerList
             }
-            mercuryLine
+            calmLine
             ledgerStatusBar
         }
-        .background(Color.mercuryBackground(for: scheme))
+        .background(Color.calmBackground(for: scheme))
     }
 
     // MARK: - Greeting Block
@@ -42,26 +42,26 @@ struct ContentView: View {
     private var greetingBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(greetingString)
-                .font(.mercuryGreeting)
-                .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                .font(.calmHeading)
+                .foregroundStyle(Color.calmLabel(for: scheme))
 
             Group {
                 if state.totalWords > 0 {
                     (
                         Text("You have spoken ")
-                            .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                            .foregroundStyle(Color.calmLabel4(for: scheme))
                         + Text("\(formatWords(state.totalWords)) words")
                             .fontWeight(.medium)
-                            .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                            .foregroundStyle(Color.calmLabel3(for: scheme))
                         + Text(" — and counting.")
-                            .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                            .foregroundStyle(Color.calmLabel4(for: scheme))
                     )
                 } else {
                     Text("Start dictating and your words will appear here.")
-                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
             }
-            .font(.mercuryGreetingStat)
+            .font(.system(size: 13))
 
             // D15: one-time milestone greeting echo — shown until user opens Insights.
             if MilestoneTracker.hasUnseenMilestone,
@@ -69,88 +69,77 @@ struct ContentView: View {
                 milestoneEchoLine(milestone: milestone)
             }
         }
-        .padding(.horizontal, R.r6)
-        .padding(.vertical, R.r5)
+        .padding(.horizontal, C.s6)
+        .padding(.vertical, C.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.mercuryBackground(for: scheme))
+        .background(Color.calmBackground(for: scheme))
     }
 
     // MARK: - Stats Strip
 
     private var statsStrip: some View {
         HStack(spacing: 0) {
-            statItem(value: "\(UsageTracker.streakDays)", label: "day streak", style: .orange)
+            statItem(value: "\(UsageTracker.streakDays)", label: "day streak", showOrb: false)
             statDivider
-            statItem(value: formatWords(UsageTracker.totalWords), label: "total words", style: .aurora)
+            // The aurora orb dot lives only on total words — sanctioned aurora moment.
+            statItem(value: formatWords(UsageTracker.totalWords), label: "total words", showOrb: true)
             statDivider
 
             if UsageTracker.wordsPerMinute > 0 {
-                statItem(value: "\(UsageTracker.wordsPerMinute)", label: "avg WPM", style: .ink)
+                statItem(value: "\(UsageTracker.wordsPerMinute)", label: "avg WPM", showOrb: false)
                 statDivider
             }
 
-            statItem(value: "\(UsageTracker.currentMonthCount)", label: "this month", style: .ink)
+            statItem(value: "\(UsageTracker.currentMonthCount)", label: "this month", showOrb: false)
             Spacer()
         }
-        .padding(.horizontal, R.r6)
-        .frame(height: 60)
-        .background(Color.mercuryWarm(for: scheme))
+        .padding(.horizontal, C.s6)
+        .frame(height: 64)
+        .background(Color.calmSubtle(for: scheme))
     }
 
     private var statDivider: some View {
         Rectangle()
-            .fill(Color.mercuryDivider(for: scheme))
+            .fill(Color.calmDivider(for: scheme))
             .frame(width: 1, height: 28)
-            .padding(.trailing, R.r5)
+            .padding(.trailing, C.s5)
     }
 
-    private enum StatStyle { case orange, aurora, ink }
-
     @ViewBuilder
-    private func statItem(value: String, label: String, style: StatStyle) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            switch style {
-            case .orange:
+    private func statItem(value: String, label: String, showOrb: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 7) {
                 Text(value)
-                    .font(.mercuryStatValue)
+                    .font(.calmStatValue)
                     .monospacedDigit()
-                    .foregroundStyle(Color.mercuryOrange)
-            case .aurora:
-                Text(value)
-                    .font(.mercuryStatValue)
-                    .monospacedDigit()
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.auroraBlue, .auroraViolet],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-            case .ink:
-                Text(value)
-                    .font(.mercuryStatValue)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.mercuryLabel(for: scheme))
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                if showOrb {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [.calmAuroraCyan, .calmAuroraViolet],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 9, height: 9)
+                        .shadow(color: Color.calmAuroraCyan.opacity(0.4), radius: 3)
+                }
             }
-
             Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                .font(.system(size: 11))
+                .foregroundStyle(Color.calmLabel4(for: scheme))
         }
-        .padding(.trailing, R.r5)
+        .padding(.trailing, C.s5)
     }
 
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: R.r2) {
+        HStack(spacing: C.s2) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
-                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                .foregroundStyle(Color.calmLabel4(for: scheme))
 
             TextField("Search your ledger…", text: $searchText)
                 .font(.system(size: 12))
-                .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                .foregroundStyle(Color.calmLabel(for: scheme))
                 .textFieldStyle(.plain)
 
             if !searchText.isEmpty {
@@ -159,7 +148,7 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
                 .buttonStyle(.plain)
             }
@@ -169,7 +158,7 @@ struct ContentView: View {
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
             .buttonStyle(.plain)
             .help("Clear History")
@@ -184,9 +173,9 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) {}
             }
         }
-        .padding(.horizontal, R.r6)
-        .frame(height: 40)
-        .background(Color.mercuryBackground(for: scheme))
+        .padding(.horizontal, C.s6)
+        .frame(height: 42)
+        .background(Color.calmBackground(for: scheme))
     }
 
     // MARK: - Ledger List
@@ -198,29 +187,29 @@ struct ContentView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 28))
-                        .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                     Text("No results for \"\(searchText)\"")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groupedFiltered(filtered), id: \.key) { group in
-                        // Date group header — small-caps serif
-                        HStack(spacing: R.r3) {
-                            Text(group.key)
-                                .font(.mercuryGroupLabel)
-                                .foregroundStyle(Color.mercuryLabel5(for: scheme))
-                                .textCase(nil)
+                        // Date group header — quiet uppercase calm label
+                        HStack(spacing: C.s3) {
+                            Text(group.key.uppercased())
+                                .font(.calmSectionLabel)
+                                .kerning(0.7)
+                                .foregroundStyle(Color.calmLabel4(for: scheme))
 
                             Rectangle()
-                                .fill(Color.mercuryDivider(for: scheme))
+                                .fill(Color.calmDivider(for: scheme))
                                 .frame(height: 1)
                         }
-                        .padding(.horizontal, R.r6)
-                        .padding(.top, 14)
+                        .padding(.horizontal, C.s6)
+                        .padding(.top, 16)
                         .padding(.bottom, 6)
 
                         ForEach(group.value) { entry in
@@ -230,7 +219,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                .padding(.bottom, R.r3)
+                .padding(.bottom, C.s3)
             }
         }
     }
@@ -242,26 +231,26 @@ struct ContentView: View {
             Spacer()
             ZStack {
                 Circle()
-                    .fill(Color.auroraBlue.opacity(0.06))
+                    .fill(Color.calmAccentWash(for: scheme))
                     .frame(width: 72, height: 72)
                 Image(systemName: "waveform.circle")
                     .font(.system(size: 36))
-                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .foregroundStyle(Color.calmAccent(for: scheme))
             }
             VStack(spacing: 6) {
                 Text("Your ledger is empty.")
-                    .font(.system(size: 15, design: .serif).italic())
-                    .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.calmLabel(for: scheme))
                 Text("Hold \(HotkeyDisplay.symbolAndName) and speak — your words appear here.")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 280)
             }
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .background(Color.mercuryBackground(for: scheme))
+        .background(Color.calmBackground(for: scheme))
     }
 
     // MARK: - Status Bar
@@ -271,61 +260,57 @@ struct ContentView: View {
             if let statusMsg = state.status {
                 HStack(spacing: 6) {
                     Image(systemName: "info.circle")
-                        .foregroundStyle(Color.auroraBlue)
+                        .foregroundStyle(Color.calmAccent(for: scheme))
                         .font(.system(size: 11))
                     Text(statusMsg)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.auroraBlue)
+                        .foregroundStyle(Color.calmAccent(for: scheme))
                         .lineLimit(1)
                     Spacer()
                 }
-                .padding(.horizontal, R.r6)
+                .padding(.horizontal, C.s6)
                 .padding(.vertical, 5)
-                .background(Color.auroraBlue.opacity(0.06))
-                mercuryLine
+                .background(Color.calmAccentWash(for: scheme))
+                calmLine
             }
 
-            HStack(spacing: R.r2) {
+            HStack(spacing: C.s2) {
                 if state.isRecording {
-                    Circle()
-                        .fill(Color.mercuryOrange)
-                        .frame(width: 6, height: 6)
-                    MercuryLevelBars(audioLevel: CGFloat(state.audioLevel))
+                    CalmStatusDot(status: .recording)
+                    CalmLevelBars(audioLevel: CGFloat(state.audioLevel), scheme: scheme)
                         .frame(width: 40, height: 14)
                     Text(formatDuration(state.recordingDuration))
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.mercuryOrange)
+                        .foregroundStyle(Color.calmAccent(for: scheme))
                         .monospacedDigit()
                 } else if state.isTranscribing {
                     ProgressView().controlSize(.small)
                     Text("Transcribing…")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .foregroundStyle(Color.calmLabel3(for: scheme))
                 } else if let error = state.error {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Color.mercuryOrange)
+                        .foregroundStyle(Color.calmWarn)
                         .font(.system(size: 11))
                     Text(error)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.mercuryOrange)
+                        .foregroundStyle(Color.calmWarn)
                         .lineLimit(1)
                 } else {
-                    Circle()
-                        .fill(Color.mercuryLabel5(for: scheme))
-                        .frame(width: 6, height: 6)
+                    CalmStatusDot(status: .idle)
                     (
                         Text("Hold ")
                         + Text(HotkeyDisplay.symbol)
                         + Text(" to record  ·  Powered by Kyma")
                     )
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
                 Spacer()
             }
-            .padding(.horizontal, R.r6)
+            .padding(.horizontal, C.s6)
             .padding(.vertical, 10)
-            .background(Color.mercuryWarm(for: scheme))
+            .background(Color.calmSubtle(for: scheme))
         }
     }
 
@@ -339,8 +324,8 @@ struct ContentView: View {
             ? "Bạn đã đạt \(formatWords(milestone.threshold)) từ — \(label)."
             : "You've reached \(formatWords(milestone.threshold)) words — \(label)."
         return Text(msg)
-            .font(.system(size: 12, design: .serif).italic())
-            .foregroundStyle(Color.auroraBlue)
+            .font(.system(size: 12))
+            .foregroundStyle(Color.calmAccent(for: scheme))
             .fixedSize(horizontal: false, vertical: true)
             .onAppear { MilestoneTracker.clearUnseenFlag() }
     }
@@ -366,9 +351,9 @@ struct ContentView: View {
 
     // MARK: - Shared divider
 
-    private var mercuryLine: some View {
+    private var calmLine: some View {
         Rectangle()
-            .fill(Color.mercuryDivider(for: scheme))
+            .fill(Color.calmDivider(for: scheme))
             .frame(height: 1)
     }
 
@@ -445,91 +430,90 @@ struct LedgerEntryRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: R.r4) {
+        HStack(alignment: .top, spacing: C.s3) {
+            // Language tag — leading, mirrors the board's row layout
+            let lang = detectLanguage(entry.text)
+            Text(lang.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .kerning(0.4)
+                .foregroundStyle(lang == "vi" ? Color.calmWarn : Color.calmAccent(for: scheme))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(
+                    lang == "vi" ? Color.calmWarnBg : Color.calmAccentWash(for: scheme),
+                    in: RoundedRectangle(cornerRadius: 4)
+                )
+                .padding(.top, 1)
+
             // Main content
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(entry.text)
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                    .foregroundStyle(Color.calmLabel(for: scheme))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
 
-                // Language tag
-                let lang = detectLanguage(entry.text)
-                Text(lang.uppercased())
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(lang == "vi" ? Color.auroraBlue : Color(hex: "#0F8CA5"))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(
-                        lang == "vi"
-                            ? Color.auroraBlue.opacity(0.10)
-                            : Color.auroraCyan.opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: 3)
-                    )
-            }
-
-            // Meta column
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(entry.timestamp, style: .time)
+                Text("\(timeString)  ·  \(entry.wordCount) words")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
                     .monospacedDigit()
-
-                Text("\(entry.wordCount) words")
-                    .font(.system(size: 11, design: .serif))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
-                    .monospacedDigit()
-
-                if isHovered {
-                    HStack(spacing: 5) {
-                        Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(entry.text, forType: .string)
-                            copied = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-                        } label: {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(copied ? Color.mercuryGreen : Color.mercuryLabel3(for: scheme))
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: 26, height: 26)
-                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
-                        .help("Copy")
-
-                        Button {
-                            withAnimation(.easeOut(duration: 0.15)) { onDelete() }
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(Color.mercuryOrange)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: 26, height: 26)
-                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
-                        .help("Delete")
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
-                }
             }
-            .frame(minWidth: 80, alignment: .trailing)
+
+            // Hover actions
+            if isHovered {
+                HStack(spacing: 5) {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(entry.text, forType: .string)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(copied ? Color.calmSuccess : Color.calmLabel3(for: scheme))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 26, height: 26)
+                    .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
+                    .help("Copy")
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.15)) { onDelete() }
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(Color.calmWarn)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 26, height: 26)
+                    .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
+                    .help("Delete")
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .trailing)))
+                .padding(.top, 1)
+            }
         }
-        .padding(.horizontal, R.r6)
-        .padding(.vertical, 12)
-        .background(isHovered ? Color.mercuryWarm(for: scheme) : Color.clear)
+        .padding(.horizontal, C.s6)
+        .padding(.vertical, 13)
+        .background(isHovered ? Color.calmHover(for: scheme) : Color.clear)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Color.mercuryDivider(for: scheme))
+                .fill(Color.calmDivider(for: scheme))
                 .frame(height: 1)
-                .padding(.leading, R.r6)
+                .padding(.leading, C.s6)
         }
         .animation(.easeInOut(duration: 0.12), value: isHovered)
         .animation(.easeInOut(duration: 0.12), value: copied)
         .onHover { isHovered = $0 }
+    }
+
+    private var timeString: String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: entry.timestamp)
     }
 
     private func detectLanguage(_ text: String) -> String {
@@ -541,10 +525,11 @@ struct LedgerEntryRow: View {
     }
 }
 
-// MARK: - Mercury Level Bars (recording indicator)
+// MARK: - Calm Level Bars (recording indicator)
 
-struct MercuryLevelBars: View {
+struct CalmLevelBars: View {
     let audioLevel: CGFloat
+    let scheme: ColorScheme
     private let barCount = 8
 
     var body: some View {
@@ -563,7 +548,7 @@ struct MercuryLevelBars: View {
                     let h = max(2.5, size.height * max(audioLevel, 0.05) * CGFloat(response))
                     let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
                     let path = Path(roundedRect: rect, cornerRadius: 1.5)
-                    context.fill(path, with: .color(Color.mercuryOrange.opacity(0.75)))
+                    context.fill(path, with: .color(Color.calmAccent(for: scheme).opacity(0.85)))
                 }
             }
         }

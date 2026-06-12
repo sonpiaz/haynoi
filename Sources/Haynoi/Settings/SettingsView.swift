@@ -2,12 +2,12 @@ import SwiftUI
 import AVFoundation
 import ApplicationServices
 
-// MARK: - SettingsView (Mercury reskin)
+// MARK: - SettingsView (Calm)
 //
 // Structure is unchanged: 5 tabs, all controls/logic identical.
-// Visual changes: paper background, serif small-caps section headers,
-// aurora-toned selected states, paper/ink form labels.
-// TODO: full Mercury treatment deferred — system Form colors intentionally kept
+// Calm uses the native macOS grouped Form chrome (the calm board's right-hand
+// System Settings facsimile mirrors exactly this native look), with calm-token
+// accents (indigo links, success/warn semantics) on the few custom rows.
 
 struct SettingsView: View {
     @Environment(\.colorScheme) private var scheme
@@ -107,7 +107,7 @@ private struct GeneralTab: View {
                 UserDefaults.standard.set(false, forKey: "onboardingCompleted")
                 NotificationCenter.default.post(name: .haynoiRestartSetup, object: nil)
             }
-            .foregroundStyle(.orange)
+            .foregroundStyle(Color.calmWarn)
         } footer: {
             Text("Walks through permissions and account setup from the beginning.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -362,7 +362,7 @@ private struct AccountTab: View {
     @ViewBuilder
     private func signedInView(email: String) -> some View {
         HStack {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.mercuryGreen)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.calmSuccess)
             Text("Signed in as \(email)").font(.callout)
             Spacer()
             Button("Sign out") {
@@ -375,16 +375,16 @@ private struct AccountTab: View {
         if let balance = balanceManager.balance {
             HStack {
                 if balance < 0.05 {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.mercuryOrange)
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Color.calmWarn)
                     Text("Out of credits —")
                         .font(.caption).foregroundStyle(.secondary)
                     Link("top up at kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
                         .font(.caption)
-                        .foregroundStyle(Color.auroraBlue)
+                        .foregroundStyle(Color.calmAccent)
                 } else {
                     HStack(spacing: 4) {
                         Text(String(format: "$%.2f", balance))
-                            .font(.system(size: 13, design: .serif).monospacedDigit())
+                            .font(.system(size: 13).monospacedDigit())
                         Text("remaining")
                             .font(.caption).foregroundStyle(.secondary)
                     }

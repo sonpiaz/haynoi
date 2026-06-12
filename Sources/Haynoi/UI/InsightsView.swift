@@ -7,7 +7,7 @@ import AppKit
 //   (a) Hero sentence with comparison ladder
 //   (b) WPM stat (hidden below 30 s cumulative tracked audio, D29)
 //   (c) Streak block: current + longest ever (D12)
-//   (d) 16-week heatmap — Monday-first, 5-bucket aurora intensity (D20/D30)
+//   (d) 16-week heatmap — Monday-first, 5-bucket indigo intensity (D20/D30)
 //   (e) Per-app destination breakdown (top 5 + remainder)
 //   (f) Milestone line + Copy button (D15/D16/D27)
 //
@@ -35,9 +35,9 @@ struct InsightsView: View {
                 appBreakdownSection
                 milestoneSection
             }
-            .padding(.bottom, R.r7)
+            .padding(.bottom, C.s7)
         }
-        .background(Color.mercuryBackground(for: scheme))
+        .background(Color.calmBackground(for: scheme))
         .onAppear(perform: refresh)
         .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
             refresh()
@@ -64,20 +64,20 @@ struct InsightsView: View {
 
     private var heroSection: some View {
         let total = UsageTracker.totalWords
-        return VStack(alignment: .leading, spacing: R.r2) {
+        return VStack(alignment: .leading, spacing: C.s2) {
             Text(heroText(total: total))
-                .font(.system(size: 22, design: .serif).italic())
-                .foregroundStyle(Color.mercuryLabel(for: scheme))
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Color.calmLabel(for: scheme))
                 .fixedSize(horizontal: false, vertical: true)
 
             if total > 0, let comparison = comparisonLabel(total: total) {
                 Text("About \(comparison) in length.")
-                    .font(.system(size: 13, design: .serif))
-                    .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.calmLabel3(for: scheme))
             }
         }
-        .padding(.horizontal, R.r6)
-        .padding(.vertical, R.r5)
+        .padding(.horizontal, C.s6)
+        .padding(.vertical, C.s5)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -87,23 +87,23 @@ struct InsightsView: View {
     private var wpmSection: some View {
         let wpm = UsageTracker.wordsPerMinute
         if wpm > 0 {
-            VStack(alignment: .leading, spacing: R.r1) {
+            VStack(alignment: .leading, spacing: C.s1) {
                 sectionLabel("Speaking pace")
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(wpm)")
-                        .font(.system(size: 32, weight: .semibold, design: .serif))
-                        .foregroundStyle(Color.mercuryLabel(for: scheme))
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundStyle(Color.calmLabel(for: scheme))
                         .monospacedDigit()
                     Text("words per minute")
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.mercuryLabel3(for: scheme))
+                        .foregroundStyle(Color.calmLabel3(for: scheme))
                 }
                 Text("Measured across timed dictations only.")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
-            .padding(.horizontal, R.r6)
-            .padding(.vertical, R.r5)
+            .padding(.horizontal, C.s6)
+            .padding(.vertical, C.s5)
         }
     }
 
@@ -112,50 +112,50 @@ struct InsightsView: View {
     private var streakSection: some View {
         let current = UsageTracker.streakDays
         let longest = UsageTracker.longestStreakDays
-        return VStack(alignment: .leading, spacing: R.r3) {
+        return VStack(alignment: .leading, spacing: C.s3) {
             sectionLabel("Consistency")
-            HStack(spacing: R.r6) {
+            HStack(spacing: C.s6) {
                 streakStat(value: current, label: "current streak",
-                           accent: current > 0 ? Color.mercuryOrange : Color.mercuryLabel4(for: scheme))
+                           accent: current > 0 ? Color.calmWarn : Color.calmLabel4(for: scheme))
                 streakStat(value: longest, label: "longest streak",
-                           accent: Color.mercuryLabel3(for: scheme))
+                           accent: Color.calmLabel3(for: scheme))
             }
             if current == 0 {
                 Text("Dictate today to start a new streak.")
                     .font(.system(size: 11))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
         }
-        .padding(.horizontal, R.r6)
-        .padding(.vertical, R.r5)
+        .padding(.horizontal, C.s6)
+        .padding(.vertical, C.s5)
     }
 
     private func streakStat(value: Int, label: String, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(value)")
-                    .font(.system(size: 28, weight: .semibold, design: .serif))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(accent)
                     .monospacedDigit()
                 Text(value == 1 ? "day" : "days")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             }
             Text(label)
                 .font(.system(size: 10))
-                .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                .foregroundStyle(Color.calmLabel5(for: scheme))
         }
     }
 
     // MARK: - (d) Heatmap Section
 
     private var heatmapSection: some View {
-        VStack(alignment: .leading, spacing: R.r3) {
+        VStack(alignment: .leading, spacing: C.s3) {
             sectionLabel("Activity — last 16 weeks")
             HeatmapGrid(dailyWords: insights.dailyWords, scheme: scheme)
         }
-        .padding(.horizontal, R.r6)
-        .padding(.vertical, R.r5)
+        .padding(.horizontal, C.s6)
+        .padding(.vertical, C.s5)
     }
 
     // MARK: - (e) Per-app Breakdown Section
@@ -169,12 +169,12 @@ struct InsightsView: View {
         let attributedSum = appMap.values.reduce(0) { $0 + $1.words }
         let remainder = max(0, total - attributedSum)
 
-        return VStack(alignment: .leading, spacing: R.r3) {
+        return VStack(alignment: .leading, spacing: C.s3) {
             sectionLabel("Where your words go")
             if topEntries.isEmpty && remainder == 0 {
                 Text("Per-app breakdown will appear after new dictations.")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
             } else {
                 VStack(spacing: 6) {
                     ForEach(topEntries, id: \.key) { bundleId, app in
@@ -194,8 +194,8 @@ struct InsightsView: View {
                 }
             }
         }
-        .padding(.horizontal, R.r6)
-        .padding(.vertical, R.r5)
+        .padding(.horizontal, C.s6)
+        .padding(.vertical, C.s5)
     }
 
     // MARK: - (f) Milestone Section
@@ -205,11 +205,11 @@ struct InsightsView: View {
         let total = UsageTracker.totalWords
         if let milestone = MilestoneTracker.latestMilestone(for: total) {
             insightsDivider
-            VStack(alignment: .leading, spacing: R.r2) {
-                HStack(spacing: R.r2) {
+            VStack(alignment: .leading, spacing: C.s2) {
+                HStack(spacing: C.s2) {
                     Text(milestoneText(milestone: milestone, total: total))
-                        .font(.system(size: 13, design: .serif))
-                        .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.calmLabel2(for: scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Button {
@@ -221,20 +221,20 @@ struct InsightsView: View {
                             Text(milestoneCopied ? "Copied" : "Copy")
                                 .font(.system(size: 11))
                         }
-                        .foregroundStyle(milestoneCopied ? Color.mercuryGreen : Color.mercuryLabel3(for: scheme))
+                        .foregroundStyle(milestoneCopied ? Color.calmSuccess : Color.calmLabel3(for: scheme))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color.mercuryMid(for: scheme), in: RoundedRectangle(cornerRadius: 6))
+                        .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
                         .overlay(RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.mercuryDivider(for: scheme), lineWidth: 1))
+                            .stroke(Color.calmDivider(for: scheme), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .animation(.easeInOut(duration: 0.15), value: milestoneCopied)
                 }
             }
-            .padding(.horizontal, R.r6)
-            .padding(.vertical, R.r4)
-            .background(Color.mercuryWarm(for: scheme))
+            .padding(.horizontal, C.s6)
+            .padding(.vertical, C.s4)
+            .background(Color.calmSubtle(for: scheme))
         }
     }
 
@@ -242,14 +242,14 @@ struct InsightsView: View {
 
     private var insightsDivider: some View {
         Rectangle()
-            .fill(Color.mercuryDivider(for: scheme))
+            .fill(Color.calmDivider(for: scheme))
             .frame(height: 1)
     }
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(Color.mercuryLabel5(for: scheme))
+            .foregroundStyle(Color.calmLabel5(for: scheme))
             .kerning(0.8)
     }
 
@@ -339,7 +339,7 @@ struct InsightsView: View {
 // MARK: - HeatmapGrid (F2.4d / D20 / D30)
 //
 // 7 rows (Mon–Sun) × 16 columns (most-recent week rightmost).
-// Intensity: 5 aurora-on-paper buckets relative to user's own max-day.
+// Intensity: 5 indigo-on-white buckets relative to user's own max-day.
 // Today: outlined cell. Future cells: bare paper, no stroke.
 // Past zero-word days: lightest bucket WITH stroke.
 
@@ -402,7 +402,7 @@ private struct HeatmapGrid: View {
                     ForEach(0..<dayLabels.count, id: \.self) { i in
                         Text(dayLabels[i])
                             .font(.system(size: 8, weight: .medium))
-                            .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                            .foregroundStyle(Color.calmLabel5(for: scheme))
                             .frame(width: 10, height: 12, alignment: .trailing)
                     }
                 }
@@ -420,17 +420,17 @@ private struct HeatmapGrid: View {
             HStack(spacing: 4) {
                 Text("Less")
                     .font(.system(size: 9))
-                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .foregroundStyle(Color.calmLabel5(for: scheme))
                 ForEach(0..<5, id: \.self) { b in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(bucketFill(bucket: b, scheme: scheme))
                         .frame(width: 10, height: 10)
                         .overlay(RoundedRectangle(cornerRadius: 2)
-                            .stroke(Color.mercuryDivider(for: scheme), lineWidth: 0.5))
+                            .stroke(Color.calmDivider(for: scheme), lineWidth: 0.5))
                 }
                 Text("More")
                     .font(.system(size: 9))
-                    .foregroundStyle(Color.mercuryLabel5(for: scheme))
+                    .foregroundStyle(Color.calmLabel5(for: scheme))
             }
             .padding(.top, 4)
         }
@@ -444,10 +444,10 @@ private struct HeatmapGrid: View {
                 .fill(cellBackground(cell))
             if cell.isToday {
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(Color.auroraBlue.opacity(0.7), lineWidth: 1.5)
+                    .stroke(Color.calmAccent(for: scheme).opacity(0.7), lineWidth: 1.5)
             } else if showStroke {
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(Color.mercuryDivider(for: scheme), lineWidth: 0.5)
+                    .stroke(Color.calmDivider(for: scheme), lineWidth: 0.5)
             }
         }
         .frame(width: 12, height: 12)
@@ -456,22 +456,22 @@ private struct HeatmapGrid: View {
 
     private func cellBackground(_ cell: HeatmapCell) -> Color {
         if cell.isFuture {
-            return Color.mercuryBackground(for: scheme)
+            return Color.calmBackground(for: scheme)
         }
         return bucketFill(bucket: cell.bucket, scheme: scheme)
     }
 
     private func bucketFill(bucket: Int, scheme: ColorScheme) -> Color {
         // 0 = lightest (zero-word past day), 4 = darkest (highest day)
-        let base = scheme == .dark ? Color.mercuryDarkPaper : Color.mercuryPaper
+        let base = Color.calmBackground(for: scheme)
         switch bucket {
         case 0: return scheme == .dark
-                    ? Color.mercuryDarkPaperWarm
-                    : Color.mercuryPaperWarm
-        case 1: return Color.auroraBlue.opacity(0.12)
-        case 2: return Color.auroraBlue.opacity(0.28)
-        case 3: return Color.auroraViolet.opacity(0.45)
-        case 4: return Color.auroraViolet.opacity(0.75)
+                    ? Color.calmDarkSidebar
+                    : Color.calmSidebar
+        case 1: return Color.calmAccent(for: scheme).opacity(0.10)
+        case 2: return Color.calmAccent(for: scheme).opacity(0.28)
+        case 3: return Color.calmAccent(for: scheme).opacity(0.50)
+        case 4: return Color.calmAccent(for: scheme).opacity(0.78)
         default: return base
         }
     }
@@ -511,7 +511,7 @@ private struct AppWordRow: View {
     @State private var appIcon: NSImage? = nil
 
     var body: some View {
-        HStack(spacing: R.r3) {
+        HStack(spacing: C.s3) {
             // App icon
             Group {
                 if let icon = appIcon {
@@ -521,7 +521,7 @@ private struct AppWordRow: View {
                 } else {
                     Image(systemName: bundleId == nil ? "clock.arrow.circlepath" : "app.dashed")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
             }
             .frame(width: 20, height: 20)
@@ -532,21 +532,21 @@ private struct AppWordRow: View {
                 HStack {
                     Text(displayName)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.mercuryLabel2(for: scheme))
+                        .foregroundStyle(Color.calmLabel2(for: scheme))
                         .lineLimit(1)
                     Spacer()
                     Text(formattedWords)
-                        .font(.system(size: 11, design: .serif))
-                        .foregroundStyle(Color.mercuryLabel4(for: scheme))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
                         .monospacedDigit()
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.mercuryMid(for: scheme))
+                            .fill(Color.calmSubtle(for: scheme))
                             .frame(height: 3)
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(colors: [.auroraBlue, .auroraViolet],
+                            .fill(LinearGradient(colors: [Color.calmAccent(for: scheme), Color.calmAccent(for: scheme).opacity(0.7)],
                                                  startPoint: .leading, endPoint: .trailing))
                             .frame(width: geo.size.width * shareFraction, height: 3)
                     }
