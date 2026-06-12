@@ -6,6 +6,25 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.2</title>
+            <pubDate>Fri, 12 Jun 2026 23:38:41 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.2</h2>
+
+<h3>Changed</h3>
+<ul>
+<li>History rows are completely still now: no more layout shift on hover</li>
+</ul>
+<p>  and no language badge. Copy and Delete live in the right-click menu;</p>
+<p>  selecting text directly still works.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.2/Haynoi-0.2.2-universal.zip" length="2848475" type="application/octet-stream" sparkle:edSignature="2NM8WTUOMEQ5+pHk63PfswVn/RQhYuFLXDyBNsta0XrUhbtHJi21PKZyjwsexIpiAMCPVCDjBL7Z3zqvuhZcBg=="/>
+        </item>
+        <item>
             <title>0.2.1</title>
             <pubDate>Fri, 12 Jun 2026 23:35:16 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -69,47 +88,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.0/Haynoi-0.2.0-universal.zip" length="2865877" type="application/octet-stream" sparkle:edSignature="W15Z39DiVx7Y3mXBM0+xsJ8y3ABLv+rCUpjHDk3NGyp84+jDx60bpk0NC+agfNbGI8xGxKc2AXwcMBZRBefKCw=="/>
-        </item>
-        <item>
-            <title>0.1.9</title>
-            <pubDate>Fri, 12 Jun 2026 22:05:52 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>10</sparkle:version>
-            <sparkle:shortVersionString>0.1.9</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.1.9</h2>
-
-<h3>Fixed</h3>
-<ul>
-<li>Dictation now starts the instant you press the key: the microphone engine</li>
-</ul>
-<p>  stays warm between dictations instead of cold-starting every time, so the</p>
-<p>  multi-second wait (especially on Bluetooth headsets) is gone.</p>
-<ul>
-<li>Your first words are never clipped again — Haynoi keeps a 300ms pre-roll</li>
-</ul>
-<p>  from just before recording begins.</p>
-<ul>
-<li>The start tone is honest now: it plays exactly when the microphone is</li>
-</ul>
-<p>  truly live. When you hear it, speak.</p>
-<ul>
-<li>The hotkey hint showed "Option + Space"; recording is hold left Option</li>
-</ul>
-<p>  alone. The hint now reads "Left Option" (and haynoi.com says so too).</p>
-
-<h3>Changed</h3>
-<ul>
-<li>The recording waveform follows your real voice: still while you are</li>
-</ul>
-<p>  silent, moving while you speak — in both the floating orb and the menu</p>
-<p>  bar panel.</p>
-<ul>
-<li>Text lands ~250ms faster when dictating into the app you are already in.</li>
-</ul>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.9/Haynoi-0.1.9-universal.zip" length="2784122" type="application/octet-stream" sparkle:edSignature="O7K6kSBpxgmkzOt4GVDaemOnU9rdoMxZSaphUHMaNWs/ys8x91gqvPlb3vptmYVKLE2T266LzM9GJO15VS+4BQ=="/>
         </item>
     </channel>
 </rss>
