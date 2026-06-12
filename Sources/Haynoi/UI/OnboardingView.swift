@@ -1522,7 +1522,7 @@ struct HotkeyTestView: View {
     let scheme: ColorScheme
     let onContinue: () -> Void
 
-    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
     @State private var pressed = false
     @State private var didPress = false
     @State private var monitor: Any?
@@ -1530,19 +1530,19 @@ struct HotkeyTestView: View {
 
     private var symbol: String {
         switch hotkeyChoice {
-        case "option":  return "⌥"
+        case "command": return "⌘"
         case "control": return "⌃"
         case "fn":      return "fn"
-        default:        return "⌘"
+        default:        return "⌥"
         }
     }
 
     private var name: String {
         switch hotkeyChoice {
-        case "option":  return "Option"
+        case "command": return "Command"
         case "control": return "Control"
         case "fn":      return "Globe"
-        default:        return "Command"
+        default:        return "left Option"
         }
     }
 
@@ -1590,8 +1590,8 @@ struct HotkeyTestView: View {
             // Inline change-shortcut
             if showChange {
                 Picker("", selection: $hotkeyChoice) {
-                    Text("⌘ Command").tag("command")
                     Text("⌥ Option").tag("option")
+                    Text("⌘ Command").tag("command")
                     Text("⌃ Control").tag("control")
                     Text("fn Globe").tag("fn")
                 }
@@ -1626,10 +1626,10 @@ struct HotkeyTestView: View {
 
     private var targetFlag: NSEvent.ModifierFlags {
         switch hotkeyChoice {
-        case "option":  return .option
+        case "command": return .command
         case "control": return .control
         case "fn":      return .function
-        default:        return .command
+        default:        return .option
         }
     }
 
@@ -1637,7 +1637,12 @@ struct HotkeyTestView: View {
         // Local monitor — fires while the onboarding window is key. Input
         // Monitoring (granted by now) lets us read modifier flags reliably.
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { event in
-            let down = event.modifierFlags.contains(targetFlag)
+            var down = event.modifierFlags.contains(targetFlag)
+            // Left-option gate: mirror HotkeyManager — only the LEFT option key
+            // (keyCode 58) counts. Ignore a right-option press (keyCode 61).
+            if hotkeyChoice == "option", down, event.keyCode == 61 {
+                down = false
+            }
             DispatchQueue.main.async {
                 withAnimation { pressed = down }
                 if down && !didPress {
@@ -1657,10 +1662,10 @@ struct HotkeyTestView: View {
 
     private func applyHotkeyChoice(_ choice: String) {
         switch choice {
-        case "option":  HotkeyManager.shared.targetModifier = .maskAlternate
+        case "command": HotkeyManager.shared.targetModifier = .maskCommand
         case "control": HotkeyManager.shared.targetModifier = .maskControl
         case "fn":      HotkeyManager.shared.targetModifier = .maskSecondaryFn
-        default:        HotkeyManager.shared.targetModifier = .maskCommand
+        default:        HotkeyManager.shared.targetModifier = .maskAlternate
         }
         // Reset detection so the user tests the newly chosen key.
         didPress = false

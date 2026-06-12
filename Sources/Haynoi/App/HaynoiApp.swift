@@ -24,6 +24,7 @@ struct HaynoiApp: App {
                 .environmentObject(appState)
                 .environmentObject(authState)
                 .frame(width: 360)
+                .haynoiTheme()
         } label: {
             Label("Haynoi", systemImage: appState.menuBarIcon)
         }
@@ -31,6 +32,7 @@ struct HaynoiApp: App {
 
         Settings {
             SettingsView()
+                .haynoiTheme()
         }
     }
 }
@@ -46,7 +48,8 @@ private struct MenuBarContent: View {
     @ObservedObject private var checker: UpdaterChecker
     @ObservedObject private var balanceManager = BalanceManager.shared
     @Environment(\.colorScheme) private var scheme
-    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
+    @AppStorage("languageHint") private var languageHint = "auto"
     private let updater: SPUUpdater
 
     init(updater: SPUUpdater) {
@@ -71,6 +74,11 @@ private struct MenuBarContent: View {
 
                 // Hold-to-dictate hotkey chips
                 hotkeySection
+
+                popoverDivider
+
+                // Language segmented control (VI / EN / Auto)
+                languageRow
 
                 popoverDivider
 
@@ -183,11 +191,56 @@ private struct MenuBarContent: View {
 
     private var hotkeySymbol: String {
         switch hotkeyChoice {
-        case "option":  return "⌥"
+        case "command": return "⌘"
         case "control": return "⌃"
         case "fn":      return "fn"
-        default:        return "⌘"
+        default:        return "⌥"
         }
+    }
+
+    // MARK: - Language segmented control (board panel 02)
+
+    private var languageRow: some View {
+        HStack {
+            Text("Language")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Spacer()
+            HStack(spacing: 1) {
+                langSegment("VI", value: "vi")
+                langSegment("EN", value: "en")
+                langSegment("Auto", value: "auto")
+            }
+            .padding(2)
+            .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.calmBorder, lineWidth: 1))
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+        .background(Color.calmSurface(for: scheme))
+    }
+
+    private func langSegment(_ label: String, value: String) -> some View {
+        let isActive = languageHint == value
+        return Button {
+            languageHint = value
+        } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel3(for: scheme))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
+                .background(
+                    isActive ? Color.calmSurface(for: scheme) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 5)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(isActive ? Color.calmAccent(for: scheme).opacity(0.25) : Color.clear, lineWidth: 1)
+                )
+                .shadow(color: isActive ? .black.opacity(scheme == .dark ? 0 : 0.06) : .clear, radius: 1, y: 1)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Last Dictation
@@ -260,7 +313,11 @@ private struct MenuBarContent: View {
         case 2..<60: when = "\(mins) min ago"
         default:     when = "\(mins / 60)h ago"
         }
-        return "\(when)  ·  \(entry.wordCount) words"
+        var meta = "\(when)  ·  \(entry.wordCount) words"
+        if let source = AppStyleDetector.displayName(bundleId: entry.appBundleId, fallback: entry.appName) {
+            meta += "  ·  \(source)"
+        }
+        return meta
     }
 
     // MARK: - Standalone Retry Row (empty history, transient failure)
@@ -685,16 +742,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
-        UserDefaults.standard.register(defaults: ["soundEnabled": true])
+        UserDefaults.standard.register(defaults: [
+            "soundEnabled": true,
+            "appTheme": "light",       // founder default: white-gray light look
+            "hotkeyChoice": "option",  // founder default: left Option push-to-talk
+        ])
         NSLog("[Haynoi] App launched")
         NSApplication.shared.setActivationPolicy(.regular)
 
-        let choice = UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "command"
+        let choice = UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "option"
         switch choice {
-        case "option": HotkeyManager.shared.targetModifier = .maskAlternate
+        case "command": HotkeyManager.shared.targetModifier = .maskCommand
         case "control": HotkeyManager.shared.targetModifier = .maskControl
         case "fn": HotkeyManager.shared.targetModifier = .maskSecondaryFn
-        default: HotkeyManager.shared.targetModifier = .maskCommand
+        default: HotkeyManager.shared.targetModifier = .maskAlternate
         }
 
         PipelineController.shared.setup()
@@ -775,6 +836,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let contentView = MainView()
             .environmentObject(AppState.shared)
             .frame(minWidth: 680, minHeight: 480)
+            .haynoiTheme()
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 860, height: 580),
@@ -783,11 +845,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             defer: false
         )
         window.title = "Haynoi"
+        window.appearance = Self.themeAppearance()
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         mainWindow = window
+    }
+
+    /// Maps the user's theme choice to an NSAppearance so the window chrome
+    /// (titlebar + traffic lights) matches the SwiftUI content. nil follows the
+    /// system. Default is the light (aqua) appearance — the founder's white-gray.
+    static func themeAppearance() -> NSAppearance? {
+        switch AppTheme.current {
+        case .light:  return NSAppearance(named: .aqua)
+        case .dark:   return NSAppearance(named: .darkAqua)
+        case .system: return nil
+        }
     }
 
     private func showOnboarding() {
@@ -805,6 +879,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 self?.showMainWindowPublic()
             }
         }
+        .haynoiTheme()
 
         // Size the window for the resume step: the Accessibility split-screen
         // teaching step is wide (Onboarding v3).
@@ -822,6 +897,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
+        window.appearance = Self.themeAppearance()
         window.contentView = NSHostingView(rootView: view)
         window.center()
         window.makeKeyAndOrderFront(nil)

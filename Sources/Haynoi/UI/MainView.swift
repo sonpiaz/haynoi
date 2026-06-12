@@ -1,64 +1,242 @@
 import SwiftUI
 
-// MARK: - MainView (Calm "ledger")
+// MARK: - MainView (board "01 — MAIN WINDOW")
 //
-// Layout: optional recording banner → two-column body
-//   Left (flexible): greeting block + stats row + search + ledger history
-//   Right (260px): balance card + mode pills + quick nav + settings
-// Calm has no aurora top-edge; quiet hairline dividers do the structural work.
+// Faithful rebuild of the founder-approved board:
+//   LEFT SIDEBAR (~210pt): app icon + "Haynoi" wordmark → nav rows
+//     (History / Recent / Modes / About) → bottom Settings row + account chip.
+//   MAIN CONTENT: a slim optional recording banner, then the page selected in
+//     the sidebar:
+//       History → top 4-card stat row (Day streak / Words / Avg WPM / HOLD TO
+//                 RECORD keycaps) + grouped history list with section headers.
+//       Recent  → the same list, limited to the most recent entries.
+//       Modes   → the transcription-mode chips.
+//       About   → app / version / Powered-by-Kyma card.
+//
+// Light white-gray Calm palette throughout; quiet hairlines do the structural
+// work. Engine wiring (AppState / BalanceManager / UsageTracker) unchanged.
+
+enum SidebarSection: String, CaseIterable, Identifiable {
+    case history = "History"
+    case recent  = "Recent"
+    case modes   = "Modes"
+    case about   = "About"
+
+    var id: String { rawValue }
+
+    /// SF Symbol mirroring the board's nav glyphs.
+    var icon: String {
+        switch self {
+        case .history: return "list.bullet"
+        case .recent:  return "clock"
+        case .modes:   return "lightbulb"
+        case .about:   return "info.circle"
+        }
+    }
+}
 
 struct MainView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.colorScheme) private var scheme
-
-    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
-
     @ObservedObject private var balanceManager = BalanceManager.shared
+    @ObservedObject private var authState = AuthState.shared
 
-    // Context panel nav selection
-    @State private var selectedNav: MercuryNavItem = .ledger
+    @State private var section: SidebarSection = .history
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Recording banner — slim, calm-styled
-            if state.isRecording {
-                calmRecordingBanner
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 210)
 
-            // Two-column body
-            HStack(spacing: 0) {
-                // Left: ledger or insights depending on nav selection
-                Group {
-                    if selectedNav == .insights {
-                        InsightsView()
-                            .environmentObject(state)
-                    } else {
-                        ContentView(onStatStripTap: { selectedNav = .insights })
-                            .environmentObject(state)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+            // Hairline divider sidebar → content
+            Rectangle()
+                .fill(Color.calmDivider(for: scheme))
+                .frame(width: 1)
 
-                // Vertical divider
-                Rectangle()
-                    .fill(Color.calmDivider(for: scheme))
-                    .frame(width: 1)
-
-                // Right: context panel
-                contextPanel
-                    .frame(width: 260)
-            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 680, minHeight: 480)
+        .frame(minWidth: 720, minHeight: 500)
         .background(Color.calmBackground(for: scheme))
-        .animation(.easeInOut(duration: 0.2), value: state.isRecording)
         .onAppear { BalanceManager.shared.refresh() }
     }
 
-    // MARK: - Recording Banner (Calm style)
+    // MARK: - Sidebar
 
-    private var calmRecordingBanner: some View {
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // App icon + wordmark
+            HStack(spacing: 9) {
+                AppIconBadge(size: 28)
+                Text("Haynoi")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                    .kerning(-0.2)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+
+            Rectangle()
+                .fill(Color.calmDivider(for: scheme))
+                .frame(height: 1)
+                .padding(.horizontal, 0)
+
+            // Nav rows
+            VStack(spacing: 1) {
+                ForEach(SidebarSection.allCases) { item in
+                    navRow(item)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 10)
+
+            Spacer(minLength: 0)
+
+            Rectangle()
+                .fill(Color.calmDivider(for: scheme))
+                .frame(height: 1)
+
+            // Bottom: Settings + account chip
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsLink {
+                    HStack(spacing: 9) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.calmLabel4(for: scheme))
+                            .frame(width: 15)
+                        Text("Settings")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.calmLabel3(for: scheme))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(SidebarRowButtonStyle(scheme: scheme))
+
+                accountChip
+                    .padding(.top, 4)
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
+        }
+        .background(Color.calmSubtle(for: scheme))
+    }
+
+    @ViewBuilder
+    private func navRow(_ item: SidebarSection) -> some View {
+        let isActive = section == item
+        Button {
+            section = item
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: item.icon)
+                    .font(.system(size: 13))
+                    .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel4(for: scheme))
+                    .frame(width: 15)
+                Text(item.rawValue)
+                    .font(.system(size: 13, weight: isActive ? .medium : .regular))
+                    .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel3(for: scheme))
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                isActive ? Color.calmActive(for: scheme) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var accountChip: some View {
+        HStack(spacing: 9) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [.calmAuroraCyan, .calmAuroraViolet],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 26, height: 26)
+                Text(avatarInitial)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(accountName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                    .lineLimit(1)
+                Text(balanceLine)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+    }
+
+    private var avatarInitial: String {
+        if let email = authState.signedInEmail, let f = email.first {
+            return String(f).uppercased()
+        }
+        return "H"
+    }
+
+    private var accountName: String {
+        if let email = authState.signedInEmail {
+            let user = email.split(separator: "@").first.map(String.init) ?? email
+            return user.replacingOccurrences(of: ".", with: " ").capitalized
+        }
+        return "Sign in"
+    }
+
+    private var balanceLine: String {
+        if let b = balanceManager.balance {
+            return String(format: "$%.2f remaining", b)
+        }
+        return "Pay as you go"
+    }
+
+    // MARK: - Content (switches on sidebar section)
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            if state.isRecording {
+                recordingBanner
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            Group {
+                switch section {
+                case .history:
+                    ContentView(mode: .history)
+                        .environmentObject(state)
+                case .recent:
+                    ContentView(mode: .recent)
+                        .environmentObject(state)
+                case .modes:
+                    ModesPage()
+                case .about:
+                    AboutPage()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color.calmBackground(for: scheme))
+        .animation(.easeInOut(duration: 0.2), value: state.isRecording)
+    }
+
+    // MARK: - Recording Banner (Calm)
+
+    private var recordingBanner: some View {
         HStack(spacing: 10) {
             CalmStatusDot(status: .recording)
 
@@ -86,203 +264,57 @@ struct MainView: View {
         }
     }
 
-    // MARK: - Context Panel (right rail)
-
-    private var contextPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-
-            // Balance card
-            contextSection(label: "Balance") {
-                balanceCard
-            }
-
-            contextLine
-
-            // Mode pills
-            contextSection(label: "Mode") {
-                CalmModePills()
-            }
-
-            contextLine
-
-            // Nav links — Ledger and Insights are wired; others are placeholders.
-            VStack(alignment: .leading, spacing: 2) {
-                calmNavRow(.ledger)
-                calmNavRow(.insights)
-            }
-            .padding(.horizontal, C.s3)
-            .padding(.vertical, C.s3)
-
-            Spacer()
-
-            contextLine
-
-            // Settings link
-            SettingsLink {
-                HStack(spacing: 6) {
-                    Image(systemName: "gear")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                    Text("Settings")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                }
-                .padding(.horizontal, C.s5)
-                .padding(.vertical, C.s3)
-            }
-            .buttonStyle(.plain)
-        }
-        .background(Color.calmSubtle(for: scheme))
-    }
-
-    private func contextSection<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: C.s3) {
-            Text(label.uppercased())
-                .font(.calmSectionLabel)
-                .foregroundStyle(Color.calmLabel4(for: scheme))
-                .kerning(0.8)
-                .padding(.horizontal, C.s5)
-                .padding(.top, C.s5)
-
-            content()
-                .padding(.horizontal, C.s5)
-                .padding(.bottom, C.s5)
-        }
-    }
-
-    private var contextLine: some View {
-        Rectangle()
-            .fill(Color.calmDivider(for: scheme))
-            .frame(height: 1)
-    }
-
-    // MARK: - Balance Card
-
-    private var balanceCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let balance = balanceManager.balance {
-                Text(String(format: "$%.2f", balance))
-                    .font(.calmBalance)
-                    .foregroundStyle(Color.calmLabel(for: scheme))
-                    .monospacedDigit()
-
-                Text(balance < 0.05
-                     ? "Out of credits — top up to continue."
-                     : "Pay as you go — no subscription.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Aurora balance bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.calmHairline(for: scheme))
-                            .frame(height: 3)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient.calmAuroraBar)
-                            .frame(width: geo.size.width * balanceFraction, height: 3)
-                    }
-                }
-                .frame(height: 3)
-                .padding(.top, 5)
-                .padding(.bottom, 2)
-
-                HStack {
-                    Text("~$0.02 / min")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                    Spacer()
-                    Link("Top up ↗", destination: URL(string: "https://kymaapi.com")!)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.calmAccent(for: scheme))
-                }
-            } else {
-                // Loading / signed out state
-                HStack(spacing: 6) {
-                    Text("Sign in to see balance.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                    Spacer()
-                    SettingsLink {
-                        Text("Sign in")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.calmAccent(for: scheme))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(C.s4)
-        .background(Color.calmSurface(for: scheme))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.calmBorder, lineWidth: 1)
-        )
-    }
-
-    private var balanceFraction: CGFloat {
-        guard let b = balanceManager.balance, b > 0 else { return 0 }
-        // Treat $20 as "full"; cap at 1.0
-        return min(CGFloat(b) / 20.0, 1.0)
-    }
-
-    // MARK: - Nav Rows
-
-    @ViewBuilder
-    private func calmNavRow(_ item: MercuryNavItem) -> some View {
-        let isActive = selectedNav == item
-        Button {
-            selectedNav = item
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: item.icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel4(for: scheme))
-                    .frame(width: 16)
-                Text(item.rawValue)
-                    .font(.system(size: 13, weight: isActive ? .medium : .regular))
-                    .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel3(for: scheme))
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(isActive ? Color.calmActive(for: scheme) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Helpers
-
     private func formatDuration(_ d: TimeInterval) -> String {
         String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
     }
 }
 
-// MARK: - Mercury Nav Items
+// MARK: - Sidebar row button hover style
 
-enum MercuryNavItem: String, CaseIterable, Identifiable {
-    case ledger = "Ledger"
-    case insights = "Insights"
-    case dictionary = "Dictionary"
-    case snippets = "Snippets"
+private struct SidebarRowButtonStyle: ButtonStyle {
+    let scheme: ColorScheme
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                configuration.isPressed ? Color.calmHover(for: scheme) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+    }
+}
 
-    var id: String { rawValue }
+// MARK: - App Icon Badge
+//
+// Renders the bundled app icon if present, otherwise a calm aurora glyph tile so
+// the wordmark never sits next to an empty square in previews / fresh installs.
 
-    var icon: String {
-        switch self {
-        case .ledger:     return "list.bullet.rectangle"
-        case .insights:   return "chart.bar"
-        case .dictionary: return "book.closed"
-        case .snippets:   return "text.quote"
+struct AppIconBadge: View {
+    var size: CGFloat = 28
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        if let nsImage = NSImage(named: "AppIcon") {
+            Image(nsImage: nsImage)
+                .resizable()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.25))
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.25)
+                    .fill(LinearGradient(
+                        colors: [Color(hex: "#0F1220"), Color(hex: "#1A1E34")],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                Image(systemName: "waveform")
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundStyle(LinearGradient.calmAurora)
+            }
+            .frame(width: size, height: size)
         }
     }
 }
 
-// MARK: - Calm Mode Pills
+// MARK: - Modes Page (sidebar → Modes)
 
-private struct CalmModePills: View {
+private struct ModesPage: View {
     @AppStorage("transcriptionMode") private var modeRaw = TranscriptionMode.normal.rawValue
     @Environment(\.colorScheme) private var scheme
 
@@ -291,43 +323,172 @@ private struct CalmModePills: View {
     }
 
     var body: some View {
-        let modes = TranscriptionMode.allCases
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
-            ForEach(modes) { mode in
-                modePill(mode)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Transcription modes")
+                    .font(.calmHeading)
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                Text("Choose how Haynoi shapes your dictation. The active mode applies everywhere.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
+                    .padding(.top, 4)
+
+                VStack(spacing: 10) {
+                    ForEach(TranscriptionMode.allCases) { mode in
+                        modeCard(mode)
+                    }
+                }
+                .padding(.top, 22)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
         }
+        .background(Color.calmBackground(for: scheme))
     }
 
     @ViewBuilder
-    private func modePill(_ mode: TranscriptionMode) -> some View {
+    private func modeCard(_ mode: TranscriptionMode) -> some View {
         let isActive = mode == currentMode
         Button {
             modeRaw = mode.rawValue
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(mode.rawValue)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel2(for: scheme))
-                Text(mode.shortDescription)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-                    .lineLimit(1)
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9)
+                        .fill(isActive ? Color.calmAccentWash(for: scheme) : Color.calmSubtle(for: scheme))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 15))
+                        .foregroundStyle(isActive ? Color.calmAccent(for: scheme) : Color.calmLabel3(for: scheme))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.rawValue)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.calmLabel(for: scheme))
+                    Text(mode.shortDescription)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                }
+                Spacer()
+                if isActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.calmAccent(for: scheme))
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
             .background(isActive ? Color.calmActive(for: scheme) : Color.calmSurface(for: scheme))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        isActive ? Color.calmAccent(for: scheme).opacity(0.6) : Color.calmBorder,
+                        isActive ? Color.calmAccent(for: scheme).opacity(0.4) : Color.calmBorder,
                         lineWidth: isActive ? 1.5 : 1
                     )
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - About Page (sidebar → About)
+
+private struct AboutPage: View {
+    @Environment(\.colorScheme) private var scheme
+
+    private var versionString: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "Version \(v) (\(b))"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 14) {
+                    AppIconBadge(size: 56)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Haynoi")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(Color.calmLabel(for: scheme))
+                            .kerning(-0.3)
+                        Text("hãy nói · hay nói · Hà Nội")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.calmLabel4(for: scheme))
+                            .kerning(0.4)
+                    }
+                    Spacer()
+                }
+
+                VStack(spacing: 0) {
+                    aboutRow("Edition", value: versionString)
+                    aboutDivider
+                    aboutRow("Transcription", value: "Powered by Kyma")
+                    aboutDivider
+                    aboutLinkRow("Website", url: "https://haynoi.com")
+                    aboutDivider
+                    aboutLinkRow("Top up credits", url: "https://kymaapi.com")
+                }
+                .background(Color.calmSurface(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.calmBorder, lineWidth: 1))
+                .padding(.top, 24)
+
+                Text("Hold left ⌥ and speak. Your words appear in any app, instantly.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
+                    .padding(.top, 16)
+            }
+            .frame(maxWidth: 480, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 28)
+        }
+        .background(Color.calmBackground(for: scheme))
+    }
+
+    private func aboutRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Spacer()
+            Text(value)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.calmLabel(for: scheme))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private func aboutLinkRow(_ label: String, url: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Spacer()
+            Link(destination: URL(string: url)!) {
+                HStack(spacing: 3) {
+                    Text(url.replacingOccurrences(of: "https://", with: ""))
+                        .font(.system(size: 13, weight: .medium))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(Color.calmAccent(for: scheme))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private var aboutDivider: some View {
+        Rectangle()
+            .fill(Color.calmDivider(for: scheme))
+            .frame(height: 1)
+            .padding(.leading, 14)
     }
 }
 
@@ -361,14 +522,13 @@ struct RecordingBannerWaveform: View {
     }
 }
 
-// MARK: - UsageView (Calm reskin)
+// MARK: - UsageView (Calm reskin — retained for Insights / compatibility)
 
 struct UsageView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 0) {
-            // Stat
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(UsageTracker.currentMonthCount)")
                     .font(.system(size: 48, weight: .semibold))
@@ -386,7 +546,6 @@ struct UsageView: View {
                 .fill(Color.calmDivider(for: scheme))
                 .frame(height: 1)
 
-            // Monthly breakdown
             let stats = UsageTracker.stats
             if stats.isEmpty {
                 VStack(spacing: 10) {
