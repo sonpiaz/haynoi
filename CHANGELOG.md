@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-06-12
+
+### Fixed
+- Dictation now starts the instant you press the key: the microphone engine
+  stays warm between dictations instead of cold-starting every time, so the
+  multi-second wait (especially on Bluetooth headsets) is gone.
+- Your first words are never clipped again — Haynoi keeps a 300ms pre-roll
+  from just before recording begins.
+- The start tone is honest now: it plays exactly when the microphone is
+  truly live. When you hear it, speak.
+- The hotkey hint showed "Option + Space"; recording is hold left Option
+  alone. The hint now reads "Left Option" (and haynoi.com says so too).
+
+### Changed
+- The recording waveform follows your real voice: still while you are
+  silent, moving while you speak — in both the floating orb and the menu
+  bar panel.
+- Text lands ~250ms faster when dictating into the app you are already in.
+
 ## [0.1.8] - 2026-06-11
 
 ### Added
