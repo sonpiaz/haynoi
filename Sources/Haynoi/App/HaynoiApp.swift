@@ -166,9 +166,11 @@ private struct MenuBarContent: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Color.calmLabel3(for: scheme))
             Spacer()
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 calmKey(hotkeySymbol)
-                calmKey("Space")
+                Text(hotkeyName)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.calmLabel3(for: scheme))
             }
         }
         .padding(.horizontal, 18)
@@ -195,6 +197,15 @@ private struct MenuBarContent: View {
         case "control": return "⌃"
         case "fn":      return "fn"
         default:        return "⌥"
+        }
+    }
+
+    private var hotkeyName: String {
+        switch hotkeyChoice {
+        case "command": return "Command"
+        case "control": return "Control"
+        case "fn":      return "Globe"
+        default:        return "Left Option"
         }
     }
 
