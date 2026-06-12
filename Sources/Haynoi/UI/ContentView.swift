@@ -24,7 +24,6 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var scheme
 
     @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
-    @State private var showClearConfirmation = false
 
     var mode: Mode = .history
 
@@ -376,15 +375,18 @@ struct HistoryRow: View {
             default:       return "\(secs / 3600) hr ago"
             }
         }
-        let timeFmt = DateFormatter()
-        timeFmt.dateFormat = "h:mm a"
         if cal.isDateInYesterday(entry.timestamp) {
-            return "Yesterday \(timeFmt.string(from: entry.timestamp))"
+            return "Yesterday \(Self.timeFmt.string(from: entry.timestamp))"
         }
-        let dayFmt = DateFormatter()
-        dayFmt.dateFormat = "MMM d"
-        return "\(dayFmt.string(from: entry.timestamp)) \(timeFmt.string(from: entry.timestamp))"
+        return "\(Self.dayFmt.string(from: entry.timestamp)) \(Self.timeFmt.string(from: entry.timestamp))"
     }
+
+    private static let timeFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f
+    }()
+    private static let dayFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
 
     private func detectLanguage(_ text: String) -> String {
         let viChars = CharacterSet(charactersIn: "àáảãạăắặằẵẳâấậầẫẩđèéẹẻẽêếệềễểìíịỉĩòóọỏõôốộồỗổơớợờỡởùúụủũưứựừữửỳýỵỷỹÀÁẢÃẠĂẮẶẰẴẲÂẤẬẦẪẨĐÈÉẸẺẼÊẾỆỀỄỂÌÍỊỈĨÒÓỌỎÕÔỐỘỒỖỔƠỚỢỜỠỞÙÚỤỦŨƯỨỰỪỮỬỲÝỴỶỸ")

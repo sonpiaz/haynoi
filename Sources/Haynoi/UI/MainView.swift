@@ -17,20 +17,22 @@ import SwiftUI
 // work. Engine wiring (AppState / BalanceManager / UsageTracker) unchanged.
 
 enum SidebarSection: String, CaseIterable, Identifiable {
-    case history = "History"
-    case recent  = "Recent"
-    case modes   = "Modes"
-    case about   = "About"
+    case history  = "History"
+    case insights = "Insights"
+    case recent   = "Recent"
+    case modes    = "Modes"
+    case about    = "About"
 
     var id: String { rawValue }
 
     /// SF Symbol mirroring the board's nav glyphs.
     var icon: String {
         switch self {
-        case .history: return "list.bullet"
-        case .recent:  return "clock"
-        case .modes:   return "lightbulb"
-        case .about:   return "info.circle"
+        case .history:  return "list.bullet"
+        case .insights: return "chart.bar"
+        case .recent:   return "clock"
+        case .modes:    return "lightbulb"
+        case .about:    return "info.circle"
         }
     }
 }
@@ -218,6 +220,9 @@ struct MainView: View {
                 switch section {
                 case .history:
                     ContentView(mode: .history)
+                        .environmentObject(state)
+                case .insights:
+                    InsightsView()
                         .environmentObject(state)
                 case .recent:
                     ContentView(mode: .recent)
@@ -470,7 +475,7 @@ private struct AboutPage: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Color.calmLabel3(for: scheme))
             Spacer()
-            Link(destination: URL(string: url)!) {
+            Link(destination: URL(string: url) ?? URL(string: "https://haynoi.com")!) {
                 HStack(spacing: 3) {
                     Text(url.replacingOccurrences(of: "https://", with: ""))
                         .font(.system(size: 13, weight: .medium))
