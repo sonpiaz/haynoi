@@ -4,7 +4,7 @@ Thanks for your interest in contributing to Haynoi!
 
 ## Reporting Issues
 
-- Use [GitHub Issues](https://github.com/sonpiaz/yap/issues) to report bugs
+- Use [GitHub Issues](https://github.com/sonpiaz/haynoi/issues) to report bugs
 - Include steps to reproduce, expected vs actual behavior, and your macOS version
 
 ## Submitting PRs
@@ -18,8 +18,8 @@ Thanks for your interest in contributing to Haynoi!
 ## Local Development
 
 ```bash
-git clone https://github.com/sonpiaz/yap.git
-cd yap
+git clone https://github.com/sonpiaz/haynoi.git
+cd haynoi
 brew install xcodegen
 make run
 ```
