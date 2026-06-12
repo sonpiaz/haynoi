@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-12
+
+### Changed
+- History rows are completely still now: no more layout shift on hover
+  and no language badge. Copy and Delete live in the right-click menu;
+  selecting text directly still works.
+
 ## [0.2.1] - 2026-06-12
 
 ### Changed
