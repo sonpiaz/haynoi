@@ -435,6 +435,8 @@ private struct AboutPage: View {
                     aboutDivider
                     aboutLinkRow("Website", url: "https://haynoi.com")
                     aboutDivider
+                    aboutLinkRow("Source", url: "https://github.com/sonpiaz/haynoi")
+                    aboutDivider
                     aboutLinkRow("Top up credits", url: "https://kymaapi.com")
                 }
                 .background(Color.calmSurface(for: scheme))
@@ -446,6 +448,11 @@ private struct AboutPage: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.calmLabel4(for: scheme))
                     .padding(.top, 16)
+
+                Text("Open source under the MIT license · © 2026 Affitor LLC")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
+                    .padding(.top, 4)
             }
             .frame(maxWidth: 480, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -35,7 +35,7 @@ Most dictation tools treat Vietnamese as an afterthought. **Haynoi is built for 
 ## How it works
 
 ```
-Hold ⌘  →  speak  →  release  →  text appears
+Hold ⌥  →  speak  →  release  →  text appears
 ```
 
 That's the whole product. A floating bar shows the waveform while you talk; a layered chord confirms start/stop.
@@ -51,7 +51,7 @@ That's the whole product. A floating bar shows the waveform while you talk; a la
 
 ## Features
 
-- **Push-to-talk** — hold `⌘` (or `⌥` / `⌃` / `fn`), release to transcribe
+- **Push-to-talk** — hold the left `⌥` Option key (or `⌘` / `⌃` / `fn`), release to transcribe
 - **Language preference** — auto-detect by default, or pin Tiếng Việt / English
 - **Your words are never lost** — if the network fails mid-transcription, the recording is saved locally and retried with one click
 - **Survives real life** — AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully instead of eating your dictation
@@ -79,9 +79,9 @@ make run
 
 First run, either way:
 
-1. The onboarding wizard walks you through Microphone, Accessibility, and Input Monitoring permissions
+1. The onboarding wizard walks you through Microphone and Accessibility permissions — that's all Haynoi needs
 2. Sign in with your [Kyma](https://kymaapi.com) account — free credit on signup, nothing to paste
-3. Hold `⌘`, say something, release — the guided first dictation shows you the loop
+3. Hold the left `⌥` Option key, say something, release — the guided first dictation shows you the loop
 
 ## Quality & cost
 
@@ -128,7 +128,7 @@ Sources/Haynoi/
 │   ├── KymaAuth.swift            — OAuth 2.0 + PKCE sign-in to Kyma
 │   └── KeychainStorage.swift     — Credential storage
 ├── Input/
-│   ├── HotkeyManager.swift       — Global hotkey via CGEventTap
+│   ├── HotkeyManager.swift       — Global hotkey via NSEvent monitors (Accessibility)
 │   └── TextInserter.swift        — AX API + clipboard text insertion
 ├── Transcription/
 │   ├── STTProvider.swift         — Kyma transcription (quality / fast tiers)
@@ -148,7 +148,7 @@ Sources/Haynoi/
 | Swift 5.9 + SwiftUI | App |
 | AVFoundation | Audio capture & sound synthesis |
 | [Kyma API](https://kymaapi.com) | Speech-to-text (`gpt-4o-mini-transcribe` / `whisper-v3-turbo`) and rewrite (`gemini-2.5-flash`) |
-| Accessibility API + CGEventTap | Text insertion + global hotkey |
+| Accessibility API + NSEvent | Text insertion + global hotkey (no Input Monitoring needed) |
 | [XcodeGen](https://github.com/yonaskolb/XcodeGen) | Project generation |
 
 ## Related
