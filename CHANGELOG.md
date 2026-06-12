@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-12
+
+### Changed
+- A new recording indicator: Trail — a Voice-Memos style scrolling
+  waveform where your last second of speech stays visible. Silence is a
+  flat line of dashes; the trail only ever moves with your voice.
+- A new default sound theme: Chime — a gentle bell pair on start and
+  stop. The previous themes are still available in Settings → Sounds.
+
+### Added
+- When your text lands, the indicator shows a small "N words" chip —
+  confirmation plus a tiny reward. A subtle chime plays with it; turn
+  either off in Settings → Sounds.
+
 ## [0.1.9] - 2026-06-12
 
 ### Fixed
