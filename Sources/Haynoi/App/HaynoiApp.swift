@@ -134,7 +134,7 @@ private struct MenuBarContent: View {
                     ))
                     .frame(width: 44, height: 44)
                     .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
-                CalmOrbBars(active: status == .recording || status == .transcribing)
+                CalmOrbBars(status: status, level: state.audioLevel)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -677,9 +677,23 @@ private extension Text {
 /// The aurora micro-waveform that sits inside the dark popover orb tile.
 /// Mirrors the board's three-bar orb. Saturated aurora gradient is sanctioned
 /// here — the orb is one of the four approved aurora surfaces.
+///
+/// Voice-reactive: in `.recording` the bar heights are driven by the live mic
+/// level (same RMS signal FloatingBar uses) with fast-attack / slow-release
+/// smoothing — silence sits low and still, speech rises. `.transcribing` shows
+/// a calm opacity shimmer (mic is off — no height bobbing, clearly NOT voice).
+/// Idle / other states render static bars.
 private struct CalmOrbBars: View {
-    let active: Bool
-    @State private var phase: Double = 0
+    let status: CalmStatus
+    let level: Float
+
+    // Smoothed mic level (fast attack ~50ms, slow release ~200ms at 60fps).
+    @State private var displayLevel: CGFloat = 0.04
+    // Calm shimmer used only while transcribing (opacity, not height).
+    @State private var shimmer: Double = 0
+    @State private var ticker: Timer?
+
+    private let baseHeights: [CGFloat] = [10, 16, 8]
 
     var body: some View {
         HStack(spacing: 3) {
@@ -691,22 +705,73 @@ private struct CalmOrbBars: View {
                         endPoint: .bottom
                     ))
                     .frame(width: 3, height: barHeight(i))
+                    .opacity(barOpacity)
             }
         }
         .frame(height: 18)
-        .onAppear {
-            guard active else { return }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                phase = 1
-            }
+        .onAppear { syncForStatus() }
+        .onChange(of: status) { _, _ in syncForStatus() }
+        .onChange(of: level) { _, newLevel in
+            // Drive the smoother off the live level only while recording.
+            guard status == .recording else { return }
+            let target = max(CGFloat(newLevel), 0.04)
+            let speed: CGFloat = target > displayLevel ? 0.33 : 0.085
+            displayLevel += (target - displayLevel) * speed
         }
+        .onDisappear { ticker?.invalidate(); ticker = nil }
     }
 
+    /// `.recording` → voice-driven heights; everything else → static base.
     private func barHeight(_ i: Int) -> CGFloat {
-        let base: [CGFloat] = [10, 16, 8]
-        guard active else { return base[i] * 0.6 }
-        let wobble = sin(Double(i) * 1.3 + phase * .pi) * 4
-        return base[i] + CGFloat(wobble)
+        guard status == .recording else { return baseHeights[i] * 0.6 }
+        let minH: CGFloat = 4
+        let maxH: CGFloat = 18
+        let amp = min(max(displayLevel, 0), 1)
+        // Per-bar shape so the three bars don't read as one block; amplitude is
+        // entirely from the mic — at silence amp≈0.04 → bars near the floor.
+        let shape: [CGFloat] = [0.7, 1.0, 0.55]
+        return minH + (maxH - minH) * amp * shape[i]
+    }
+
+    /// Transcribing → gentle opacity shimmer; otherwise fully opaque.
+    private var barOpacity: Double {
+        status == .transcribing ? 0.45 + shimmer * 0.45 : 1.0
+    }
+
+    /// React to state changes (fixes the old onAppear-only bug): recording
+    /// runs a 60fps decay ticker so the smoother keeps gliding down between
+    /// level updates; transcribing runs a calm opacity shimmer; idle is still.
+    private func syncForStatus() {
+        ticker?.invalidate(); ticker = nil
+
+        switch status {
+        case .recording:
+            // Decay ticker — eases displayLevel back toward the floor so the
+            // release tail is smooth even if the mic level updates sparsely.
+            shimmer = 0
+            let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in
+                Task { @MainActor in
+                    let floor: CGFloat = 0.04
+                    if displayLevel > floor {
+                        displayLevel += (floor - displayLevel) * 0.085
+                    }
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            ticker = timer
+
+        case .transcribing:
+            // Calm pulse — opacity only, no height bobbing. Mic is off here.
+            displayLevel = 0.04
+            shimmer = 0
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                shimmer = 1
+            }
+
+        default:
+            displayLevel = 0.04
+            shimmer = 0
+        }
     }
 }
 

@@ -177,8 +177,9 @@ struct FloatingBarView: View {
     private var recordingOrb: some View {
         TimelineView(.animation) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            // Mic-driven energy: idle bars still breathe, loud speech taller.
-            let energy = 0.4 + displayLevel * 0.6
+            // Voice IS the amplitude: silence → bars near-flat, speech → bars
+            // rise. No floor — `displayLevel` (smoothed mic RMS) is the driver.
+            let energy = displayLevel
 
             ZStack {
                 // Soft aurora glow behind everything — breathes with the voice.
@@ -224,19 +225,27 @@ struct FloatingBarView: View {
         }
     }
 
-    /// Height of bar `index` at time `t`, easing 7→24pt with a staggered phase.
+    /// Height of bar `index`. AMPLITUDE comes from `energy` (= displayLevel);
+    /// the time term is only a subtle ±12% per-bar shimmer so the bars don't
+    /// move in lockstep — it never bobs the bars on its own when energy is low.
     private func barHeight(index: Int, at t: Double, energy: CGFloat) -> CGFloat {
-        let cycle = 0.9                              // ~0.9s, matches the CSS bb2
+        let cycle = 0.9                              // ~0.9s ripple
         let delay = auroraBarDelays[index % auroraBarDelays.count]
         // Normalized phase in [0,1) for this bar, offset by its stagger delay.
         let p = ((t - delay) / cycle).truncatingRemainder(dividingBy: 1.0)
         let phase = p < 0 ? p + 1.0 : p
-        // ease-in-out 0→1→0 over the cycle (sine gives the smooth bounce).
+        // ease-in-out 0→1 over the cycle (subtle per-bar variation only).
         let eased = (1 - cos(phase * 2 * .pi)) / 2   // 0 at ends, 1 at mid
-        let minH: CGFloat = 7
+
+        let minH: CGFloat = 4                         // calm floor — silence sits low & still
         let maxH: CGFloat = 24
-        let span = (maxH - minH) * energy
-        return minH + span * CGFloat(eased)
+        // Voice drives the bulk of the height; the shimmer is weighted to ~12%
+        // and itself scales with energy so it vanishes at silence (no metronome).
+        let amp = min(max(energy, 0), 1)
+        let shimmer = 0.12 * amp * CGFloat(eased)
+        let drive = amp * 0.88 + shimmer
+        let span = (maxH - minH) * drive
+        return minH + span
     }
 
     /// One expanding ring: scale 0.9→2.1, opacity .55→0 over `cycle` seconds.
@@ -458,18 +467,27 @@ struct FloatingBarView: View {
             Task { @MainActor [self] in
                 guard state.orbState == .recording else { return }
 
-                let rawLevel = CGFloat(max(state.audioLevel, 0.03))
+                // Raw mic level with a tiny floor so the orb never reads as 0
+                // (silence still shows a low, *still* bar — not a flat line).
+                let rawLevel = CGFloat(max(state.audioLevel, 0.0))
                 levelHistory.append(rawLevel)
                 if levelHistory.count > 6 { levelHistory.removeFirst() }
 
+                // Short weighted-average so the input isn't jittery, but stays
+                // responsive — recent frames dominate.
                 let weights: [CGFloat] = [0.05, 0.08, 0.12, 0.15, 0.25, 0.35]
                 var smoothed: CGFloat = 0
                 for (i, w) in weights.enumerated() {
                     if i < levelHistory.count { smoothed += levelHistory[i] * w }
                 }
 
-                let target = max(smoothed, 0.05)
-                let speed: CGFloat = target > displayLevel ? 0.35 : 0.12
+                // Calm resting floor — silence parks at ~0.04 (≈5pt bars).
+                let target = max(smoothed, 0.04)
+                // Fast attack (~50ms to ~63%), slower graceful release (~200ms)
+                // so speech onset is instant and decay glides down, never bobs.
+                let attack: CGFloat = 0.33   // up
+                let release: CGFloat = 0.085 // down
+                let speed = target > displayLevel ? attack : release
                 displayLevel += (target - displayLevel) * speed
 
                 phase += 0.04 + Double(displayLevel) * 0.08
