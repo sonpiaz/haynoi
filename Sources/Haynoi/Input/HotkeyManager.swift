@@ -177,6 +177,11 @@ final class HotkeyManager {
                     if secureInput != AppState.shared.secureInputActive {
                         if secureInput {
                             NSLog("[Haynoi] Secure event input is active — recordings will be blocked")
+                            // NSEvent monitors silently stop delivering during
+                            // secure input (the old tap got an explicit disable
+                            // event); a release may be missed, so resync now to
+                            // clear any stuck modifier state.
+                            self.resyncModifierState()
                         }
                         AppState.shared.secureInputActive = secureInput
                     }
