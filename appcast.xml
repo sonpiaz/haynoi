@@ -6,6 +6,36 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.0</title>
+            <pubDate>Fri, 12 Jun 2026 23:09:04 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.0</h2>
+
+<h3>Changed</h3>
+<ul>
+<li>A new recording indicator: Trail — a Voice-Memos style scrolling</li>
+</ul>
+<p>  waveform where your last second of speech stays visible. Silence is a</p>
+<p>  flat line of dashes; the trail only ever moves with your voice.</p>
+<ul>
+<li>A new default sound theme: Chime — a gentle bell pair on start and</li>
+</ul>
+<p>  stop. The previous themes are still available in Settings → Sounds.</p>
+
+<h3>Added</h3>
+<ul>
+<li>When your text lands, the indicator shows a small "N words" chip —</li>
+</ul>
+<p>  confirmation plus a tiny reward. A subtle chime plays with it; turn</p>
+<p>  either off in Settings → Sounds.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.0/Haynoi-0.2.0-universal.zip" length="2865877" type="application/octet-stream" sparkle:edSignature="W15Z39DiVx7Y3mXBM0+xsJ8y3ABLv+rCUpjHDk3NGyp84+jDx60bpk0NC+agfNbGI8xGxKc2AXwcMBZRBefKCw=="/>
+        </item>
+        <item>
             <title>0.1.9</title>
             <pubDate>Fri, 12 Jun 2026 22:05:52 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -78,28 +108,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.8/Haynoi-0.1.8-universal.zip" length="2769084" type="application/octet-stream" sparkle:edSignature="I/qbReR1Ioswe3Oz9DDGdrI/9o+A22fDwx/13wR3QznBf7dJA2NL9yB+kEhFe7jKeyQgf/2YR+qIp2xCuqWlBA=="/>
-        </item>
-        <item>
-            <title>0.1.7</title>
-            <pubDate>Fri, 12 Jun 2026 03:43:20 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>8</sparkle:version>
-            <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.1.7</h2>
-
-<h3>Fixed</h3>
-<ul>
-<li>The listening orb now appears the instant you hold the key, so you can see</li>
-</ul>
-<p>  Haynoi is hearing you — previously it only showed up after you finished.</p>
-<ul>
-<li>Removed the extra "done" sound after transcription; releasing the key now</li>
-</ul>
-<p>  plays a single tone instead of two.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.7/Haynoi-0.1.7-universal.zip" length="2762853" type="application/octet-stream" sparkle:edSignature="a+1XV+nb27qvpV44mzXEsxJSL+1XFo+cg037LguwZyJiddWCLNQvKox0htnWOqzwf7acprV++mMr0JOVB9u9Ag=="/>
         </item>
     </channel>
 </rss>
