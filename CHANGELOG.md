@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-06-12
+
+### Fixed
+- The app no longer feels sluggish after dictating: an internal audio
+  level signal kept re-rendering the interface ~47 times a second for a
+  minute after each dictation. Scrolling, switching sections, and the
+  menu bar panel are smooth again.
+- Long histories scroll smoothly — rows are now built only as they come
+  into view.
+
+### Changed
+- The copy button is back on every history row — always visible, and the
+  row never shifts. Delete stays in the right-click menu.
+- Removed the Recent section — it duplicated History.
+
 ## [0.2.2] - 2026-06-12
 
 ### Changed
