@@ -10,16 +10,18 @@ import UniformTypeIdentifiers
 //   • Calm tokens only (no Mercury serif / parchment).
 //   • SINGLE accent indigo for CTA + selection. The aurora gradient appears
 //     only on the app-icon chip + the recording orb in the mic-test step.
-//   • Split-screen SPATIAL TEACHING (Cluely pattern) for Input Monitoring +
-//     Accessibility: LEFT = permission cards, RIGHT = a SwiftUI-drawn facsimile
-//     of the macOS Privacy & Security pane with a synthetic cursor that
-//     demonstrates flipping the exact Haynoi toggle — before the real pane
+//   • Split-screen SPATIAL TEACHING (Cluely pattern) for Accessibility — the
+//     only list-pane permission Haynoi needs now that hotkey detection uses
+//     NSEvent monitors (which also gate on Accessibility), so Input Monitoring
+//     is gone entirely. LEFT = permission cards, RIGHT = a SwiftUI-drawn
+//     facsimile of the macOS Privacy & Security pane with a synthetic cursor
+//     that demonstrates flipping the exact Haynoi toggle — before the real pane
 //     (still deep-linked) appears.
 //   • superwhisper MIC-TEST step: live waveform that rises with the voice.
 //   • superwhisper HOTKEY-TEST step: a key graphic that lights up on press.
 //   • AX-TRUST-STALE fallback: if the toggle reads ON in Settings but
-//     AXIsProcessTrusted()/CGPreflightListenEventAccess() still returns false
-//     after ~10s, surface a "Relaunch Haynoi" button.
+//     AXIsProcessTrusted() still returns false after ~10s, surface a
+//     "Relaunch Haynoi" button.
 //
 // The real drag mechanism (NSDraggingSession in BundleDragSourceView, working
 // since 0.1.2) is unchanged — only re-dressed inside the calm split-screen.
@@ -30,7 +32,6 @@ enum OnboardingStep: Int, CaseIterable {
     case welcome = 0
     case microphone
     case micTest
-    case inputMonitoring
     case accessibility
     case hotkeyTest
     case signIn
@@ -45,7 +46,9 @@ enum OnboardingStep: Int, CaseIterable {
     var progressIndex: Int { rawValue - 1 }
 
     /// Whether this step uses drag-grant choreography + the wide split-screen.
-    var isDragStep: Bool { self == .inputMonitoring || self == .accessibility }
+    /// Accessibility is now the only list-pane permission (Input Monitoring was
+    /// removed once hotkey detection moved to NSEvent monitors).
+    var isDragStep: Bool { self == .accessibility }
 
     /// The wide split-screen teaching steps need a wider window.
     var isWide: Bool { isDragStep }
@@ -66,7 +69,6 @@ struct OnboardingView: View {
     @State private var step: OnboardingStep
     @State private var micGranted = false
     @State private var axGranted = false
-    @State private var inputGranted = false
     @State private var hotkeyArmFailed = false
     @State private var pollTimer: Timer?
 
@@ -79,21 +81,15 @@ struct OnboardingView: View {
     @State private var trialText = ""
     @State private var trialCelebrating = false
 
-    // Drag-grant step state
-    @State private var imChipState: DragChipState = .idle
+    // Drag-grant step state (Accessibility — the only list-pane permission now)
     @State private var axChipState: DragChipState = .idle
-    @State private var imFallbackVisible = false
     @State private var axFallbackVisible = false
-    @State private var imFallbackTimer: Timer?
     @State private var axFallbackTimer: Timer?
-    @State private var imSettingsOpenTask: DispatchWorkItem?
     @State private var axSettingsOpenTask: DispatchWorkItem?
 
     // AX-trust-stale fallback (the real founder bug): toggle ON in Settings but
     // the running process still reads untrusted after ~10s of polling.
-    @State private var imStaleSince: Date?
     @State private var axStaleSince: Date?
-    @State private var imRelaunchNudge = false
     @State private var axRelaunchNudge = false
 
     // Window choreography state
@@ -130,8 +126,6 @@ struct OnboardingView: View {
     static func resumeStep() -> OnboardingStep {
         let micOK = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         guard micOK else { return .microphone }
-        let imOK = CGPreflightListenEventAccess()
-        guard imOK else { return .inputMonitoring }
         let axOK = AXIsProcessTrusted()
         guard axOK else { return .accessibility }
         let signedIn = AuthState.shared.signedInEmail != nil
@@ -219,8 +213,8 @@ struct OnboardingView: View {
 
             // RIGHT — rendered macOS System Settings facsimile + synthetic cursor
             SystemSettingsFacsimile(
-                highlight: step == .inputMonitoring ? .inputMonitoring : .accessibility,
-                granted: step == .inputMonitoring ? inputGranted : axGranted
+                highlight: .accessibility,
+                granted: axGranted
             )
             .frame(maxWidth: .infinity)
             .background(Color.calmSubtle(for: scheme))
@@ -262,8 +256,7 @@ struct OnboardingView: View {
         case .welcome:         return "Welcome to Haynoi"
         case .microphone:      return "Allow Microphone Access"
         case .micTest:         return "Test Your Microphone"
-        case .inputMonitoring: return "Two quick permissions"
-        case .accessibility:   return "Two quick permissions"
+        case .accessibility:   return "One last permission"
         case .hotkeyTest:      return "Try Your Hotkey"
         case .signIn:          return "Connect Your Account"
         case .tryIt:           return "Try Your First Dictation"
@@ -334,17 +327,17 @@ struct OnboardingView: View {
         .padding(.horizontal, 32)
     }
 
-    // MARK: - Step D: Input Monitoring teaching panel (LEFT of split-screen)
+    // MARK: - Step D: Accessibility teaching panel (LEFT of split-screen)
 
     private var permissionTeachingPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header inside the left panel (board shows a left-aligned title)
             VStack(alignment: .leading, spacing: 6) {
                 appIconBadge(size: 36)
-                Text("Two quick permissions")
+                Text("One last permission")
                     .font(.calmTitle)
                     .foregroundStyle(Color.calmLabel(for: scheme))
-                Text("Haynoi needs your microphone to hear you, and the ability to type into other apps. That's it — no screen access, no files.")
+                Text("Haynoi needs the ability to type into other apps and detect your hotkey. That's it — no screen access, no files.")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.calmLabel3(for: scheme))
                     .lineSpacing(2)
@@ -362,15 +355,9 @@ struct OnboardingView: View {
                     state: .granted
                 )
                 permissionCard(
-                    icon: "keyboard",
-                    title: "Input Monitoring",
-                    subtitle: "To detect your hotkey while in other apps",
-                    state: cardState(for: .inputMonitoring)
-                )
-                permissionCard(
                     icon: "hand.raised",
                     title: "Accessibility",
-                    subtitle: "To insert your spoken words into any app",
+                    subtitle: "To detect your hotkey and type your words into any app",
                     state: cardState(for: .accessibility)
                 )
             }
@@ -379,7 +366,7 @@ struct OnboardingView: View {
             if !currentDragGranted {
                 VStack(alignment: .center, spacing: 8) {
                     AppIconDragChipView(
-                        chipState: step == .inputMonitoring ? $imChipState : $axChipState,
+                        chipState: $axChipState,
                         scheme: scheme,
                         onDragEnd: { resetFallbackTimer(for: step) }
                     )
@@ -586,8 +573,7 @@ struct OnboardingView: View {
     enum CardState { case granted, active, next }
 
     private func cardState(for target: OnboardingStep) -> CardState {
-        let granted = target == .inputMonitoring ? inputGranted : axGranted
-        if granted { return .granted }
+        if axGranted { return .granted }
         return step == target ? .active : .next
     }
 
@@ -716,38 +702,26 @@ struct OnboardingView: View {
     }
 
     // MARK: - Current-step accessors (split-screen)
+    //
+    // Accessibility is the only drag step now, so these read the ax* state
+    // directly. The hotkey is armed once Accessibility is granted, so the
+    // hotkey-arm failure also surfaces on this step.
 
-    private var currentChipState: DragChipState {
-        step == .inputMonitoring ? imChipState : axChipState
-    }
-    private var currentDragGranted: Bool {
-        step == .inputMonitoring ? inputGranted : axGranted
-    }
-    private var currentFallbackVisible: Bool {
-        step == .inputMonitoring ? imFallbackVisible : axFallbackVisible
-    }
-    private var currentRelaunchNudge: Bool {
-        if step == .inputMonitoring { return imRelaunchNudge || hotkeyArmFailed }
-        return axRelaunchNudge
-    }
-    private var currentStaleNudge: Bool {
-        step == .inputMonitoring ? imRelaunchNudge : axRelaunchNudge
-    }
+    private var currentChipState: DragChipState { axChipState }
+    private var currentDragGranted: Bool { axGranted }
+    private var currentFallbackVisible: Bool { axFallbackVisible }
+    private var currentRelaunchNudge: Bool { axRelaunchNudge || hotkeyArmFailed }
+    private var currentStaleNudge: Bool { axRelaunchNudge }
     private var currentFallbackInstructions: String {
-        step == .inputMonitoring
-        ? "Open System Settings → Privacy & Security → Input Monitoring. Click +, navigate to your Applications folder, select Haynoi, then enable the toggle."
-        : "Open System Settings → Privacy & Security → Accessibility. Click +, navigate to your Applications folder, select Haynoi, then enable the toggle."
+        "Open System Settings → Privacy & Security → Accessibility. Click +, navigate to your Applications folder, select Haynoi, then enable the toggle."
     }
 
     private func revealFallback(for s: OnboardingStep) {
-        if s == .inputMonitoring { imFallbackVisible = true } else { axFallbackVisible = true }
+        axFallbackVisible = true
     }
 
     private func reopenCurrentPane() {
-        let urlString = step == .inputMonitoring
-        ? "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-        : "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        reopenPane(urlString)
+        reopenPane("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
     }
 
     // MARK: - Calm primitives
@@ -858,51 +832,28 @@ struct OnboardingView: View {
     }
 
     private func enterDragStep(_ dragStep: OnboardingStep) {
-        let paneURL: String
-        switch dragStep {
-        case .inputMonitoring:
-            paneURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-            imChipState = .idle
-            imFallbackVisible = false
-            imStaleSince = nil
-            imRelaunchNudge = false
-            cancelFallbackTimer(for: .inputMonitoring)
-            startFallbackTimer(for: .inputMonitoring)
-            imSettingsOpenTask?.cancel()
-            let task = DispatchWorkItem {
-                guard let url = URL(string: paneURL) else { return }
-                NSWorkspace.shared.open(url)
-                NSLog("[Haynoi] Onboarding: opened pane %@", paneURL)
-            }
-            imSettingsOpenTask = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: task)
-        case .accessibility:
-            paneURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-            axChipState = .idle
-            axFallbackVisible = false
-            axStaleSince = nil
-            axRelaunchNudge = false
-            cancelFallbackTimer(for: .accessibility)
-            startFallbackTimer(for: .accessibility)
-            axSettingsOpenTask?.cancel()
-            let task = DispatchWorkItem {
-                guard let url = URL(string: paneURL) else { return }
-                NSWorkspace.shared.open(url)
-                NSLog("[Haynoi] Onboarding: opened pane %@", paneURL)
-            }
-            axSettingsOpenTask = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: task)
-        default:
-            return
+        guard dragStep == .accessibility else { return }
+        let paneURL = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        axChipState = .idle
+        axFallbackVisible = false
+        axStaleSince = nil
+        axRelaunchNudge = false
+        cancelFallbackTimer(for: .accessibility)
+        startFallbackTimer(for: .accessibility)
+        axSettingsOpenTask?.cancel()
+        let task = DispatchWorkItem {
+            guard let url = URL(string: paneURL) else { return }
+            NSWorkspace.shared.open(url)
+            NSLog("[Haynoi] Onboarding: opened pane %@", paneURL)
         }
+        axSettingsOpenTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: task)
 
         raiseWindowLevel()
     }
 
     private func leaveDragStep() {
-        cancelFallbackTimer(for: .inputMonitoring)
         cancelFallbackTimer(for: .accessibility)
-        imSettingsOpenTask?.cancel()
         axSettingsOpenTask?.cancel()
         restoreWindowLevel()
     }
@@ -949,33 +900,18 @@ struct OnboardingView: View {
     // MARK: - Fallback Timer (D4)
 
     private func startFallbackTimer(for timerStep: OnboardingStep) {
-        let timer = Timer.scheduledTimer(withTimeInterval: 25.0, repeats: false) { _ in
+        guard timerStep == .accessibility else { return }
+        axFallbackTimer = Timer.scheduledTimer(withTimeInterval: 25.0, repeats: false) { _ in
             DispatchQueue.main.async {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    switch timerStep {
-                    case .inputMonitoring: imFallbackVisible = true
-                    case .accessibility:   axFallbackVisible = true
-                    default: break
-                    }
-                }
+                withAnimation(.easeInOut(duration: 0.25)) { axFallbackVisible = true }
                 NSLog("[Haynoi] Onboarding: 25s fallback revealed")
             }
-        }
-        switch timerStep {
-        case .inputMonitoring: imFallbackTimer = timer
-        case .accessibility:   axFallbackTimer = timer
-        default: break
         }
     }
 
     private func cancelFallbackTimer(for timerStep: OnboardingStep) {
-        switch timerStep {
-        case .inputMonitoring:
-            imFallbackTimer?.invalidate(); imFallbackTimer = nil
-        case .accessibility:
-            axFallbackTimer?.invalidate(); axFallbackTimer = nil
-        default: break
-        }
+        guard timerStep == .accessibility else { return }
+        axFallbackTimer?.invalidate(); axFallbackTimer = nil
     }
 
     private func resetFallbackTimer(for timerStep: OnboardingStep) {
@@ -1043,10 +979,9 @@ struct OnboardingView: View {
 
     private func refreshPermissions() {
         micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        // Non-prompting variants (F1.7 / D3): never call CGRequestListenEventAccess()
-        // or AXIsProcessTrustedWithOptions(prompt:true) on these steps.
+        // Non-prompting variant (F1.7 / D3): never call
+        // AXIsProcessTrustedWithOptions(prompt:true) on these steps.
         axGranted = AXIsProcessTrusted()
-        inputGranted = CGPreflightListenEventAccess()
     }
 
     private func checkDenied(for icon: String) -> Bool {
@@ -1061,24 +996,17 @@ struct OnboardingView: View {
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
             DispatchQueue.main.async {
-                let wasInputGranted = inputGranted
                 let wasAxGranted = axGranted
                 refreshPermissions()
 
-                let inputJustGranted = !wasInputGranted && inputGranted
                 let axJustGranted = !wasAxGranted && axGranted
 
                 // AX-trust-stale detection (real founder bug): we can't read the
                 // System-Settings toggle directly, but if the user has spent a
-                // long time on a drag step without the process flipping to
+                // long time on the drag step without the process flipping to
                 // trusted, surface the Relaunch nudge after the threshold. The
                 // chip-waiting state (drag landed, switch likely flipped) is the
                 // signal that the user has acted but the process hasn't updated.
-                evaluateStaleGrant(for: .inputMonitoring,
-                                   granted: inputGranted,
-                                   chip: imChipState,
-                                   since: &imStaleSince,
-                                   nudge: &imRelaunchNudge)
                 evaluateStaleGrant(for: .accessibility,
                                    granted: axGranted,
                                    chip: axChipState,
@@ -1087,14 +1015,6 @@ struct OnboardingView: View {
 
                 if step == .microphone && micGranted {
                     withAnimation { advance() }
-                } else if step == .inputMonitoring && inputGranted {
-                    if inputJustGranted && UserDefaults.standard.bool(forKey: "soundEnabled") {
-                        SoundFeedback.shared.playSuccessTone()
-                    }
-                    withAnimation { imChipState = .granted; imRelaunchNudge = false }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                        withAnimation { advance() }
-                    }
                 } else if step == .accessibility && axGranted {
                     if axJustGranted && UserDefaults.standard.bool(forKey: "soundEnabled") {
                         SoundFeedback.shared.playSuccessTone()
@@ -1105,8 +1025,11 @@ struct OnboardingView: View {
                     }
                 }
 
-                // Arm hotkey once Input Monitoring flips to granted (preserved).
-                if inputJustGranted {
+                // Arm the hotkey once Accessibility flips to granted — the
+                // NSEvent monitors gate on Accessibility, so this is where the
+                // push-to-talk detector comes alive (no separate Input
+                // Monitoring grant, no relaunch).
+                if axJustGranted {
                     let armed = HotkeyManager.shared.start()
                     NSLog("[Haynoi] Onboarding: hotkey arm after grant = %d", armed ? 1 : 0)
                     if !armed { hotkeyArmFailed = true }
@@ -1182,12 +1105,12 @@ struct CalmButtonStyle: ButtonStyle {
 // A SwiftUI-drawn likeness of the macOS Privacy & Security pane (NOT a
 // screenshot). A synthetic cursor glides to the relevant Haynoi toggle and
 // "flips" it on a loop — teaching the spatial action before the real pane is in
-// focus. The highlighted section (Input Monitoring / Accessibility) tracks the
-// current step; once truly granted, the demo toggle settles green and the
-// cursor rests.
+// focus. The highlighted section is Accessibility (the only list-pane
+// permission Haynoi needs); once truly granted, the demo toggle settles green
+// and the cursor rests.
 
 struct SystemSettingsFacsimile: View {
-    enum Highlight { case inputMonitoring, accessibility }
+    enum Highlight { case accessibility }
 
     let highlight: Highlight
     let granted: Bool
@@ -1305,14 +1228,6 @@ struct SystemSettingsFacsimile: View {
                 toggleRow(app: "Haynoi", on: true, isTeachingTarget: false)
             }
 
-            // INPUT MONITORING
-            settingsGroup(label: "INPUT MONITORING",
-                          highlighted: highlight == .inputMonitoring) {
-                toggleRow(app: "Haynoi",
-                          on: highlight == .inputMonitoring ? (granted || demoOn) : false,
-                          isTeachingTarget: highlight == .inputMonitoring)
-            }
-
             // ACCESSIBILITY
             settingsGroup(label: "ACCESSIBILITY",
                           highlighted: highlight == .accessibility) {
@@ -1414,11 +1329,12 @@ struct SystemSettingsFacsimile: View {
     // Approximate on-screen position of the teaching toggle within the facsimile.
     private var cursorTargetX: CGFloat {
         // Right pane starts at ~151pt; toggles sit near the right edge.
-        highlight == .inputMonitoring ? 470 : 470
+        470
     }
     private var cursorTargetY: CGFloat {
-        // Input Monitoring group sits higher than Accessibility.
-        highlight == .inputMonitoring ? 195 : 270
+        // Accessibility group now sits just below MICROPHONE (Input Monitoring
+        // group removed), so the teaching toggle is higher than before.
+        210
     }
 
     private func startLoop() {
@@ -1598,9 +1514,9 @@ struct MicTestView: View {
 // MARK: - Hotkey Test (superwhisper-style key graphic that lights on press)
 
 /// Shows the chosen hotkey as a key graphic that lights up while the modifier is
-/// held. Uses a local NSEvent monitor (Input Monitoring is granted by now).
-/// "Change shortcut" is inline (writes the same `hotkeyChoice` AppStorage key
-/// SettingsView owns).
+/// held. Uses a local NSEvent monitor (Accessibility is granted by now, which is
+/// what HotkeyManager's global monitors also gate on). "Change shortcut" is
+/// inline (writes the same `hotkeyChoice` AppStorage key SettingsView owns).
 
 struct HotkeyTestView: View {
     let scheme: ColorScheme
@@ -2065,13 +1981,7 @@ struct DragGrantSheetHost: View {
     }
 
     private func beginSheet() {
-        let alreadyGranted: Bool
-        switch permissionType {
-        case .inputMonitoring: alreadyGranted = CGPreflightListenEventAccess()
-        case .accessibility:   alreadyGranted = AXIsProcessTrusted()
-        }
-
-        if alreadyGranted {
+        if AXIsProcessTrusted() {
             withAnimation { granted = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { isPresented = false }
             return
@@ -2091,11 +2001,7 @@ struct DragGrantSheetHost: View {
 
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
             DispatchQueue.main.async {
-                let nowGranted: Bool
-                switch permissionType {
-                case .inputMonitoring: nowGranted = CGPreflightListenEventAccess()
-                case .accessibility:   nowGranted = AXIsProcessTrusted()
-                }
+                let nowGranted = AXIsProcessTrusted()
 
                 // AX-trust-stale fallback: user acted (chip waiting) but the
                 // process still reads not-granted after the threshold.
@@ -2114,10 +2020,10 @@ struct DragGrantSheetHost: View {
                 if UserDefaults.standard.bool(forKey: "soundEnabled") {
                     SoundFeedback.shared.playSuccessTone()
                 }
-                if case .inputMonitoring = permissionType {
-                    let armed = HotkeyManager.shared.start()
-                    NSLog("[Haynoi] Settings Fix sheet: hotkey arm = %d", armed ? 1 : 0)
-                }
+                // Accessibility now gates the hotkey too — arm the NSEvent
+                // monitors as soon as it flips to granted.
+                let armed = HotkeyManager.shared.start()
+                NSLog("[Haynoi] Settings Fix sheet: hotkey arm = %d", armed ? 1 : 0)
                 withAnimation { granted = true; relaunchNudge = false }
                 pollTimer?.invalidate()
                 fallbackTimer?.invalidate()
@@ -2127,44 +2033,27 @@ struct DragGrantSheetHost: View {
     }
 }
 
-// MARK: - DragGrantPermissionType (shared between onboarding and settings sheet)
+// MARK: - DragGrantPermissionType (Settings → Permissions Fix sheet)
+//
+// Accessibility is the only list-pane permission Haynoi needs (Input Monitoring
+// was removed once hotkey detection moved to NSEvent monitors). The enum stays
+// as a small abstraction so the sheet host's copy/URLs live in one place.
 
 enum DragGrantPermissionType {
-    case inputMonitoring
     case accessibility
 
     var paneURL: String {
-        switch self {
-        case .inputMonitoring:
-            return "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
-        case .accessibility:
-            return "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-        }
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
     }
 
-    var title: String {
-        switch self {
-        case .inputMonitoring: return "Input Monitoring"
-        case .accessibility:   return "Accessibility"
-        }
-    }
+    var title: String { "Accessibility" }
 
     var body: String {
-        switch self {
-        case .inputMonitoring:
-            return "Drag the Haynoi icon into the Input Monitoring list — or if it is already listed, just flip the switch."
-        case .accessibility:
-            return "Drag the Haynoi icon into the Accessibility list — or if it is already listed, just flip the switch."
-        }
+        "Drag the Haynoi icon into the Accessibility list — or if it is already listed, just flip the switch."
     }
 
     var fallbackInstructions: String {
-        switch self {
-        case .inputMonitoring:
-            return "Open System Settings → Privacy & Security → Input Monitoring. Click the + button, navigate to your Applications folder, and select Haynoi. Then enable it with the toggle."
-        case .accessibility:
-            return "Open System Settings → Privacy & Security → Accessibility. Click the + button, navigate to your Applications folder, and select Haynoi. Then enable it with the toggle."
-        }
+        "Open System Settings → Privacy & Security → Accessibility. Click the + button, navigate to your Applications folder, and select Haynoi. Then enable it with the toggle."
     }
 }
 

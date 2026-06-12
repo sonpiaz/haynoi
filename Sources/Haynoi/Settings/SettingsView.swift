@@ -433,11 +433,9 @@ private struct AccountTab: View {
 private struct PermissionsTab: View {
     @State private var micPermission = false
     @State private var axPermission = false
-    @State private var inputMonitoring = false
 
     // Fix sheet state (D8 / D26) — replaces the old prompting calls
     @State private var showAxFixSheet = false
-    @State private var showImFixSheet = false
 
     var body: some View {
         Form {
@@ -454,11 +452,14 @@ private struct PermissionsTab: View {
                     }
                 }
 
-                // Accessibility: drag-grant sheet instead of the old prompting call (D8)
+                // Accessibility: drag-grant sheet instead of the old prompting call (D8).
+                // This single permission now covers both typing transcribed text
+                // AND detecting the push-to-talk hotkey (NSEvent monitors gate on
+                // Accessibility), so Input Monitoring is no longer required.
                 dragPermissionRow(
                     "Accessibility",
                     icon: "hand.raised.fill",
-                    description: "Required to type into other apps.",
+                    description: "Required to detect the hotkey and type into other apps.",
                     granted: axPermission,
                     showSheet: $showAxFixSheet
                 )
@@ -466,21 +467,6 @@ private struct PermissionsTab: View {
                     DragGrantSheetHost(
                         permissionType: .accessibility,
                         isPresented: $showAxFixSheet
-                    )
-                }
-
-                // Input Monitoring: drag-grant sheet instead of just opening Settings (D8)
-                dragPermissionRow(
-                    "Input Monitoring",
-                    icon: "keyboard.fill",
-                    description: "Required to detect the hotkey.",
-                    granted: inputMonitoring,
-                    showSheet: $showImFixSheet
-                )
-                .sheet(isPresented: $showImFixSheet, onDismiss: refreshPermissions) {
-                    DragGrantSheetHost(
-                        permissionType: .inputMonitoring,
-                        isPresented: $showImFixSheet
                     )
                 }
             }
@@ -519,7 +505,7 @@ private struct PermissionsTab: View {
         }
     }
 
-    // Drag-grant row for Input Monitoring and Accessibility (D8)
+    // Drag-grant row for Accessibility (D8)
     @ViewBuilder
     private func dragPermissionRow(
         _ title: String,
@@ -550,9 +536,8 @@ private struct PermissionsTab: View {
 
     private func refreshPermissions() {
         micPermission = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        // Non-prompting variants — no pre-registration (F1.7)
+        // Non-prompting variant — no pre-registration (F1.7)
         axPermission = AXIsProcessTrusted()
-        inputMonitoring = CGPreflightListenEventAccess()
     }
 }
 

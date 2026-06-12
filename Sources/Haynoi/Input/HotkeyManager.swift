@@ -1,28 +1,45 @@
 import Carbon
 import Cocoa
-import CoreGraphics
 
-/// Detects modifier-only hold (default: ⌘ Command) via listenOnly CGEventTap.
+/// Detects modifier-only hold (default: ⌘ Command) via NSEvent global + local
+/// monitors.
 ///
 /// Key insight from Wispr Flow: when modifier is held past the grace period,
 /// ALWAYS activate — even if other keys were pressed during the grace period.
 /// The user pressed Cmd+T (shortcut) then kept holding Cmd to dictate.
 /// Both the shortcut AND dictation should work.
 ///
-/// Uses .listenOnly tap (not active) for maximum compatibility with macOS
-/// permission system. Events pass through to apps normally.
+/// Mechanism (engine change): we no longer use a CGEventTap (which required the
+/// Input Monitoring TCC grant + a relaunch after granting). Instead we use:
+///   • a GLOBAL monitor (NSEvent.addGlobalMonitorForEvents) — fires for events
+///     in OTHER apps. This is the primary path: the user dictates while focused
+///     in another app.
+///   • a LOCAL monitor (NSEvent.addLocalMonitorForEvents) returning the event
+///     unchanged — so the modifier is also detected when Haynoi itself is
+///     frontmost.
+/// Both monitors are passive observers; they never consume or modify events, so
+/// shortcuts (Cmd+T etc.) pass through normally and the user gets both the
+/// shortcut AND dictation.
 ///
-/// Fix #1: start() now returns Bool and tracks `isActive` state. When Input
-/// Monitoring is not yet granted, a retry loop fires every 2.5s and also
-/// re-arms on NSApplication.didBecomeActiveNotification so grant-then-switch-
-/// back works without a manual relaunch.
+/// Permission: NSEvent global keyboard monitors require the app to be trusted
+/// for Accessibility (AXIsProcessTrusted()). Haynoi already requests
+/// Accessibility for typing transcribed text, so this removes the separate
+/// Input Monitoring permission entirely. The retry loop (every 2.5s + re-arm on
+/// NSApplication.didBecomeActiveNotification) arms the monitors once
+/// Accessibility is granted — no relaunch needed.
 ///
-/// Fix #5: After re-enabling a disabled tap and after the 3s watchdog fires,
-/// we resync isModifierDown against the real hardware key state. If the target
+/// Fix #1: start() returns Bool and tracks `isActive` state. When Accessibility
+/// is not yet granted, a retry loop fires every 2.5s and also re-arms on
+/// NSApplication.didBecomeActiveNotification so grant-then-switch-back works
+/// without a manual relaunch.
+///
+/// Fix #5: On NSApplication.didBecomeActiveNotification we resync isModifierDown
+/// against the real hardware key state (NSEvent.modifierFlags). If the target
 /// modifier is no longer physically down, we run the release path to end any
-/// stuck recording. The watchdog also checks for secure event input (via the
-/// public Carbon API IsSecureEventInputEnabled()) and sets a flag so
-/// preRecording can reject silently.
+/// stuck recording (e.g. a release event missed while another app was frontmost
+/// and the global monitor was throttled). We also check secure event input (via
+/// the public Carbon API IsSecureEventInputEnabled()) so preRecording can reject
+/// silently.
 
 final class HotkeyManager {
     static let shared = HotkeyManager()
@@ -32,18 +49,25 @@ final class HotkeyManager {
     var onKeyUp: (() -> Void)?
     var onCancelled: (() -> Void)?
 
+    /// Public API kept as CGEventFlags so SettingsView's hotkey picker keeps
+    /// working unchanged. Internally we translate to NSEvent.ModifierFlags.
     var targetModifier: CGEventFlags = .maskCommand
 
     /// Grace period — if modifier held longer than this, activate.
     private let activationDelay: TimeInterval = 0.20
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    private var tapCheckTimer: Timer?
+    // NSEvent monitor handles (global = other apps, local = Haynoi frontmost)
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private var secureInputTimer: Timer?
 
     // Fix #1: retry state when permission not yet granted
     private var retryTimer: Timer?
     private var appBecameActiveObserver: NSObjectProtocol?
+
+    // Fix #5: resync stuck modifier state when the app regains focus while the
+    // monitors are already live (separate from the permission-poll observer).
+    private var resyncObserver: NSObjectProtocol?
 
     private var isModifierDown = false
     private var isActivated = false
@@ -54,111 +78,113 @@ final class HotkeyManager {
 
     private init() {}
 
+    // MARK: - Modifier mapping (CGEventFlags → NSEvent.ModifierFlags)
+
+    /// Translate the public CGEventFlags target into the NSEvent.ModifierFlags
+    /// that the NSEvent monitors report. Keeps SettingsView's picker
+    /// (.maskCommand / .maskAlternate / .maskControl / .maskSecondaryFn)
+    /// working without any caller changes.
+    private var targetFlag: NSEvent.ModifierFlags {
+        switch targetModifier {
+        case .maskAlternate:    return .option
+        case .maskControl:      return .control
+        case .maskSecondaryFn:  return .function
+        default:                return .command
+        }
+    }
+
     // MARK: - Setup
 
-    /// Starts the event tap. Returns true if the tap is now live.
-    /// If Input Monitoring is not yet granted, schedules a retry loop so the
-    /// tap arms automatically once the user grants the permission and returns
-    /// to Haynoi — no relaunch needed.
+    /// Starts the NSEvent monitors. Returns true if the monitors are now live.
+    /// If Accessibility is not yet granted, schedules a retry loop so the
+    /// monitors arm automatically once the user grants the permission and
+    /// returns to Haynoi — no relaunch needed.
     @discardableResult
     func start() -> Bool {
         stop()
 
-        guard CGPreflightListenEventAccess() else {
-            NSLog("[Haynoi] Input Monitoring permission not granted — scheduling retry")
+        // GATE on Accessibility, not Input Monitoring. NSEvent global keyboard
+        // monitors only deliver events when the process is trusted for
+        // Accessibility.
+        guard AXIsProcessTrusted() else {
+            NSLog("[Haynoi] Accessibility permission not granted — scheduling retry")
             scheduleRetry()
             isActive = false
             DispatchQueue.main.async { AppState.shared.hotkeyActive = false }
             return false
         }
 
-        let mask: CGEventMask =
-            (1 << CGEventType.flagsChanged.rawValue) |
-            (1 << CGEventType.keyDown.rawValue)
-
-        let callback: CGEventTapCallBack = { proxy, type, event, refcon in
-            guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
-            let mgr = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
-
-            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                NSLog("[Haynoi] CGEventTap disabled, re-enabling")
-                if let tap = mgr.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
-                // Fix #5: resync after re-enable so stuck recording is cleared.
-                // Hop to main so resyncModifierState's precondition is satisfied.
-                DispatchQueue.main.async { mgr.resyncModifierState() }
-                return Unmanaged.passUnretained(event)
-            }
-
-            if type == .flagsChanged {
-                let rawFlags = event.flags.rawValue
-                DispatchQueue.main.async { mgr.handleFlagsChanged(rawFlags) }
-            } else if type == .keyDown {
-                // Just for diagnostics — verify tap is alive
-                let _ = event.getIntegerValueField(.keyboardEventKeycode)
-            }
-
-            return Unmanaged.passUnretained(event)
+        // GLOBAL monitor: fires for events in OTHER apps (primary path).
+        // Does not return the event — global monitors are observe-only.
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.flagsChanged, .keyDown]
+        ) { [weak self] event in
+            self?.handle(event)
         }
 
-        let refcon = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: mask,
-            callback: callback,
-            userInfo: refcon
-        ) else {
-            NSLog("[Haynoi] Failed to create CGEventTap")
+        // LOCAL monitor: fires when Haynoi itself is frontmost. Must return the
+        // event unchanged so it still reaches Haynoi's own UI.
+        localMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.flagsChanged, .keyDown]
+        ) { [weak self] event in
+            self?.handle(event)
+            return event
+        }
+
+        guard globalMonitor != nil else {
+            NSLog("[Haynoi] Failed to install NSEvent global monitor")
             isActive = false
             DispatchQueue.main.async { AppState.shared.hotkeyActive = false }
-            // Tap create can fail even after preflight passes (macOS timing) —
-            // keep retrying
             scheduleRetry()
             return false
         }
 
-        eventTap = tap
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        if let src = runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
-        }
-        CGEvent.tapEnable(tap: tap, enable: true)
-        NSLog("[Haynoi] CGEventTap started (listenOnly, modifier 0x%llx, delay %.0fms)",
+        NSLog("[Haynoi] NSEvent monitors started (modifier 0x%llx, delay %.0fms)",
               targetModifier.rawValue, activationDelay * 1000)
 
         isActive = true
         DispatchQueue.main.async { AppState.shared.hotkeyActive = true }
 
-        // Cancel any pending retry — tap is live
+        // Cancel any pending retry — monitors are live
         cancelRetry()
 
-        DispatchQueue.main.async {
-            self.tapCheckTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-                guard let self, let tap = self.eventTap else { return }
+        // Fix #5: resync the modifier state whenever the app regains focus, so a
+        // release event missed while another app was frontmost can't leave a
+        // stuck recording.
+        if resyncObserver == nil {
+            resyncObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.resyncModifierState()
+            }
+        }
 
-                // Fix #5: check secure input in the watchdog via the public Carbon
-                // API IsSecureEventInputEnabled() (available since macOS 10.4).
-                // When a password field or screensaver is active, key events are
-                // routed away — starting a recording would capture silence.
-                // Reading AppState on main actor; the Timer runs on the main
-                // RunLoop so this is safe. Wrapped in Task @MainActor to satisfy
-                // the Swift concurrency checker.
+        // Watchdog: poll secure event input. When a password field or
+        // screensaver is active, key events are routed away — starting a
+        // recording would capture silence. The CGEventTap tap-disabled watchdog
+        // no longer applies to NSEvent monitors, but the secure-input check
+        // remains meaningful.
+        DispatchQueue.main.async {
+            self.secureInputTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+                // IsSecureEventInputEnabled() is a public Carbon API
+                // (available since macOS 10.4). The Timer runs on the main
+                // RunLoop. Wrapped in Task @MainActor to satisfy the Swift
+                // concurrency checker when reading AppState.
                 let secureInput = Bool(IsSecureEventInputEnabled())
                 Task { @MainActor in
                     if secureInput != AppState.shared.secureInputActive {
                         if secureInput {
                             NSLog("[Haynoi] Secure event input is active — recordings will be blocked")
+                            // NSEvent monitors silently stop delivering during
+                            // secure input (the old tap got an explicit disable
+                            // event); a release may be missed, so resync now to
+                            // clear any stuck modifier state.
+                            self.resyncModifierState()
                         }
                         AppState.shared.secureInputActive = secureInput
                     }
-                }
-
-                if !CGEvent.tapIsEnabled(tap: tap) {
-                    NSLog("[Haynoi] Re-enabling disabled tap")
-                    CGEvent.tapEnable(tap: tap, enable: true)
-                    // Fix #5: resync after watchdog re-enables the tap
-                    self.resyncModifierState()
                 }
             }
         }
@@ -166,18 +192,22 @@ final class HotkeyManager {
     }
 
     func stop() {
-        tapCheckTimer?.invalidate()
-        tapCheckTimer = nil
+        secureInputTimer?.invalidate()
+        secureInputTimer = nil
         cancelRetry()
+        if let obs = resyncObserver {
+            NotificationCenter.default.removeObserver(obs)
+            resyncObserver = nil
+        }
         activationWorkItem?.cancel()
         activationWorkItem = nil
-        if let src = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
-            runLoopSource = nil
+        if let m = globalMonitor {
+            NSEvent.removeMonitor(m)
+            globalMonitor = nil
         }
-        if let tap = eventTap {
-            CFMachPortInvalidate(tap)
-            eventTap = nil
+        if let m = localMonitor {
+            NSEvent.removeMonitor(m)
+            localMonitor = nil
         }
         isModifierDown = false
         isActivated = false
@@ -193,11 +223,11 @@ final class HotkeyManager {
             guard let self else { return }
             NSLog("[Haynoi] Retrying HotkeyManager.start() (permission poll)")
             let ok = self.start()
-            if ok { NSLog("[Haynoi] Event tap armed on retry (no relaunch needed)") }
+            if ok { NSLog("[Haynoi] NSEvent monitors armed on retry (no relaunch needed)") }
         }
 
         // Also retry whenever the app comes back to the foreground — the user
-        // may have just granted Input Monitoring and switched back
+        // may have just granted Accessibility and switched back
         if appBecameActiveObserver == nil {
             appBecameActiveObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification,
@@ -205,7 +235,7 @@ final class HotkeyManager {
                 queue: .main
             ) { [weak self] _ in
                 guard let self, !self.isActive else { return }
-                NSLog("[Haynoi] App became active — retrying event tap")
+                NSLog("[Haynoi] App became active — retrying NSEvent monitors")
                 self.start()
             }
         }
@@ -220,17 +250,18 @@ final class HotkeyManager {
         }
     }
 
-    // MARK: - Modifier Resync (Fix #5)
+    // MARK: - App-active resync (Fix #5)
 
-    /// Reads the ACTUAL hardware modifier state and reconciles with our
-    /// internal isModifierDown flag. If we think the modifier is held but it
-    /// isn't (e.g. release event was lost during tap disable), synthetically
-    /// fire the release path to clear stuck recording state.
-    private func resyncModifierState() {
+    /// Wired from AppState/AppDelegate on NSApplication.didBecomeActiveNotification.
+    /// Reads the ACTUAL hardware modifier state (NSEvent.modifierFlags) and
+    /// reconciles with our internal isModifierDown flag. If we think the
+    /// modifier is held but it isn't (e.g. a release event was missed while
+    /// another app was frontmost), synthetically fire the release path to clear
+    /// stuck recording state.
+    func resyncModifierState() {
         dispatchPrecondition(condition: .onQueue(.main))
         guard isModifierDown else { return }
-        guard let event = CGEvent(source: nil) else { return }
-        let actuallyDown = event.flags.contains(targetModifier)
+        let actuallyDown = NSEvent.modifierFlags.contains(targetFlag)
         if !actuallyDown {
             NSLog("[Haynoi] Resync: modifier no longer held — firing synthetic release")
             isModifierDown = false
@@ -247,19 +278,35 @@ final class HotkeyManager {
 
     // MARK: - Event Handling
 
-    private func handleFlagsChanged(_ rawFlags: UInt64) {
-        dispatchPrecondition(condition: .onQueue(.main))
-        let targetRaw = targetModifier.rawValue
-        let isDown = (rawFlags & targetRaw) != 0
+    /// Routes an NSEvent from either monitor onto the main queue. flagsChanged
+    /// drives the modifier state machine; keyDown during the grace window marks
+    /// that another key was pressed (kept for diagnostics — shortcuts still
+    /// activate dictation when the modifier is held past the grace period).
+    private func handle(_ event: NSEvent) {
+        switch event.type {
+        case .flagsChanged:
+            let flags = event.modifierFlags
+            DispatchQueue.main.async { self.handleFlagsChanged(flags) }
+        case .keyDown:
+            // Just for diagnostics — verify the monitor is alive. The old
+            // onKeyDown semantics ("other key pressed") no longer gate
+            // activation: holding the modifier past the grace period always
+            // activates, exactly as the CGEventTap path behaved.
+            break
+        default:
+            break
+        }
+    }
 
-        // Check no other modifiers are pressed
-        let allModifiers: UInt64 =
-            CGEventFlags.maskCommand.rawValue |
-            CGEventFlags.maskAlternate.rawValue |
-            CGEventFlags.maskControl.rawValue |
-            CGEventFlags.maskShift.rawValue
-        let otherModifiers = (rawFlags & allModifiers) & ~targetRaw
-        let hasOtherModifiers = otherModifiers != 0
+    private func handleFlagsChanged(_ flags: NSEvent.ModifierFlags) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let isDown = flags.contains(targetFlag)
+
+        // Check no other modifiers are pressed (device-independent mask, minus
+        // the target flag).
+        let allModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift, .function]
+        let otherModifiers = flags.intersection(allModifiers).subtracting(targetFlag)
+        let hasOtherModifiers = !otherModifiers.isEmpty
 
         if isDown && !isModifierDown && !hasOtherModifiers {
             // Modifier pressed
@@ -271,7 +318,8 @@ final class HotkeyManager {
 
             // After grace period: if modifier STILL held → activate
             // Don't care about keyDown events — shortcuts pass through normally
-            // with listenOnly tap, user gets both shortcut AND dictation
+            // with the observe-only monitors, user gets both shortcut AND
+            // dictation
             let work = DispatchWorkItem { [weak self] in
                 guard let self, self.isModifierDown else { return }
                 self.isActivated = true
