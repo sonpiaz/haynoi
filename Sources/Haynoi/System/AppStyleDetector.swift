@@ -44,4 +44,48 @@ enum AppStyleDetector {
         ]
         return chatApps.contains(id)
     }
+
+    /// A clean human display name for a dictation's destination app, used in the
+    /// history rows (board shows "Slack", "Google Calendar", "Notion", …).
+    /// Prefers a curated label for well-known bundle ids, then falls back to the
+    /// stored localized `appName`, then a tidied bundle id.
+    static func displayName(bundleId: String?, fallback: String?) -> String? {
+        if let id = bundleId, let known = knownAppNames[id] {
+            return known
+        }
+        if let name = fallback, !name.isEmpty {
+            return name
+        }
+        guard let id = bundleId, !id.isEmpty else { return nil }
+        // Tidy a reverse-dns id into its last segment, capitalized.
+        let last = id.split(separator: ".").last.map(String.init) ?? id
+        return last.prefix(1).uppercased() + last.dropFirst()
+    }
+
+    /// Curated display names matching the founder board's source labels.
+    private static let knownAppNames: [String: String] = [
+        "com.tinyspeck.slackmacgap":      "Slack",
+        "com.apple.iCal":                 "Calendar",
+        "com.apple.iCalendar":            "Calendar",
+        "com.google.Chrome":              "Chrome",
+        "com.apple.Safari":               "Safari",
+        "notion.id":                      "Notion",
+        "com.linear":                     "Linear",
+        "com.linearapp.linear":           "Linear",
+        "com.apple.reminders":            "Reminders",
+        "com.apple.mail":                 "Mail",
+        "com.google.Gmail":               "Gmail",
+        "com.microsoft.Outlook":          "Outlook",
+        "com.superhuman.electron":        "Superhuman",
+        "ru.keepcoder.Telegram":          "Telegram",
+        "com.hnc.Discord":                "Discord",
+        "com.apple.MobileSMS":            "Messages",
+        "net.whatsapp.WhatsApp":          "WhatsApp",
+        "us.zoom.xos":                    "Zoom",
+        "com.microsoft.teams2":           "Teams",
+        "com.apple.Notes":                "Notes",
+        "md.obsidian":                    "Obsidian",
+        "com.microsoft.VSCode":           "VS Code",
+        "com.figma.Desktop":              "Figma",
+    ]
 }

@@ -51,7 +51,10 @@ final class HotkeyManager {
 
     /// Public API kept as CGEventFlags so SettingsView's hotkey picker keeps
     /// working unchanged. Internally we translate to NSEvent.ModifierFlags.
-    var targetModifier: CGEventFlags = .maskCommand
+    /// Default is Option (⌥) — the founder-approved push-to-talk key. When the
+    /// target is Option we additionally require the LEFT option key (keyCode 58),
+    /// so the right option key stays free for typing accented characters.
+    var targetModifier: CGEventFlags = .maskAlternate
 
     /// Grace period — if modifier held longer than this, activate.
     private let activationDelay: TimeInterval = 0.20
@@ -72,6 +75,15 @@ final class HotkeyManager {
     private var isModifierDown = false
     private var isActivated = false
     private var activationWorkItem: DispatchWorkItem?
+
+    /// keyCode of the most recent flagsChanged event. Used to distinguish the
+    /// LEFT Option key (kVK_Option = 58) from the right one (kVK_RightOption = 61)
+    /// when the target modifier is Option — only the left key triggers dictation.
+    private var lastFlagKeyCode: UInt16 = 0
+
+    // Carbon virtual key codes for the left/right option keys.
+    private let kLeftOptionKeyCode: UInt16 = 58   // kVK_Option
+    private let kRightOptionKeyCode: UInt16 = 61  // kVK_RightOption
 
     // Exposed state for AppState / onboarding
     private(set) var isActive = false
@@ -286,7 +298,8 @@ final class HotkeyManager {
         switch event.type {
         case .flagsChanged:
             let flags = event.modifierFlags
-            DispatchQueue.main.async { self.handleFlagsChanged(flags) }
+            let keyCode = event.keyCode
+            DispatchQueue.main.async { self.handleFlagsChanged(flags, keyCode: keyCode) }
         case .keyDown:
             // Just for diagnostics — verify the monitor is alive. The old
             // onKeyDown semantics ("other key pressed") no longer gate
@@ -298,9 +311,23 @@ final class HotkeyManager {
         }
     }
 
-    private func handleFlagsChanged(_ flags: NSEvent.ModifierFlags) {
+    private func handleFlagsChanged(_ flags: NSEvent.ModifierFlags, keyCode: UInt16 = 0) {
         dispatchPrecondition(condition: .onQueue(.main))
+        lastFlagKeyCode = keyCode
         let isDown = flags.contains(targetFlag)
+
+        // Left-option gate: when the target modifier is Option, only the LEFT
+        // option key (keyCode 58) triggers dictation. The right option key (61)
+        // is left free for typing accented characters. The release of a modifier
+        // reports keyCode 0 in some paths, so we only gate the press; the press
+        // is what arms the grace timer.
+        if targetModifier == .maskAlternate && isDown && !isModifierDown {
+            if keyCode == kRightOptionKeyCode {
+                // Right option pressed — ignore entirely.
+                return
+            }
+            // keyCode 58 (left) or 0 (ambiguous) → allow.
+        }
 
         // Check no other modifiers are pressed (device-independent mask, minus
         // the target flag).

@@ -1,226 +1,200 @@
 import SwiftUI
 import Combine
 
-// MARK: - ContentView (Calm Ledger)
+// MARK: - ContentView (board "01" content area)
+//
+// The main-window content pane that sits to the right of the sidebar:
+//   • Top STAT ROW — four cards in a grid:
+//       (a) Day streak — big number + indigo aurora status dot
+//       (b) Words transcribed — UsageTracker.totalWords (e.g. 54.4K)
+//       (c) Avg words / min — UsageTracker.wordsPerMinute (e.g. 127)
+//       (d) HOLD TO RECORD — distinct accent card showing the hotkey as keycaps
+//   • HISTORY LIST — grouped by TODAY / YESTERDAY / date with a per-section
+//     dictation count on the right; each row is a VI/EN language badge + the
+//     transcript text + a meta line (relative time · word count · source app)
+//     with a hover copy button.
+//
+// `mode` decides the page: .history shows the full grouped ledger; .recent shows
+// only the most recent slice. Light Calm palette, generous calm spacing.
 
 struct ContentView: View {
+    enum Mode { case history, recent }
+
     @EnvironmentObject var state: AppState
     @Environment(\.colorScheme) private var scheme
 
-    @AppStorage("hotkeyChoice") private var hotkeyChoice = "command"
-    @State private var searchText = ""
-    @State private var showClearConfirmation = false
+    @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
 
-    /// Called when the user taps the stats strip (D24 — click-through to Insights).
-    var onStatStripTap: (() -> Void)? = nil
+    var mode: Mode = .history
+
+    private var recentLimit: Int { 8 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if state.transcriptions.isEmpty {
-                emptyState
-            } else {
-                greetingBlock
-                calmLine
-                // D24: stat strip is a click-through to the Insights page.
-                statsStrip
-                    .contentShape(Rectangle())
-                    .onTapGesture { onStatStripTap?() }
-                    .help("Open Insights")
-                calmLine
-                searchBar
-                calmLine
-                ledgerList
-            }
-            calmLine
-            ledgerStatusBar
-        }
-        .background(Color.calmBackground(for: scheme))
-    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Stat row only on the History page (the board's stat strip).
+                if mode == .history {
+                    statRow
+                        .padding(.bottom, 28)
+                }
 
-    // MARK: - Greeting Block
-
-    private var greetingBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(greetingString)
-                .font(.calmHeading)
-                .foregroundStyle(Color.calmLabel(for: scheme))
-
-            Group {
-                if state.totalWords > 0 {
-                    (
-                        Text("You have spoken ")
-                            .foregroundStyle(Color.calmLabel4(for: scheme))
-                        + Text("\(formatWords(state.totalWords)) words")
-                            .fontWeight(.medium)
-                            .foregroundStyle(Color.calmLabel3(for: scheme))
-                        + Text(" — and counting.")
-                            .foregroundStyle(Color.calmLabel4(for: scheme))
-                    )
+                if state.transcriptions.isEmpty {
+                    emptyState
                 } else {
-                    Text("Start dictating and your words will appear here.")
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                    historySections
                 }
             }
-            .font(.system(size: 13))
-
-            // D15: one-time milestone greeting echo — shown until user opens Insights.
-            if MilestoneTracker.hasUnseenMilestone,
-               let milestone = MilestoneTracker.latestMilestone(for: UsageTracker.totalWords) {
-                milestoneEchoLine(milestone: milestone)
-            }
+            .padding(.horizontal, 28)
+            .padding(.top, 22)
+            .padding(.bottom, 28)
         }
-        .padding(.horizontal, C.s6)
-        .padding(.vertical, C.s5)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.calmBackground(for: scheme))
     }
 
-    // MARK: - Stats Strip
+    // MARK: - Stat Row (4 cards)
 
-    private var statsStrip: some View {
-        HStack(spacing: 0) {
-            statItem(value: "\(UsageTracker.streakDays)", label: "day streak", showOrb: false)
-            statDivider
-            // The aurora orb dot lives only on total words — sanctioned aurora moment.
-            statItem(value: formatWords(UsageTracker.totalWords), label: "total words", showOrb: true)
-            statDivider
-
-            if UsageTracker.wordsPerMinute > 0 {
-                statItem(value: "\(UsageTracker.wordsPerMinute)", label: "avg WPM", showOrb: false)
-                statDivider
-            }
-
-            statItem(value: "\(UsageTracker.currentMonthCount)", label: "this month", showOrb: false)
-            Spacer()
-        }
-        .padding(.horizontal, C.s6)
-        .frame(height: 64)
-        .background(Color.calmSubtle(for: scheme))
-    }
-
-    private var statDivider: some View {
-        Rectangle()
-            .fill(Color.calmDivider(for: scheme))
-            .frame(width: 1, height: 28)
-            .padding(.trailing, C.s5)
-    }
-
-    @ViewBuilder
-    private func statItem(value: String, label: String, showOrb: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 7) {
-                Text(value)
-                    .font(.calmStatValue)
-                    .monospacedDigit()
-                    .foregroundStyle(Color.calmLabel(for: scheme))
-                if showOrb {
+    private var statRow: some View {
+        // Board proportion: three equal stat cards + a wider (1.4×) hotkey card.
+        HStack(spacing: 10) {
+            // (a) Day streak — with the indigo aurora status dot
+            statCard {
+                HStack(spacing: 7) {
                     Circle()
                         .fill(LinearGradient(
                             colors: [.calmAuroraCyan, .calmAuroraViolet],
                             startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 9, height: 9)
                         .shadow(color: Color.calmAuroraCyan.opacity(0.4), radius: 3)
+                    Text("\(UsageTracker.streakDays)")
+                        .font(.calmStatValue)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.calmLabel(for: scheme))
                 }
+                statLabel("Day streak")
             }
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.calmLabel4(for: scheme))
+
+            // (b) Words transcribed
+            statCard {
+                Text(formatWords(UsageTracker.totalWords))
+                    .font(.calmStatValue)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                statLabel("Words transcribed")
+            }
+
+            // (c) Avg words / min
+            statCard {
+                Text(UsageTracker.wordsPerMinute > 0 ? "\(UsageTracker.wordsPerMinute)" : "—")
+                    .font(.calmStatValue)
+                    .monospacedDigit()
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                statLabel("Avg words / min")
+            }
+
+            // (d) HOLD TO RECORD — distinct accent card with keycap chips
+            hotkeyCard
         }
-        .padding(.trailing, C.s5)
     }
 
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        HStack(spacing: C.s2) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.calmLabel4(for: scheme))
-
-            TextField("Search your ledger…", text: $searchText)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.calmLabel(for: scheme))
-                .textFieldStyle(.plain)
-
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Button {
-                showClearConfirmation = true
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-            }
-            .buttonStyle(.plain)
-            .help("Clear History")
-            .confirmationDialog(
-                "Clear all transcription history?",
-                isPresented: $showClearConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Clear History", role: .destructive) {
-                    state.clearAllTranscriptions()
-                }
-                Button("Cancel", role: .cancel) {}
-            }
+    @ViewBuilder
+    private func statCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            content()
         }
-        .padding(.horizontal, C.s6)
-        .frame(height: 42)
-        .background(Color.calmBackground(for: scheme))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Color.calmSurface(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.calmBorder, lineWidth: 1))
     }
 
-    // MARK: - Ledger List
+    private func statLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(Color.calmLabel4(for: scheme))
+    }
 
-    private var ledgerList: some View {
-        let filtered = filteredTranscriptions
-        return ScrollView {
-            if filtered.isEmpty && !searchText.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                    Text("No results for \"\(searchText)\"")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(groupedFiltered(filtered), id: \.key) { group in
-                        // Date group header — quiet uppercase calm label
-                        HStack(spacing: C.s3) {
-                            Text(group.key.uppercased())
-                                .font(.calmSectionLabel)
-                                .kerning(0.7)
-                                .foregroundStyle(Color.calmLabel4(for: scheme))
+    private var hotkeyCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("HOLD TO RECORD")
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(0.5)
+                .foregroundStyle(Color.calmAccent(for: scheme))
+            HStack(spacing: 5) {
+                keycap(hotkeySymbol)
+                keycap("Space")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Color.calmActive(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.calmAccent(for: scheme).opacity(0.25), lineWidth: 1)
+        )
+    }
 
-                            Rectangle()
-                                .fill(Color.calmDivider(for: scheme))
-                                .frame(height: 1)
-                        }
-                        .padding(.horizontal, C.s6)
-                        .padding(.top, 16)
-                        .padding(.bottom, 6)
+    private func keycap(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.calmLabel(for: scheme))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3)
+            .background(Color.calmSurface(for: scheme))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .stroke(Color.calmHairline(for: scheme), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.05), radius: 1, y: 1)
+    }
 
-                        ForEach(group.value) { entry in
-                            LedgerEntryRow(entry: entry, scheme: scheme) {
-                                state.deleteTranscription(id: entry.id)
-                            }
+    private var hotkeySymbol: String {
+        switch hotkeyChoice {
+        case "command": return "⌘"
+        case "control": return "⌃"
+        case "fn":      return "fn"
+        default:        return "⌥"
+        }
+    }
+
+    // MARK: - History Sections
+
+    private var historySections: some View {
+        let groups = groupedTranscriptions
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(groups.enumerated()), id: \.element.key) { index, group in
+                sectionHeader(title: group.key, count: group.value.count)
+                    .padding(.top, index == 0 ? 0 : 22)
+                    .padding(.bottom, 8)
+
+                VStack(spacing: 0) {
+                    ForEach(group.value) { entry in
+                        HistoryRow(entry: entry, scheme: scheme) {
+                            state.deleteTranscription(id: entry.id)
                         }
                     }
                 }
-                .padding(.bottom, C.s3)
+                .background(Color.calmSurface(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.calmBorder, lineWidth: 1))
             }
+        }
+    }
+
+    private func sectionHeader(title: String, count: Int) -> some View {
+        HStack {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .kerning(0.7)
+                .foregroundStyle(Color.calmLabel4(for: scheme))
+            Spacer()
+            Text("\(count) \(count == 1 ? "dictation" : "dictations")")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.calmLabel4(for: scheme))
         }
     }
 
@@ -228,7 +202,7 @@ struct ContentView: View {
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Spacer()
+            Spacer(minLength: 60)
             ZStack {
                 Circle()
                     .fill(Color.calmAccentWash(for: scheme))
@@ -238,158 +212,21 @@ struct ContentView: View {
                     .foregroundStyle(Color.calmAccent(for: scheme))
             }
             VStack(spacing: 6) {
-                Text("Your ledger is empty.")
+                Text("Your history is empty.")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Color.calmLabel(for: scheme))
                 Text("Hold \(HotkeyDisplay.symbolAndName) and speak — your words appear here.")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.calmLabel4(for: scheme))
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 280)
+                    .frame(maxWidth: 300)
             }
-            Spacer()
+            Spacer(minLength: 60)
         }
         .frame(maxWidth: .infinity)
-        .background(Color.calmBackground(for: scheme))
     }
 
-    // MARK: - Status Bar
-
-    private var ledgerStatusBar: some View {
-        VStack(spacing: 0) {
-            if let statusMsg = state.status {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(Color.calmAccent(for: scheme))
-                        .font(.system(size: 11))
-                    Text(statusMsg)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmAccent(for: scheme))
-                        .lineLimit(1)
-                    Spacer()
-                }
-                .padding(.horizontal, C.s6)
-                .padding(.vertical, 5)
-                .background(Color.calmAccentWash(for: scheme))
-                calmLine
-            }
-
-            HStack(spacing: C.s2) {
-                if state.isRecording {
-                    CalmStatusDot(status: .recording)
-                    CalmLevelBars(audioLevel: CGFloat(state.audioLevel), scheme: scheme)
-                        .frame(width: 40, height: 14)
-                    Text(formatDuration(state.recordingDuration))
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.calmAccent(for: scheme))
-                        .monospacedDigit()
-                } else if state.isTranscribing {
-                    ProgressView().controlSize(.small)
-                    Text("Transcribing…")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel3(for: scheme))
-                } else if let error = state.error {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Color.calmWarn)
-                        .font(.system(size: 11))
-                    Text(error)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmWarn)
-                        .lineLimit(1)
-                } else {
-                    CalmStatusDot(status: .idle)
-                    (
-                        Text("Hold ")
-                        + Text(HotkeyDisplay.symbol)
-                        + Text(" to record  ·  Powered by Kyma")
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-                }
-                Spacer()
-            }
-            .padding(.horizontal, C.s6)
-            .padding(.vertical, 10)
-            .background(Color.calmSubtle(for: scheme))
-        }
-    }
-
-    // MARK: - Milestone Echo (D15)
-
-    private func milestoneEchoLine(milestone: MilestoneTracker.Milestone) -> some View {
-        let isVi = resolveIsVi()
-        let total = UsageTracker.totalWords
-        let label = milestoneComparisonLabel(total: total, isVi: isVi)
-        let msg = isVi
-            ? "Bạn đã đạt \(formatWords(milestone.threshold)) từ — \(label)."
-            : "You've reached \(formatWords(milestone.threshold)) words — \(label)."
-        return Text(msg)
-            .font(.system(size: 12))
-            .foregroundStyle(Color.calmAccent(for: scheme))
-            .fixedSize(horizontal: false, vertical: true)
-            .onAppear { MilestoneTracker.clearUnseenFlag() }
-    }
-
-    private func milestoneComparisonLabel(total: Int, isVi: Bool) -> String {
-        switch total {
-        case 1_000_000...: return isVi ? "một kệ sách" : "a library shelf"
-        case 500_000...:   return isVi ? "một tập bách khoa toàn thư" : "an encyclopedia volume"
-        case 250_000...:   return isVi ? "một bộ ba tiểu thuyết" : "a boxed trilogy"
-        case 100_000...:   return isVi ? "hai tiểu thuyết" : "two novels"
-        case 50_000...:    return isVi ? "một tiểu thuyết" : "a novel"
-        case 25_000...:    return isVi ? "một truyện vừa" : "a novella"
-        default:           return isVi ? "một truyện ngắn" : "a short story"
-        }
-    }
-
-    private func resolveIsVi() -> Bool {
-        let hint = UserDefaults.standard.string(forKey: "languageHint") ?? "auto"
-        if hint == "vi" { return true }
-        if hint == "en" { return false }
-        return Locale.current.language.languageCode?.identifier == "vi"
-    }
-
-    // MARK: - Shared divider
-
-    private var calmLine: some View {
-        Rectangle()
-            .fill(Color.calmDivider(for: scheme))
-            .frame(height: 1)
-    }
-
-    // MARK: - Helpers
-
-    private var greetingString: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        let langHint = UserDefaults.standard.string(forKey: "languageHint") ?? "auto"
-        let isVi: Bool
-        if langHint == "vi" {
-            isVi = true
-        } else if langHint == "en" {
-            isVi = false
-        } else {
-            isVi = Locale.current.language.languageCode?.identifier == "vi"
-        }
-        if isVi {
-            switch hour {
-            case 0..<12:  return "Chào buổi sáng."
-            case 12..<18: return "Chào buổi chiều."
-            default:      return "Chào buổi tối."
-            }
-        } else {
-            switch hour {
-            case 0..<12:  return "Good morning."
-            case 12..<18: return "Good afternoon."
-            default:      return "Good evening."
-            }
-        }
-    }
-
-    private var filteredTranscriptions: [Transcription] {
-        guard !searchText.isEmpty else { return state.transcriptions }
-        let q = searchText.lowercased()
-        return state.transcriptions.filter { $0.text.lowercased().contains(q) }
-    }
+    // MARK: - Grouping
 
     private static let groupDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -397,7 +234,11 @@ struct ContentView: View {
         return f
     }()
 
-    private func groupedFiltered(_ items: [Transcription]) -> [(key: String, value: [Transcription])] {
+    private var groupedTranscriptions: [(key: String, value: [Transcription])] {
+        let items = mode == .recent
+            ? Array(state.transcriptions.prefix(recentLimit))
+            : state.transcriptions
+
         let cal = Calendar.current
         let grouped = Dictionary(grouping: items) { entry -> String in
             if cal.isDateInToday(entry.timestamp) { return "Today" }
@@ -413,15 +254,11 @@ struct ContentView: View {
         if count >= 1_000 { return String(format: "%.1fK", Float(count) / 1_000) }
         return "\(count)"
     }
-
-    private func formatDuration(_ d: TimeInterval) -> String {
-        String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
-    }
 }
 
-// MARK: - Ledger Entry Row
+// MARK: - History Row (board's clean hairline row)
 
-struct LedgerEntryRow: View {
+struct HistoryRow: View {
     let entry: Transcription
     let scheme: ColorScheme
     let onDelete: () -> Void
@@ -430,8 +267,8 @@ struct LedgerEntryRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: C.s3) {
-            // Language tag — leading, mirrors the board's row layout
+        HStack(alignment: .top, spacing: 11) {
+            // Language badge
             let lang = detectLanguage(entry.text)
             Text(lang.uppercased())
                 .font(.system(size: 9, weight: .bold))
@@ -445,7 +282,7 @@ struct LedgerEntryRow: View {
                 )
                 .padding(.top, 1)
 
-            // Main content
+            // Body: transcript + meta line
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.text)
                     .font(.system(size: 13))
@@ -454,13 +291,20 @@ struct LedgerEntryRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
 
-                Text("\(timeString)  ·  \(entry.wordCount) words")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-                    .monospacedDigit()
+                HStack(spacing: 5) {
+                    Text(relativeTime)
+                    metaDot
+                    Text("\(entry.wordCount) words")
+                    if let source = sourceApp {
+                        metaDot
+                        Text(source)
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(Color.calmLabel4(for: scheme))
             }
 
-            // Hover actions
+            // Hover actions — copy (board) + delete (engine affordance)
             if isHovered {
                 HStack(spacing: 5) {
                     Button {
@@ -470,11 +314,11 @@ struct LedgerEntryRow: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
                     } label: {
                         Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(copied ? Color.calmSuccess : Color.calmLabel3(for: scheme))
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28)
                     .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
                     .help("Copy")
@@ -483,11 +327,11 @@ struct LedgerEntryRow: View {
                         withAnimation(.easeOut(duration: 0.15)) { onDelete() }
                     } label: {
                         Image(systemName: "trash")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(Color.calmWarn)
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28)
                     .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmHairline(for: scheme), lineWidth: 1))
                     .help("Delete")
@@ -496,25 +340,53 @@ struct LedgerEntryRow: View {
                 .padding(.top, 1)
             }
         }
-        .padding(.horizontal, C.s6)
+        .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(isHovered ? Color.calmHover(for: scheme) : Color.clear)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.calmDivider(for: scheme))
                 .frame(height: 1)
-                .padding(.leading, C.s6)
+                .padding(.leading, 14)
         }
         .animation(.easeInOut(duration: 0.12), value: isHovered)
         .animation(.easeInOut(duration: 0.12), value: copied)
         .onHover { isHovered = $0 }
     }
 
-    private var timeString: String {
-        let f = DateFormatter()
-        f.dateFormat = "h:mm a"
-        return f.string(from: entry.timestamp)
+    private var metaDot: some View {
+        Text("·").opacity(0.5)
     }
+
+    private var sourceApp: String? {
+        AppStyleDetector.displayName(bundleId: entry.appBundleId, fallback: entry.appName)
+    }
+
+    /// Relative time matching the board ("2 min ago", "1 hr ago", "Yesterday 4:12 PM").
+    private var relativeTime: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(entry.timestamp) {
+            let secs = Int(Date().timeIntervalSince(entry.timestamp))
+            switch secs {
+            case ..<60:    return "Just now"
+            case ..<120:   return "1 min ago"
+            case ..<3600:  return "\(secs / 60) min ago"
+            case ..<7200:  return "1 hr ago"
+            default:       return "\(secs / 3600) hr ago"
+            }
+        }
+        if cal.isDateInYesterday(entry.timestamp) {
+            return "Yesterday \(Self.timeFmt.string(from: entry.timestamp))"
+        }
+        return "\(Self.dayFmt.string(from: entry.timestamp)) \(Self.timeFmt.string(from: entry.timestamp))"
+    }
+
+    private static let timeFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f
+    }()
+    private static let dayFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "MMM d"; return f
+    }()
 
     private func detectLanguage(_ text: String) -> String {
         let viChars = CharacterSet(charactersIn: "àáảãạăắặằẵẳâấậầẫẩđèéẹẻẽêếệềễểìíịỉĩòóọỏõôốộồỗổơớợờỡởùúụủũưứựừữửỳýỵỷỹÀÁẢÃẠĂẮẶẰẴẲÂẤẬẦẪẨĐÈÉẸẺẼÊẾỆỀỄỂÌÍỊỈĨÒÓỌỎÕÔỐỘỒỖỔƠỚỢỜỠỞÙÚỤỦŨƯỨỰỪỮỬỲÝỴỶỸ")
@@ -525,7 +397,7 @@ struct LedgerEntryRow: View {
     }
 }
 
-// MARK: - Calm Level Bars (recording indicator)
+// MARK: - Calm Level Bars (recording indicator — shared)
 
 struct CalmLevelBars: View {
     let audioLevel: CGFloat
@@ -555,7 +427,17 @@ struct CalmLevelBars: View {
     }
 }
 
-// MARK: - TranscriptionRow (compatibility alias — not used in Mercury flow)
+// MARK: - Compatibility aliases (kept for any remaining call sites)
+
+struct LedgerEntryRow: View {
+    let entry: Transcription
+    let scheme: ColorScheme
+    let onDelete: () -> Void
+
+    var body: some View {
+        HistoryRow(entry: entry, scheme: scheme, onDelete: onDelete)
+    }
+}
 
 struct TranscriptionRow: View {
     let entry: Transcription
@@ -563,6 +445,6 @@ struct TranscriptionRow: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        LedgerEntryRow(entry: entry, scheme: scheme, onDelete: onDelete)
+        HistoryRow(entry: entry, scheme: scheme, onDelete: onDelete)
     }
 }
