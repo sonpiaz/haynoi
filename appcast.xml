@@ -6,6 +6,41 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.1</title>
+            <pubDate>Fri, 12 Jun 2026 23:35:16 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.1</h2>
+
+<h3>Changed</h3>
+<ul>
+<li>The press registers almost immediately: the hold-confirmation window</li>
+</ul>
+<p>  dropped from 200ms to 100ms, and the start chime now fires within a</p>
+<p>  few hundredths of a second of the microphone going live.</p>
+<ul>
+<li>The indicator moved to the top-center of the screen and wears a new</li>
+</ul>
+<p>  dark cosmic capsule — deep-space gradient, hairline border, and an</p>
+<p>  aurora halo that swells only with your voice.</p>
+<ul>
+<li>Quieter by default: exactly two tones per dictation (press and</li>
+</ul>
+<p>  release). The "N words" chip still appears — silently. The success</p>
+<p>  chime is now opt-in in Settings → Sounds.</p>
+
+<h3>Removed</h3>
+<ul>
+<li>The violet dot while transcribing. Release is quiet until the words</li>
+</ul>
+<p>  chip springs in.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.1/Haynoi-0.2.1-universal.zip" length="2863839" type="application/octet-stream" sparkle:edSignature="MYU+AqpMLSadpGwVeDU3CsAPKn2GwFJpragZER/j/c6nWFqeIqLPy/WISnG7g53RwdBnrtiDEg4EnFWMW1avAw=="/>
+        </item>
+        <item>
             <title>0.2.0</title>
             <pubDate>Fri, 12 Jun 2026 23:09:04 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -75,39 +110,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.9/Haynoi-0.1.9-universal.zip" length="2784122" type="application/octet-stream" sparkle:edSignature="O7K6kSBpxgmkzOt4GVDaemOnU9rdoMxZSaphUHMaNWs/ys8x91gqvPlb3vptmYVKLE2T266LzM9GJO15VS+4BQ=="/>
-        </item>
-        <item>
-            <title>0.1.8</title>
-            <pubDate>Fri, 12 Jun 2026 04:38:25 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>9</sparkle:version>
-            <sparkle:shortVersionString>0.1.8</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.1.8</h2>
-
-<h3>Added</h3>
-<ul>
-<li>A livelier listening indicator: while you speak, the floating orb shows</li>
-</ul>
-<p>  aurora voice bars that react to your voice, with a soft ring pulsing outward.</p>
-<ul>
-<li>New users are guided to unlock their free credit — if you sign up and</li>
-</ul>
-<p>  haven't verified your email yet, Haynoi tells you to check your inbox</p>
-<p>  instead of failing your first dictation. Tip: signing in with Google</p>
-<p>  activates your free credit instantly.</p>
-
-<h3>Changed</h3>
-<ul>
-<li>Updates now install silently in the background and check hourly, so fixes</li>
-</ul>
-<p>  reach you without any prompts.</p>
-<ul>
-<li>The credit balance refreshes when you open the menu so it's never stale.</li>
-</ul>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.1.8/Haynoi-0.1.8-universal.zip" length="2769084" type="application/octet-stream" sparkle:edSignature="I/qbReR1Ioswe3Oz9DDGdrI/9o+A22fDwx/13wR3QznBf7dJA2NL9yB+kEhFe7jKeyQgf/2YR+qIp2xCuqWlBA=="/>
         </item>
     </channel>
 </rss>
