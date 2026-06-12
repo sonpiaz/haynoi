@@ -38,8 +38,8 @@ enum TextInserter {
 
         // Step 1: Restore focus to target app.
         // Fix #1: if focus restore fails, skip synthetic paste entirely.
-        let focusOK = await restoreFocus(targetApp: targetApp)
-        NSLog("[Haynoi] Focus restored: %d", focusOK ? 1 : 0)
+        let (focusOK, didSwitch) = await restoreFocus(targetApp: targetApp)
+        NSLog("[Haynoi] Focus restored: %d (didSwitch=%d)", focusOK ? 1 : 0, didSwitch ? 1 : 0)
 
         if !focusOK {
             NSLog("[Haynoi] ⚠️ Focus restore failed — clipboard fallback to avoid wrong-app paste")
@@ -48,7 +48,10 @@ enum TextInserter {
         }
 
         // Extra settle time — let target app fully process activation.
-        try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+        // If no app switch happened the target was already frontmost — 50ms is enough.
+        // After a real switch give the full 150ms so the app can process activation.
+        let settleNs: UInt64 = didSwitch ? 150_000_000 : 50_000_000
+        try? await Task.sleep(nanoseconds: settleNs)
 
         // Fix #1: last-instant check — confirm the correct app is still frontmost.
         if let target = targetApp {
@@ -117,13 +120,22 @@ enum TextInserter {
 
     // MARK: - Focus Restoration
 
-    private static func restoreFocus(targetApp: NSRunningApplication?) async -> Bool {
+    /// Returns (focusOK, didSwitch).
+    /// didSwitch is false when the target was already frontmost — the caller can use a
+    /// shorter settle delay in that case, shaving ~100ms off the no-switch hot path.
+    private static func restoreFocus(targetApp: NSRunningApplication?) async -> (Bool, Bool) {
         guard let target = targetApp,
               target.bundleIdentifier != Bundle.main.bundleIdentifier else {
-            return true // no target or target is self
+            return (true, false) // no target or target is self — nothing to switch
         }
 
-        // Try activate
+        // Fast path: target is already frontmost — skip activate() and all polling.
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier == target.processIdentifier {
+            NSLog("[Haynoi] Focus: target already frontmost, skipping activate")
+            return (true, false)
+        }
+
+        // Slow path: target is not frontmost — activate and poll.
         target.activate()
 
         // Poll until frontmost (max 600ms)
@@ -132,7 +144,7 @@ enum TextInserter {
             if NSWorkspace.shared.frontmostApplication?.processIdentifier == target.processIdentifier {
                 // Let the app fully process activation
                 try? await Task.sleep(nanoseconds: 80_000_000) // 80ms
-                return true
+                return (true, true)
             }
         }
 
@@ -147,7 +159,7 @@ enum TextInserter {
               target.bundleIdentifier ?? "?",
               actual?.bundleIdentifier ?? "?",
               match ? 1 : 0)
-        return match
+        return (match, match) // didSwitch only true if we actually succeeded
     }
 
     // MARK: - AX Direct Insert (Fix #4)
