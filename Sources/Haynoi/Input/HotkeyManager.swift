@@ -57,7 +57,9 @@ final class HotkeyManager {
     var targetModifier: CGEventFlags = .maskAlternate
 
     /// Grace period — if modifier held longer than this, activate.
-    private let activationDelay: TimeInterval = 0.20
+    /// 100ms: short enough to feel instant (founder feedback 2026-06-12 —
+    /// "phải ngay vào luôn"), long enough to still swallow fast ⌥-chords.
+    private let activationDelay: TimeInterval = 0.10
 
     // NSEvent monitor handles (global = other apps, local = Haynoi frontmost)
     private var globalMonitor: Any?

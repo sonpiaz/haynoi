@@ -336,7 +336,9 @@ final class AudioRecorder {
         hwFormat: AVAudioFormat,
         whisperFormat: AVAudioFormat
     ) {
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] pcm, _ in
+        // 1024 frames ≈ 21ms at 48kHz — the captureLive callback (start tone)
+        // fires within one buffer, so the go-cue lands right on the keypress.
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: hwFormat) { [weak self] pcm, _ in
             self?.processTapBuffer(pcm, converter: converter, targetFormat: whisperFormat)
         }
     }

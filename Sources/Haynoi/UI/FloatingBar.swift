@@ -97,10 +97,11 @@ class FloatingBarController {
     private func repositionWindow(_ win: NSWindow, size: NSSize) {
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
-        // Bottom-center, 24pt above the bottom edge of the visible frame
-        // (sits neatly above the Dock on default-position configs).
+        // Top-center, just below the menu bar (visibleFrame excludes it) —
+        // founder feedback 2026-06-12: the indicator lives up top, not above
+        // the Dock, so it never collides with what you're typing into.
         let x = visible.midX - size.width / 2
-        let y = visible.minY + 24
+        let y = visible.maxY - size.height - 10
         win.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }
@@ -118,9 +119,6 @@ struct FloatingBarView: View {
     /// Scrolling level history for the Trail waveform — newest sample last.
     @State private var trailHistory: [CGFloat] = Array(repeating: 0, count: 40)
     @State private var displayLink: Timer?
-
-    // Transcribing pulse
-    @State private var transcribePulse: Double = 0
 
     // Success / error — checkmark scale + color injection
     @State private var successScale: CGFloat = 1.0
@@ -172,25 +170,27 @@ struct FloatingBarView: View {
     private let trailBarGap: CGFloat = 1.2
     private let trailMaxBarHeight: CGFloat = 30
 
+    /// Shared "cosmic" capsule — deep-space near-black gradient, hairline
+    /// border, aurora halo that swells only with the voice. Founder feedback
+    /// 2026-06-12: dark, mysterious, premium.
+    private func cosmicCapsule(width: CGFloat, height: CGFloat) -> some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .frame(width: width, height: height)
+            .shadow(color: .black.opacity(0.38), radius: 10, y: 3)
+            .shadow(color: Color.calmAuroraViolet.opacity(0.16 + displayLevel * 0.30), radius: 14)
+    }
+
     private var recordingOrb: some View {
         ZStack {
-            // Soft aurora glow that swells only with the voice (no idle breathing).
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmAuroraViolet.opacity(0.12 + displayLevel * 0.20),
-                            Color.calmAuroraCyan.opacity(0.04 + displayLevel * 0.08),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 4,
-                        endRadius: 84
-                    )
-                )
-                .frame(width: 170, height: 58)
-                .scaleEffect(0.95 + displayLevel * 0.12)
-                .blur(radius: 3)
+            cosmicCapsule(width: 176, height: 52)
 
             Canvas { context, size in
                 let stride = trailBarWidth + trailBarGap
@@ -206,8 +206,8 @@ struct FloatingBarView: View {
                     let path = Path(roundedRect: rect, cornerRadius: trailBarWidth / 2)
                     let age = CGFloat(i) / CGFloat(max(trailHistory.count - 1, 1)) // 0 old → 1 new
                     if v < 0.05 {
-                        // Quiet dash — brand violet so it reads on light AND dark desktops.
-                        context.fill(path, with: .color(Color.calmAuroraViolet.opacity(0.28 + 0.24 * age)))
+                        // Quiet dash — soft white on the dark cosmic pill.
+                        context.fill(path, with: .color(Color.white.opacity(0.22 + 0.18 * age)))
                     } else {
                         var bar = context
                         bar.opacity = 0.35 + 0.65 * age
@@ -219,65 +219,19 @@ struct FloatingBarView: View {
                     }
                 }
             }
-            .frame(width: 170, height: 44)
+            .frame(width: 156, height: 40)
             .shadow(color: Color.calmAuroraViolet.opacity(0.35), radius: 4)
         }
-        .frame(width: 176, height: 76)
+        .frame(width: 180, height: 76)
     }
 
-    // MARK: - Transcribing Orb (calm indigo, pulsing — matches status-dot language)
+    // MARK: - Transcribing — intentionally invisible
+    //
+    // Founder feedback 2026-06-12: no violet dot while waiting. Release →
+    // quiet — the next thing you see is the "N words" chip (or the error pill).
 
     private var transcribingOrb: some View {
-        ZStack {
-            // Indigo outer glow — reads as "thinking", same hue as the menubar dot
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmAccent.opacity(0.18 + transcribePulse * 0.08),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 4,
-                        endRadius: 32
-                    )
-                )
-                .frame(width: 64, height: 64)
-                .scaleEffect(0.88 + transcribePulse * 0.06)
-                .blur(radius: 2)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                           value: transcribePulse)
-
-            // Thin indigo ring
-            Circle()
-                .stroke(
-                    Color.calmAccent.opacity(0.40 + transcribePulse * 0.18),
-                    lineWidth: 1.5
-                )
-                .frame(width: 34, height: 34)
-                .blur(radius: 0.5)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                           value: transcribePulse)
-
-            // Core — calm indigo
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmAccent.opacity(0.9),
-                            Color.calmAccentHover,
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 8
-                    )
-                )
-                .frame(width: 13, height: 13)
-                .scaleEffect(0.92 + transcribePulse * 0.08)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                           value: transcribePulse)
-        }
-        .onAppear { transcribePulse = 1.0 }
+        Color.clear
     }
 
     // MARK: - Success — "N words" chip (founder pick, 2026-06-12 contest)
@@ -289,20 +243,35 @@ struct FloatingBarView: View {
     private var successOrb: some View {
         Group {
             if state.lastDictationWordCount > 0 {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.calmAuroraCyan, .calmAuroraPink],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                     Text(wordsLabel(state.lastDictationWordCount))
                         .font(.system(size: 12, weight: .semibold))
                         .monospacedDigit()
+                        .foregroundStyle(.white)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(Color.calmSuccess)
-                        .shadow(color: Color.calmSuccess.opacity(0.45), radius: 8, y: 2)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.38), radius: 10, y: 3)
+                        .shadow(color: Color.calmAuroraViolet.opacity(0.25), radius: 12)
                 )
                 .scaleEffect(successScale)
                 .animation(.spring(response: 0.32, dampingFraction: 0.62), value: successScale)
@@ -310,16 +279,24 @@ struct FloatingBarView: View {
                 ZStack {
                     Circle()
                         .fill(
-                            RadialGradient(
-                                colors: [Color.calmSuccess.opacity(0.95), Color.calmSuccess],
-                                center: .center, startRadius: 0, endRadius: 9
+                            LinearGradient(
+                                colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
                         )
-                        .frame(width: 22, height: 22)
-                        .shadow(color: Color.calmSuccess.opacity(0.6), radius: 8)
+                        .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
+                        .frame(width: 26, height: 26)
+                        .shadow(color: Color.calmAuroraViolet.opacity(0.3), radius: 8)
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.calmAuroraCyan, .calmAuroraPink],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .scaleEffect(successScale)
                         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: successScale)
                 }
@@ -341,42 +318,21 @@ struct FloatingBarView: View {
 
     private var errorOrb: some View {
         ZStack {
-            // Warm glow
             Circle()
                 .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmWarn.opacity(0.35),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 4,
-                        endRadius: 36
+                    LinearGradient(
+                        colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
                 )
-                .frame(width: 68, height: 68)
-                .blur(radius: 2)
+                .overlay(Circle().stroke(Color.calmWarn.opacity(0.45), lineWidth: 1))
+                .frame(width: 26, height: 26)
+                .shadow(color: Color.calmWarn.opacity(0.4), radius: 8)
 
-            // Core
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.calmWarn.opacity(0.95),
-                            Color.calmWarn,
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 9
-                    )
-                )
-                .frame(width: 22, height: 22)
-                .shadow(color: Color.calmWarn.opacity(0.6), radius: 8)
-
-            // Exclamation
             Image(systemName: "exclamationmark")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.calmWarn)
         }
     }
 
@@ -386,13 +342,13 @@ struct FloatingBarView: View {
         switch newState {
         case .recording:
             orbVisible = true
-            transcribePulse = 0
             // Fresh dictation — the trail starts flat.
             trailHistory = Array(repeating: 0, count: trailBarCount)
 
         case .transcribing:
+            // Intentionally invisible (renders Color.clear) — the window stays
+            // alive so the "N words" chip can spring in on success.
             orbVisible = true
-            // transcribing pulse handled in the view's onAppear
 
         case .success:
             orbVisible = true

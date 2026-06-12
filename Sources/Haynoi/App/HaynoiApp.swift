@@ -820,7 +820,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         AppDelegate.shared = self
         UserDefaults.standard.register(defaults: [
             "soundEnabled": true,
-            "successDinkEnabled": true, // founder pick: subtle dink when text lands
+            "successDinkEnabled": false, // founder feedback: 2 tones max — chip shows silently
             "soundTheme": "chime",      // founder pick: gentle bell pair (contest 2026-06-12)
             "appTheme": "light",       // founder default: white-gray light look
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
