@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-06-12
+
+### Added
+- A "Test connection" button in Settings → Account. It checks whether
+  your dictation can actually reach our servers on each network route
+  and tells you in plain language what's wrong — a blocked upload, an
+  expired sign-in, or no credits. It's free: it doesn't transcribe.
+
 ## [0.3.3] - 2026-06-12
 
 ### Fixed
