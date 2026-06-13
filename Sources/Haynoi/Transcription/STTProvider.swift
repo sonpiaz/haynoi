@@ -122,9 +122,11 @@ enum STTProvider {
         func makeRequest(base: String) -> URLRequest {
             var request = URLRequest(url: URL(string: "\(base)/v1/audio/transcriptions")!)
             request.httpMethod = "POST"
-            // Fix #2: raised from 30 → 90s — long audio or congested networks
-            // were hitting the old limit and discarding the recording entirely.
-            request.timeoutInterval = 90
+            // 30s IDLE timeout (URLSession resets it whenever bytes move, so a
+            // slow-but-progressing upload is safe). A genuine stall now fails
+            // in 30s and the next network in the ladder takes over — with the
+            // old 90s a stalled network meant minutes before the fallback ran.
+            request.timeoutInterval = 30
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
             request.httpBody = body
