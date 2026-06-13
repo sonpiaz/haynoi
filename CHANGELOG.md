@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-12
+
+### Changed
+- Haynoi re-checks its network routes whenever your connection changes
+  (new Wi-Fi, VPN on/off, waking up somewhere else) — not just at
+  launch. Long-running sessions always dictate over the current best
+  route.
+
 ## [0.3.0] - 2026-06-12
 
 ### Changed
