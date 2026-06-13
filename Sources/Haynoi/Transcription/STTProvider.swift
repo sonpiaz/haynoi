@@ -18,7 +18,12 @@ enum STTProvider {
         }
 
         let mode = TranscriptionMode.current.resolved
-        let wavData = try createWAV(samples: samples, sampleRate: 16000)
+        // Encode AAC/M4A (~5× smaller than 16-bit WAV, accuracy verified
+        // identical). The upload is what stalls on congested networks (VN
+        // ISPs, 2026-06-12): a ~45 KB M4A survives where a ~210 KB WAV times
+        // out — the body, not the route, was the bottleneck. Falls back to
+        // WAV if AAC encoding fails.
+        let audio = encodeAudio(samples: samples, sampleRate: 16000)
         let model = resolveModel()
 
         // Language preference: @AppStorage "languageHint" values — "auto", "vi", "en".
@@ -51,7 +56,7 @@ enum STTProvider {
         }
 
         var text = try await callKymaTranscribe(
-            apiKey: apiKey, wavData: wavData, model: model, prompt: prompt,
+            apiKey: apiKey, audio: audio, model: model, prompt: prompt,
             languageHint: languageHint
         )
 
@@ -164,16 +169,16 @@ enum STTProvider {
     }
 
     private static func callKymaTranscribe(
-        apiKey: String, wavData: Data, model: String, prompt: String,
+        apiKey: String, audio: EncodedAudio, model: String, prompt: String,
         languageHint: String
     ) async throws -> String {
         let boundary = UUID().uuidString
 
         var body = Data()
         body.append("--\(boundary)\r\n")
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"recording.wav\"\r\n")
-        body.append("Content-Type: audio/wav\r\n\r\n")
-        body.append(wavData)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(audio.filename)\"\r\n")
+        body.append("Content-Type: \(audio.mimeType)\r\n\r\n")
+        body.append(audio.data)
         body.append("\r\n")
 
         body.append("--\(boundary)\r\n")
@@ -387,6 +392,62 @@ enum STTProvider {
     }
 
     // MARK: - WAV Encoder
+
+    /// Audio bytes ready for multipart upload, with the right filename + MIME.
+    struct EncodedAudio {
+        let data: Data
+        let filename: String
+        let mimeType: String
+    }
+
+    /// Encodes recorded samples for upload. Prefers AAC/M4A (~5× smaller than
+    /// 16-bit WAV) so the upload survives congested/lossy networks; falls back
+    /// to WAV if AAC encoding fails for any reason (never blocks a dictation).
+    static func encodeAudio(samples: [Float], sampleRate: Int) -> EncodedAudio {
+        if let m4a = try? createM4A(samples: samples, sampleRate: sampleRate) {
+            NSLog("[Haynoi] Upload: M4A %d KB (%d samples)", m4a.count / 1024, samples.count)
+            return EncodedAudio(data: m4a, filename: "recording.m4a", mimeType: "audio/m4a")
+        }
+        // Fallback: uncompressed WAV.
+        let wav = (try? createWAV(samples: samples, sampleRate: sampleRate)) ?? Data()
+        NSLog("[Haynoi] Upload: WAV fallback %d KB", wav.count / 1024)
+        return EncodedAudio(data: wav, filename: "recording.wav", mimeType: "audio/wav")
+    }
+
+    /// AAC-in-MPEG4 encode at 24 kbps mono — plenty for 16 kHz speech, and
+    /// Kyma accepts M4A. AVAudioFile converts the Float32 buffer to AAC.
+    private static func createM4A(samples: [Float], sampleRate: Int) throws -> Data {
+        let float32Format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Double(sampleRate),
+            channels: 1,
+            interleaved: false
+        )!
+        let buffer = AVAudioPCMBuffer(pcmFormat: float32Format,
+                                      frameCapacity: AVAudioFrameCount(samples.count))!
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        let channelData = buffer.floatChannelData![0]
+        for i in 0..<samples.count { channelData[i] = samples[i] }
+
+        let aacSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: Double(sampleRate),
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 24000,
+        ]
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("haynoi_\(UUID().uuidString).m4a")
+        // Scope the file so it deinits (flushing the AAC trailer) BEFORE the
+        // read — reading a still-open compressed file yields a truncated clip.
+        do {
+            let file = try AVAudioFile(forWriting: tmpURL, settings: aacSettings)
+            try file.write(from: buffer)
+        }
+        let data = try Data(contentsOf: tmpURL)
+        try? FileManager.default.removeItem(at: tmpURL)
+        guard data.count > 0 else { throw STTError.parseError }
+        return data
+    }
 
     private static func createWAV(samples: [Float], sampleRate: Int) throws -> Data {
         let float32Format = AVAudioFormat(
