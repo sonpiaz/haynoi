@@ -6,6 +6,27 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.3.0</title>
+            <pubDate>Sat, 13 Jun 2026 01:18:13 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>21</sparkle:version>
+            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.3.0</h2>
+
+<h3>Changed</h3>
+<ul>
+<li>Smarter networking: Haynoi probes its API routes at launch and</li>
+</ul>
+<p>  dictates over the fastest one that works from YOUR network. If a</p>
+<p>  route stalls mid-dictation, the next one races in parallel after 4</p>
+<p>  seconds — the winner is remembered, so a bad network costs you a few</p>
+<p>  seconds once, not on every sentence.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.0/Haynoi-0.3.0-universal.zip" length="2848000" type="application/octet-stream" sparkle:edSignature="P1TY0kqUJddW6SCPZ5GHl1cLzQBiZezzvR9TQ4Jaioru/ABKrPY3aPFXXCbpmy4fCa32KZKZWxT7+p1I+ElnAA=="/>
+        </item>
+        <item>
             <title>0.2.9</title>
             <pubDate>Sat, 13 Jun 2026 01:13:07 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -41,26 +62,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.8/Haynoi-0.2.8-universal.zip" length="2838101" type="application/octet-stream" sparkle:edSignature="jE88QoVaHDp7Yzjp1Pvbjjf3gow280R/ya7z8AQ/ZSXjGLp97+Fa17cLo2OX1vhY/1VvMHmgNwNtHb112zeLCQ=="/>
-        </item>
-        <item>
-            <title>0.2.7</title>
-            <pubDate>Sat, 13 Jun 2026 00:47:08 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>18</sparkle:version>
-            <sparkle:shortVersionString>0.2.7</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.7</h2>
-
-<h3>Fixed</h3>
-<ul>
-<li>Dictation now works on networks where the direct upload path stalls</li>
-</ul>
-<p>  (reported from Vietnam): if the audio upload fails, Haynoi</p>
-<p>  automatically retries through an alternate route. If you kept seeing</p>
-<p>  "Something went wrong" after speaking, this is for you.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.7/Haynoi-0.2.7-universal.zip" length="2837554" type="application/octet-stream" sparkle:edSignature="lOjDNZlT8VzAt69PLOmPSNRx3QZa/efT/AwGi94NifpdGPVoxRkS+H9shaDBJRDD2XUPXKuhqninPWH42E36DQ=="/>
         </item>
     </channel>
 </rss>
