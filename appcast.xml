@@ -6,6 +6,26 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.7</title>
+            <pubDate>Sat, 13 Jun 2026 00:47:08 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>18</sparkle:version>
+            <sparkle:shortVersionString>0.2.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.7</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>Dictation now works on networks where the direct upload path stalls</li>
+</ul>
+<p>  (reported from Vietnam): if the audio upload fails, Haynoi</p>
+<p>  automatically retries through an alternate route. If you kept seeing</p>
+<p>  "Something went wrong" after speaking, this is for you.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.7/Haynoi-0.2.7-universal.zip" length="2837554" type="application/octet-stream" sparkle:edSignature="lOjDNZlT8VzAt69PLOmPSNRx3QZa/efT/AwGi94NifpdGPVoxRkS+H9shaDBJRDD2XUPXKuhqninPWH42E36DQ=="/>
+        </item>
+        <item>
             <title>0.2.6</title>
             <pubDate>Sat, 13 Jun 2026 00:29:33 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -50,33 +70,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.5/Haynoi-0.2.5-universal.zip" length="2834674" type="application/octet-stream" sparkle:edSignature="Wr7fT4OEx/ZfTl3Z8OlwDxjXfP0Zohtj5REda0Sbh7pgM7UFSmF/AmkUQMTR3JfaXatZr+qioLX9pldKzgjzCA=="/>
-        </item>
-        <item>
-            <title>0.2.4</title>
-            <pubDate>Sat, 13 Jun 2026 00:10:14 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>15</sparkle:version>
-            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.4</h2>
-
-<h3>Fixed</h3>
-<ul>
-<li>Clicking the menu bar icon now actually shows the panel — it was</li>
-</ul>
-<p>  opening collapsed to a sliver of 10 pixels, which looked like nothing</p>
-<p>  happened at all.</p>
-
-<h3>Changed</h3>
-<ul>
-<li>Insights got a cleaner layout: one headline, then words / pace /</li>
-</ul>
-<p>  streaks together on a single row of cards matching the History page,</p>
-<p>  the activity heatmap, and where your words go. Duplicate app rows are</p>
-<p>  merged, and the redundant footer is gone.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.4/Haynoi-0.2.4-universal.zip" length="2833930" type="application/octet-stream" sparkle:edSignature="xeocrE/Az9vFvM7t2Olc/D1hWErVECRww3AXH0m40WA1dpVy6towX+YOeXp+FdOW3fHnYg/N9ekBhIvWltZ9Cg=="/>
         </item>
     </channel>
 </rss>
