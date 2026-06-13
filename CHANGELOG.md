@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-06-12
+
+### Changed
+- The microphone now releases about 10 seconds after you finish (was a
+  minute), so the macOS orange "mic in use" dot doesn't linger.
+  Back-to-back dictations are still instant.
+
 ## [0.3.4] - 2026-06-12
 
 ### Added
