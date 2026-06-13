@@ -6,6 +6,25 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.6</title>
+            <pubDate>Sat, 13 Jun 2026 00:29:33 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>17</sparkle:version>
+            <sparkle:shortVersionString>0.2.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.6</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>The Settings gear and Sign in buttons in the menu bar panel actually</li>
+</ul>
+<p>  open Settings now — they had been calling a retired macOS hook that</p>
+<p>  silently did nothing.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.6/Haynoi-0.2.6-universal.zip" length="2836032" type="application/octet-stream" sparkle:edSignature="eY2ffVp6XAkra/VI4FG+fQFGqvzgBHfibeQa/mA5B/3GegkEImLNut39NPGoZ3tW5umHoJT38kN1xwPX7jd+CA=="/>
+        </item>
+        <item>
             <title>0.2.5</title>
             <pubDate>Sat, 13 Jun 2026 00:24:15 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -58,39 +77,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.4/Haynoi-0.2.4-universal.zip" length="2833930" type="application/octet-stream" sparkle:edSignature="xeocrE/Az9vFvM7t2Olc/D1hWErVECRww3AXH0m40WA1dpVy6towX+YOeXp+FdOW3fHnYg/N9ekBhIvWltZ9Cg=="/>
-        </item>
-        <item>
-            <title>0.2.3</title>
-            <pubDate>Fri, 12 Jun 2026 23:53:53 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>14</sparkle:version>
-            <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.3</h2>
-
-<h3>Fixed</h3>
-<ul>
-<li>The app no longer feels sluggish after dictating: an internal audio</li>
-</ul>
-<p>  level signal kept re-rendering the interface ~47 times a second for a</p>
-<p>  minute after each dictation. Scrolling, switching sections, and the</p>
-<p>  menu bar panel are smooth again.</p>
-<ul>
-<li>Long histories scroll smoothly — rows are now built only as they come</li>
-</ul>
-<p>  into view.</p>
-
-<h3>Changed</h3>
-<ul>
-<li>The copy button is back on every history row — always visible, and the</li>
-</ul>
-<p>  row never shifts. Delete stays in the right-click menu.</p>
-<ul>
-<li>Removed the Recent section — it duplicated History.</li>
-</ul>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.3/Haynoi-0.2.3-universal.zip" length="2853013" type="application/octet-stream" sparkle:edSignature="xC17p+Hpo0vpwy9PC0a9zsRs8oeWSE8wc1WZtvEMK2tf0y1e1mfKc8S/Ihvd0XRTUqcp9eLoYx7m9RDNq2xIBw=="/>
         </item>
     </channel>
 </rss>
