@@ -6,6 +6,26 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.3.1</title>
+            <pubDate>Sat, 13 Jun 2026 01:42:53 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>22</sparkle:version>
+            <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.3.1</h2>
+
+<h3>Changed</h3>
+<ul>
+<li>Haynoi re-checks its network routes whenever your connection changes</li>
+</ul>
+<p>  (new Wi-Fi, VPN on/off, waking up somewhere else) — not just at</p>
+<p>  launch. Long-running sessions always dictate over the current best</p>
+<p>  route.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.1/Haynoi-0.3.1-universal.zip" length="2850324" type="application/octet-stream" sparkle:edSignature="eHKiqZo3rpZ2EXgiRVlK84lI6Rh1u/IiX5JJnvqEAkeo23VN9x/B2R1L5C3SApliTPH0SQ43of+KRzbOsaFFCw=="/>
+        </item>
+        <item>
             <title>0.3.0</title>
             <pubDate>Sat, 13 Jun 2026 01:18:13 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -43,25 +63,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.9/Haynoi-0.2.9-universal.zip" length="2837964" type="application/octet-stream" sparkle:edSignature="q6gUSxf9SRIbTo3+OTkqw5+cofuAqEZmvhtuMCSLQF+n4GuWuNFq3N8ez/RO9z3UeQIw5CJnbKZNLE2WEpfwBw=="/>
-        </item>
-        <item>
-            <title>0.2.8</title>
-            <pubDate>Sat, 13 Jun 2026 01:03:39 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>19</sparkle:version>
-            <sparkle:shortVersionString>0.2.8</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.8</h2>
-
-<h3>Fixed</h3>
-<ul>
-<li>A third automatic upload route for networks where both standard paths</li>
-</ul>
-<p>  stall — dictation now tries a completely independent network edge</p>
-<p>  before giving up.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.8/Haynoi-0.2.8-universal.zip" length="2838101" type="application/octet-stream" sparkle:edSignature="jE88QoVaHDp7Yzjp1Pvbjjf3gow280R/ya7z8AQ/ZSXjGLp97+Fa17cLo2OX1vhY/1VvMHmgNwNtHb112zeLCQ=="/>
         </item>
     </channel>
 </rss>
