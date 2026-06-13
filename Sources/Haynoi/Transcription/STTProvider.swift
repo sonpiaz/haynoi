@@ -119,9 +119,10 @@ enum STTProvider {
         pathMonitor.start(queue: DispatchQueue(label: "haynoi.route-monitor"))
     }
 
-    /// Fire-and-forget probe of all routes (tiny GET /v1/models). The fastest
-    /// healthy route becomes preferred, so even the FIRST dictation after
-    /// launch uses a route that is known to work from this network.
+    /// Fire-and-forget probe of all routes (tiny GET /v1/health — 93 bytes,
+    /// free + no-auth, no model inference so it never bills credits). The
+    /// fastest healthy route becomes preferred, so even the FIRST dictation
+    /// after launch uses a route that is known to work from this network.
     /// Debounced: path changes arrive in bursts when switching networks.
     static func probeRoutesInBackground() {
         probeLock.lock()
@@ -138,7 +139,10 @@ enum STTProvider {
             await withTaskGroup(of: (String, Double)?.self) { group in
                 for base in routeBases {
                     group.addTask {
-                        var req = URLRequest(url: URL(string: "\(base)/v1/models")!)
+                        // /v1/health is 93 bytes (vs 71 KB for /v1/models) —
+                        // a probe only needs liveness + latency, not the model
+                        // list. 768× less bandwidth per probe round.
+                        var req = URLRequest(url: URL(string: "\(base)/v1/health")!)
                         req.timeoutInterval = 5
                         let t0 = Date()
                         guard let (_, resp) = try? await URLSession.shared.data(for: req),
