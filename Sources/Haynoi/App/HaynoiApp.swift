@@ -584,10 +584,9 @@ private struct MenuBarContent: View {
                         .foregroundStyle(Color.calmLabel3(for: scheme))
                         .lineLimit(1)
                 } else {
-                    Button {
-                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                        NSApp.activate(ignoringOtherApps: true)
-                    } label: {
+                    // SettingsLink: the legacy showSettingsWindow: selector is
+                    // dead on this macOS — buttons using it silently did nothing.
+                    SettingsLink {
                         Text("Sign in")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.calmAccent(for: scheme))
@@ -598,11 +597,8 @@ private struct MenuBarContent: View {
 
             Spacer()
 
-            // Settings
-            Button {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
+            // Settings — SettingsLink (the legacy selector silently broke)
+            SettingsLink {
                 Image(systemName: "gear")
                     .font(.system(size: 14))
                     .foregroundStyle(Color.calmLabel4(for: scheme))
@@ -884,8 +880,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 NSWorkspace.shared.open(url)
             }
         case "openSettings":
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            NSApp.activate(ignoringOtherApps: true)
+            // Settings can't be opened via the dead legacy selector from an
+            // AppKit context — open the main window (Settings in the sidebar).
+            Task { @MainActor in AppDelegate.shared?.showMainWindowPublic() }
         default:
             break
         }
