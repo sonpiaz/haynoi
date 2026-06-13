@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-12
+
+### Changed
+- Haynoi is now a menu-bar app: no Dock icon while you work — it appears
+  only when the main window is open. Dictation works whenever the app is
+  running.
+- The menu bar panel shows your 5 most recent dictations, each with a
+  copy button right on the row.
+- Removed the panel's Mode and Settings rows, which opened nothing.
+  Settings lives in the main window.
+
 ## [0.2.4] - 2026-06-12
 
 ### Fixed
