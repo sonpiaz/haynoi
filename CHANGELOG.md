@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-12
+
+### Changed
+- The network route check is now featherweight — it pings a 93-byte
+  health endpoint instead of downloading the full model list, so
+  checking your routes uses almost no data.
+
 ## [0.3.1] - 2026-06-12
 
 ### Changed
