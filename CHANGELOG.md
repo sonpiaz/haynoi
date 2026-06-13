@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-06-12
+
+### Changed
+- When a network route stalls, Haynoi now moves to the next route in 30
+  seconds instead of 90 — a rescued dictation lands in under a minute.
+
 ## [0.2.8] - 2026-06-12
 
 ### Fixed
