@@ -73,9 +73,13 @@ final class AudioRecorder {
     // Watchdog timer — fires every 500ms while CAPTURING is active.
     private var watchdogTimer: Timer?
 
-    // Cooldown timer — stops the warm engine 60s after the last endCapture.
+    // Cooldown timer — stops the warm engine this many seconds after the last
+    // endCapture, releasing the mic (and the macOS orange indicator). 10s:
+    // long enough to keep back-to-back dictations instant, short enough that
+    // the orange dot doesn't linger (founder feedback 2026-06-12). Warm-up is
+    // fast now, so re-arming after a gap is cheap.
     private var cooldownTimer: Timer?
-    private static let cooldownInterval: TimeInterval = 60
+    private static let cooldownInterval: TimeInterval = 10
 
     // Dedicated serial queue for engine start/stop so it never blocks the main
     // actor (slow Bluetooth A2DP→HFP switches can take 1–3s).
