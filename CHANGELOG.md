@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-12
+
+### Changed
+- Smarter networking: Haynoi probes its API routes at launch and
+  dictates over the fastest one that works from YOUR network. If a
+  route stalls mid-dictation, the next one races in parallel after 4
+  seconds — the winner is remembered, so a bad network costs you a few
+  seconds once, not on every sentence.
+
 ## [0.2.9] - 2026-06-12
 
 ### Changed
