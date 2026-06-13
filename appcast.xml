@@ -6,6 +6,33 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.4</title>
+            <pubDate>Sat, 13 Jun 2026 00:10:14 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>15</sparkle:version>
+            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.4</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>Clicking the menu bar icon now actually shows the panel — it was</li>
+</ul>
+<p>  opening collapsed to a sliver of 10 pixels, which looked like nothing</p>
+<p>  happened at all.</p>
+
+<h3>Changed</h3>
+<ul>
+<li>Insights got a cleaner layout: one headline, then words / pace /</li>
+</ul>
+<p>  streaks together on a single row of cards matching the History page,</p>
+<p>  the activity heatmap, and where your words go. Duplicate app rows are</p>
+<p>  merged, and the redundant footer is gone.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.4/Haynoi-0.2.4-universal.zip" length="2833930" type="application/octet-stream" sparkle:edSignature="xeocrE/Az9vFvM7t2Olc/D1hWErVECRww3AXH0m40WA1dpVy6towX+YOeXp+FdOW3fHnYg/N9ekBhIvWltZ9Cg=="/>
+        </item>
+        <item>
             <title>0.2.3</title>
             <pubDate>Fri, 12 Jun 2026 23:53:53 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -56,41 +83,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.2/Haynoi-0.2.2-universal.zip" length="2848475" type="application/octet-stream" sparkle:edSignature="2NM8WTUOMEQ5+pHk63PfswVn/RQhYuFLXDyBNsta0XrUhbtHJi21PKZyjwsexIpiAMCPVCDjBL7Z3zqvuhZcBg=="/>
-        </item>
-        <item>
-            <title>0.2.1</title>
-            <pubDate>Fri, 12 Jun 2026 23:35:16 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.1</h2>
-
-<h3>Changed</h3>
-<ul>
-<li>The press registers almost immediately: the hold-confirmation window</li>
-</ul>
-<p>  dropped from 200ms to 100ms, and the start chime now fires within a</p>
-<p>  few hundredths of a second of the microphone going live.</p>
-<ul>
-<li>The indicator moved to the top-center of the screen and wears a new</li>
-</ul>
-<p>  dark cosmic capsule — deep-space gradient, hairline border, and an</p>
-<p>  aurora halo that swells only with your voice.</p>
-<ul>
-<li>Quieter by default: exactly two tones per dictation (press and</li>
-</ul>
-<p>  release). The "N words" chip still appears — silently. The success</p>
-<p>  chime is now opt-in in Settings → Sounds.</p>
-
-<h3>Removed</h3>
-<ul>
-<li>The violet dot while transcribing. Release is quiet until the words</li>
-</ul>
-<p>  chip springs in.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.1/Haynoi-0.2.1-universal.zip" length="2863839" type="application/octet-stream" sparkle:edSignature="MYU+AqpMLSadpGwVeDU3CsAPKn2GwFJpragZER/j/c6nWFqeIqLPy/WISnG7g53RwdBnrtiDEg4EnFWMW1avAw=="/>
         </item>
     </channel>
 </rss>
