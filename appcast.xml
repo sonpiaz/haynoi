@@ -6,6 +6,33 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.5</title>
+            <pubDate>Sat, 13 Jun 2026 00:24:15 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>16</sparkle:version>
+            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.5</h2>
+
+<h3>Changed</h3>
+<ul>
+<li>Haynoi is now a menu-bar app: no Dock icon while you work — it appears</li>
+</ul>
+<p>  only when the main window is open. Dictation works whenever the app is</p>
+<p>  running.</p>
+<ul>
+<li>The menu bar panel shows your 5 most recent dictations, each with a</li>
+</ul>
+<p>  copy button right on the row.</p>
+<ul>
+<li>Removed the panel's Mode and Settings rows, which opened nothing.</li>
+</ul>
+<p>  Settings lives in the main window.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.5/Haynoi-0.2.5-universal.zip" length="2834674" type="application/octet-stream" sparkle:edSignature="Wr7fT4OEx/ZfTl3Z8OlwDxjXfP0Zohtj5REda0Sbh7pgM7UFSmF/AmkUQMTR3JfaXatZr+qioLX9pldKzgjzCA=="/>
+        </item>
+        <item>
             <title>0.2.4</title>
             <pubDate>Sat, 13 Jun 2026 00:10:14 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -64,25 +91,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.3/Haynoi-0.2.3-universal.zip" length="2853013" type="application/octet-stream" sparkle:edSignature="xC17p+Hpo0vpwy9PC0a9zsRs8oeWSE8wc1WZtvEMK2tf0y1e1mfKc8S/Ihvd0XRTUqcp9eLoYx7m9RDNq2xIBw=="/>
-        </item>
-        <item>
-            <title>0.2.2</title>
-            <pubDate>Fri, 12 Jun 2026 23:38:41 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>13</sparkle:version>
-            <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.2</h2>
-
-<h3>Changed</h3>
-<ul>
-<li>History rows are completely still now: no more layout shift on hover</li>
-</ul>
-<p>  and no language badge. Copy and Delete live in the right-click menu;</p>
-<p>  selecting text directly still works.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.2/Haynoi-0.2.2-universal.zip" length="2848475" type="application/octet-stream" sparkle:edSignature="2NM8WTUOMEQ5+pHk63PfswVn/RQhYuFLXDyBNsta0XrUhbtHJi21PKZyjwsexIpiAMCPVCDjBL7Z3zqvuhZcBg=="/>
         </item>
     </channel>
 </rss>
