@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-06-12
+
+### Fixed
+- Clicking the menu bar icon now actually shows the panel — it was
+  opening collapsed to a sliver of 10 pixels, which looked like nothing
+  happened at all.
+
+### Changed
+- Insights got a cleaner layout: one headline, then words / pace /
+  streaks together on a single row of cards matching the History page,
+  the activity heatmap, and where your words go. Duplicate app rows are
+  merged, and the redundant footer is gone.
+
 ## [0.2.3] - 2026-06-12
 
 ### Fixed
