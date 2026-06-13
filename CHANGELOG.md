@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-06-12
+
+### Fixed
+- The Settings gear and Sign in buttons in the menu bar panel actually
+  open Settings now — they had been calling a retired macOS hook that
+  silently did nothing.
+
 ## [0.2.5] - 2026-06-12
 
 ### Changed
