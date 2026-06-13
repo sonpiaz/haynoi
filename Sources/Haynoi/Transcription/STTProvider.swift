@@ -83,6 +83,51 @@ enum STTProvider {
     private static let kymaFallbackBaseURL = "https://kymaapi.com"
     private static let kymaDirectBaseURL = "https://kyma-api-production.up.railway.app"
 
+    private static var routeBases: [String] {
+        [kymaBaseURL, kymaFallbackBaseURL, kymaDirectBaseURL]
+    }
+
+    /// The route that most recently worked (or probed fastest). Persisted, so
+    /// a user whose ISP stalls the primary edge pays the rescue delay AT MOST
+    /// once — every later dictation goes straight to their good route.
+    private static var preferredBase: String {
+        get {
+            let v = UserDefaults.standard.string(forKey: "kymaPreferredRoute") ?? kymaBaseURL
+            return routeBases.contains(v) ? v : kymaBaseURL
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "kymaPreferredRoute") }
+    }
+
+    /// Fire-and-forget probe of all routes (tiny GET /v1/models). The fastest
+    /// healthy route becomes preferred, so even the FIRST dictation after
+    /// launch uses a route that is known to work from this network.
+    static func probeRoutesInBackground() {
+        Task.detached(priority: .utility) {
+            var best: (base: String, ms: Double)?
+            await withTaskGroup(of: (String, Double)?.self) { group in
+                for base in routeBases {
+                    group.addTask {
+                        var req = URLRequest(url: URL(string: "\(base)/v1/models")!)
+                        req.timeoutInterval = 5
+                        let t0 = Date()
+                        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+                              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+                        return (base, Date().timeIntervalSince(t0) * 1000)
+                    }
+                }
+                for await result in group {
+                    if let result, best == nil || result.1 < best!.ms {
+                        best = (result.0, result.1)
+                    }
+                }
+            }
+            if let best {
+                preferredBase = best.base
+                NSLog("[Haynoi] Route probe: %@ wins (%.0f ms)", best.base, best.ms)
+            }
+        }
+    }
+
     private static func callKymaTranscribe(
         apiKey: String, wavData: Data, model: String, prompt: String,
         languageHint: String
@@ -133,79 +178,104 @@ enum STTProvider {
             return request
         }
 
-        var lastError: Error = STTError.noConnection
-        // Attempts 1-2: primary edge. Attempt 3: the Vercel-proxied edge.
-        // Attempt 4: Railway's own edge (a completely different network).
-        let attemptBases = [kymaBaseURL, kymaBaseURL, kymaFallbackBaseURL, kymaDirectBaseURL]
-        for attempt in 0..<attemptBases.count {
-            let base = attemptBases[attempt]
-            let request = makeRequest(base: base)
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse else {
-                    throw STTError.noConnection
-                }
-                if http.statusCode == 401 {
-                    // Key was revoked server-side — sign out locally and notify UI.
-                    NSLog("[Haynoi] 401 from transcription endpoint — key revoked, signing out")
-                    await MainActor.run { AuthState.shared.handleKeyRevoked() }
-                    NotificationHelper.postSessionExpired()
-                    throw STTError.sessionExpired
-                }
-                if http.statusCode == 402 {
-                    // Fix #2: credit exhaustion is an expected pay-as-you-go state.
-                    NSLog("[Haynoi] 402 from transcription endpoint — out of credits")
-                    throw STTError.outOfCredits
-                }
-                if http.statusCode == 429 {
-                    let retryAfter = http.value(forHTTPHeaderField: "Retry-After")
-                        .flatMap(Double.init) ?? pow(2.0, Double(attempt + 1))
-                    let delay = min(retryAfter, 30.0)
-                    NSLog("[Haynoi] Rate limited (transcription), retrying in %.0fs (%d/3)", delay, attempt + 1)
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    lastError = STTError.rateLimited
-                    continue
-                }
-                guard http.statusCode == 200 else {
-                    // Fix #2: parse the Kyma error envelope {"error":{"message":...}}
-                    // instead of dumping raw bodies. Detail stays in NSLog only.
-                    let rawBody = String(data: data, encoding: .utf8) ?? ""
-                    NSLog("[Haynoi] Transcription API error %d via %@: %@",
-                          http.statusCode, base, rawBody)
-                    let humanMessage = parseKymaErrorMessage(data: data)
-                    // 5xx / edge errors (often unparseable middlebox or proxy
-                    // bodies) are retriable — the next attempt may go through
-                    // the fallback host. Real 4xx client errors fail fast.
-                    if http.statusCode >= 500 {
-                        lastError = STTError.serverError(
-                            humanMessage ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
-                        continue
+        // Hedged race (v0.3.0): the preferred route fires immediately; each
+        // remaining route joins IN PARALLEL 4s later if no answer yet. First
+        // success wins and becomes the preferred route for next time. A user
+        // on a stalled network pays the hedge delay once (~4-8s), then every
+        // later dictation goes straight to their working route at full speed.
+        // Trade-off: when the preferred route is merely slow (>4s, ~p99) a
+        // duplicate transcription may complete upstream and double-bill that
+        // one dictation — pennies, accepted to never lose the user's words.
+        let order = [preferredBase] + routeBases.filter { $0 != preferredBase }
+        return try await withThrowingTaskGroup(of: RaceOutcome.self) { group in
+            for (i, base) in order.enumerated() {
+                let request = makeRequest(base: base)
+                group.addTask {
+                    if i > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(i) * 4_000_000_000)
+                        if Task.isCancelled { return .routeFailed(STTError.noConnection) }
                     }
-                    throw STTError.serverError(
-                        humanMessage ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
+                    return await attemptRoute(base: base, request: request)
                 }
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let text = json["text"] as? String else {
-                    throw STTError.parseError
-                }
-                return text.trimmingCharacters(in: .whitespacesAndNewlines)
-            } catch let urlErr as URLError {
-                // Fix #2: transport errors (offline, DNS, timeout) were not
-                // retried — the WAV was lost silently. The audio is in memory;
-                // retrying costs nothing but a short backoff.
-                let backoff = pow(2.0, Double(attempt + 1)) // 2s, 4s
-                NSLog("[Haynoi] Transport error (transcription, attempt %d/3): %@ — retrying in %.0fs",
-                      attempt + 1, urlErr.localizedDescription, backoff)
-                lastError = STTError.noConnection
-                if attempt < attemptBases.count - 1 {
-                    try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
-                }
-            } catch let sttErr as STTError {
-                // Non-retriable STT errors (401, 402) — propagate immediately.
-                throw sttErr
             }
+
+            var lastFailure: Error = STTError.noConnection
+            var failures = 0
+            for try await outcome in group {
+                switch outcome {
+                case .success(let text, let base):
+                    if base != preferredBase {
+                        NSLog("[Haynoi] Route %@ rescued the dictation — now preferred", base)
+                        preferredBase = base
+                    }
+                    group.cancelAll()
+                    return text
+                case .fatal(let error):
+                    group.cancelAll()
+                    throw error
+                case .routeFailed(let error):
+                    failures += 1
+                    lastFailure = error
+                }
+            }
+            _ = failures
+            throw lastFailure
         }
-        throw lastError
+    }
+
+    /// One transcription attempt against one route. Never throws — returns a
+    /// race outcome so the hedged group can decide.
+    private enum RaceOutcome {
+        case success(String, base: String)
+        case routeFailed(Error)   // try another route
+        case fatal(Error)         // same answer everywhere — stop the race
+    }
+
+    private static func attemptRoute(base: String, request: URLRequest) async -> RaceOutcome {
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return .routeFailed(STTError.noConnection)
+            }
+            switch http.statusCode {
+            case 200:
+                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let text = json["text"] as? String else {
+                    return .routeFailed(STTError.parseError)
+                }
+                return .success(text.trimmingCharacters(in: .whitespacesAndNewlines), base: base)
+            case 401:
+                // Key was revoked server-side — sign out locally and notify UI.
+                NSLog("[Haynoi] 401 from %@ — key revoked, signing out", base)
+                await MainActor.run { AuthState.shared.handleKeyRevoked() }
+                NotificationHelper.postSessionExpired()
+                return .fatal(STTError.sessionExpired)
+            case 402:
+                NSLog("[Haynoi] 402 from %@ — out of credits", base)
+                return .fatal(STTError.outOfCredits)
+            case 429:
+                NSLog("[Haynoi] Rate limited via %@", base)
+                return .routeFailed(STTError.rateLimited)
+            case 500...:
+                let rawBody = String(data: data, encoding: .utf8) ?? ""
+                NSLog("[Haynoi] Transcription API error %d via %@: %@", http.statusCode, base, rawBody)
+                return .routeFailed(STTError.serverError(
+                    parseKymaErrorMessage(data: data)
+                        ?? "Something went wrong (HTTP \(http.statusCode)) — try again"))
+            default:
+                // Real 4xx client errors — every route gives the same answer.
+                let rawBody = String(data: data, encoding: .utf8) ?? ""
+                NSLog("[Haynoi] Transcription API error %d via %@: %@", http.statusCode, base, rawBody)
+                return .fatal(STTError.serverError(
+                    parseKymaErrorMessage(data: data)
+                        ?? "Something went wrong (HTTP \(http.statusCode)) — try again"))
+            }
+        } catch let urlErr as URLError {
+            NSLog("[Haynoi] Transport error via %@: %@", base, urlErr.localizedDescription)
+            return .routeFailed(STTError.noConnection)
+        } catch {
+            return .routeFailed(error)
+        }
     }
 
     /// Extracts the human-readable message from a Kyma error envelope.
