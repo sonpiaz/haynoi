@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-06-12
+
+### Fixed
+- Dictation on slow or congested networks (reported across Vietnam):
+  recordings are now uploaded in a compressed format about 5× smaller,
+  so the audio reaches the server even where the previous larger upload
+  stalled. This is the real fix behind the "Something went wrong" errors
+  some users saw after speaking.
+
 ## [0.3.2] - 2026-06-12
 
 ### Changed
