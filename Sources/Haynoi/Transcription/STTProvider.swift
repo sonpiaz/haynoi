@@ -73,13 +73,15 @@ enum STTProvider {
     // Data-plane goes straight to the API edge (skips the website proxy hop).
     // Auth stays on kymaapi.com (browser flow) — see KymaAuth.baseURL.
     private static let kymaBaseURL = "https://api.kymaapi.com"
-    // Fallback edge: the same API behind the website proxy (Cloudflare →
-    // Vercel → Railway). Some ISPs — notably in Vietnam — stall multipart
-    // uploads to the direct edge while the Cloudflare path sails through
-    // (live-debugged 2026-06-12: user's request HEADERS reached auth, the
-    // body never completed; direct OpenAI from the same machine was fine).
-    // The last retry attempt goes through this host.
+    // Fallback ladder — three DIFFERENT network paths (live-debugged
+    // 2026-06-12: a VN user's request HEADERS reached auth but the multipart
+    // BODY never completed; direct OpenAI from the same machine was fine):
+    //   1. api.kymaapi.com — Cloudflare edge → native Worker
+    //   2. kymaapi.com     — Cloudflare edge → Vercel proxy → Railway
+    //   3. Railway host    — Railway's own edge, NO Cloudflare at all —
+    //      rescues ISPs whose route into the Cloudflare anycast is broken.
     private static let kymaFallbackBaseURL = "https://kymaapi.com"
+    private static let kymaDirectBaseURL = "https://kyma-api-production.up.railway.app"
 
     private static func callKymaTranscribe(
         apiKey: String, wavData: Data, model: String, prompt: String,
@@ -130,10 +132,11 @@ enum STTProvider {
         }
 
         var lastError: Error = STTError.noConnection
-        for attempt in 0..<3 {
-            // Attempts 1-2: direct edge. Attempt 3: Cloudflare-proxied edge —
-            // rescues networks where the direct upload path stalls.
-            let base = attempt < 2 ? kymaBaseURL : kymaFallbackBaseURL
+        // Attempts 1-2: primary edge. Attempt 3: the Vercel-proxied edge.
+        // Attempt 4: Railway's own edge (a completely different network).
+        let attemptBases = [kymaBaseURL, kymaBaseURL, kymaFallbackBaseURL, kymaDirectBaseURL]
+        for attempt in 0..<attemptBases.count {
+            let base = attemptBases[attempt]
             let request = makeRequest(base: base)
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
@@ -192,7 +195,7 @@ enum STTProvider {
                 NSLog("[Haynoi] Transport error (transcription, attempt %d/3): %@ — retrying in %.0fs",
                       attempt + 1, urlErr.localizedDescription, backoff)
                 lastError = STTError.noConnection
-                if attempt < 2 {
+                if attempt < attemptBases.count - 1 {
                     try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
                 }
             } catch let sttErr as STTError {
