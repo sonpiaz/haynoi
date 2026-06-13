@@ -138,6 +138,97 @@ enum STTProvider {
         runProbe()
     }
 
+    // MARK: - Connection Diagnostic (user-facing "Test Connection")
+
+    struct RouteResult: Identifiable {
+        let id = UUID()
+        let name: String       // Primary / Alternate / Direct
+        let ok: Bool
+        let latencyMs: Int?
+        let detail: String     // "Reached in 0.4s" / "Upload stalled" / "HTTP 401"
+    }
+
+    struct ConnectionReport {
+        let routes: [RouteResult]
+        let verdict: String
+        let anyWorked: Bool
+    }
+
+    private static let routeLabels = ["Primary", "Alternate", "Direct"]
+
+    /// Tests whether the AUDIO UPLOAD actually reaches the server on each route
+    /// — the real failure mode, not a tiny GET. Uploads a realistic ~45 KB M4A
+    /// with an intentionally invalid model, so the server reads the whole body
+    /// then replies 400 "not a transcription model": proves the upload path
+    /// works WITHOUT transcribing or billing a cent. Distinguishes network
+    /// stalls (timeout) from auth (401) and rate limits (429).
+    static func runConnectionTest() async -> ConnectionReport {
+        guard let apiKey = KymaAuth.currentApiKey else {
+            return ConnectionReport(routes: [], verdict: "You're not signed in. Open the Account tab and sign in first.", anyWorked: false)
+        }
+
+        // ~5s of low tone → realistic dictation-sized M4A (~35 KB) so the test
+        // genuinely reproduces a congested upload, not a trivially small one.
+        let sr = 16000
+        var samples = [Float](repeating: 0, count: sr * 5)
+        for i in 0..<samples.count { samples[i] = sin(2 * .pi * 220 * Float(i) / Float(sr)) * 0.2 }
+        let audio = encodeAudio(samples: samples, sampleRate: sr)
+
+        func buildBody(boundary: String) -> Data {
+            var body = Data()
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(audio.filename)\"\r\n")
+            body.append("Content-Type: \(audio.mimeType)\r\n\r\n")
+            body.append(audio.data)
+            body.append("\r\n--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n")
+            body.append("__haynoi_diagnostic__\r\n--\(boundary)--\r\n")
+            return body
+        }
+
+        var results: [RouteResult] = []
+        var has402 = false, has401 = false
+        for (i, base) in routeBases.enumerated() {
+            let boundary = UUID().uuidString
+            var req = URLRequest(url: URL(string: "\(base)/v1/audio/transcriptions")!)
+            req.httpMethod = "POST"
+            req.timeoutInterval = 20
+            req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            req.httpBody = buildBody(boundary: boundary)
+            let label = routeLabels[i]
+            let t0 = Date()
+            do {
+                let (_, resp) = try await URLSession.shared.data(for: req)
+                let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                switch code {
+                case 400: results.append(RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server (\(ms) ms)"))
+                case 401: has401 = true; results.append(RouteResult(name: label, ok: false, latencyMs: ms, detail: "Sign-in expired (401)"))
+                case 402: has402 = true; results.append(RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of credits (402)"))
+                case 429: results.append(RouteResult(name: label, ok: false, latencyMs: ms, detail: "Servers busy (429) — try again"))
+                default:  results.append(RouteResult(name: label, ok: code < 500, latencyMs: ms, detail: "HTTP \(code) (\(ms) ms)"))
+                }
+            } catch {
+                results.append(RouteResult(name: label, ok: false, latencyMs: nil, detail: "Upload stalled / no response"))
+            }
+        }
+
+        let anyWorked = results.contains { $0.ok }
+        let verdict: String
+        if has401 {
+            verdict = "Your sign-in expired. Open the Account tab and sign in again."
+        } else if has402 {
+            verdict = "You're out of credits. Top up at kymaapi.com to keep dictating."
+        } else if anyWorked {
+            let okNames = results.filter { $0.ok }.map { $0.name }.joined(separator: ", ")
+            verdict = "Connection is good. Haynoi will use the fastest working route (\(okNames)). Dictation should work."
+        } else {
+            verdict = "Your network is blocking the audio upload on every route. Try a different Wi-Fi or your phone's hotspot — some networks throttle uploads to our servers."
+        }
+        return ConnectionReport(routes: results, verdict: verdict, anyWorked: anyWorked)
+    }
+
     private static func runProbe() {
         Task.detached(priority: .utility) {
             var best: (base: String, ms: Double)?

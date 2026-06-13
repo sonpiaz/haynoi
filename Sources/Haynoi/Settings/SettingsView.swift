@@ -335,13 +335,58 @@ private struct AccountTab: View {
     @State private var isSigningIn = false
     @State private var signInError = ""
 
+    @State private var testing = false
+    @State private var report: STTProvider.ConnectionReport?
+
     var body: some View {
         Form {
             accountSection
+            connectionSection
         }
         .formStyle(.grouped)
         .frame(minHeight: 320)
         .onAppear { BalanceManager.shared.refresh() }
+    }
+
+    private var connectionSection: some View {
+        Section("Connection") {
+            HStack {
+                Text("Test connection")
+                Spacer()
+                if testing { ProgressView().controlSize(.small) }
+                Button(testing ? "Testing…" : "Run test") { runConnectionTest() }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    .disabled(testing)
+            }
+            Text("Checks whether your dictation can reach our servers on each route. No charge — it doesn't transcribe.")
+                .font(.caption).foregroundStyle(.secondary)
+
+            if let report {
+                ForEach(report.routes) { r in
+                    HStack(spacing: 8) {
+                        Image(systemName: r.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundStyle(r.ok ? Color.calmSuccess : .orange)
+                        Text(r.name).font(.callout)
+                        Spacer()
+                        Text(r.detail).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Text(report.verdict)
+                    .font(.caption)
+                    .foregroundStyle(report.anyWorked ? Color.secondary : Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private func runConnectionTest() {
+        testing = true
+        report = nil
+        Task {
+            let result = await STTProvider.runConnectionTest()
+            await MainActor.run { report = result; testing = false }
+        }
     }
 
     private var accountSection: some View {
