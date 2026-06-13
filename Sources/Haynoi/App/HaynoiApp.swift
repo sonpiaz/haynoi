@@ -39,6 +39,13 @@ struct HaynoiApp: App {
 
 // MARK: - Menu Bar Content (Calm)
 
+/// Reports the popover content's natural height up to MenuBarContent so the
+/// MenuBarExtra window gets a real frame (see popoverHeight).
+private struct PopoverHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 /// Calm-styled menu bar popover — the most-used consumer surface.
 /// Layout per the approved board: aurora orb + status, hold-key chips,
 /// indigo record button, last dictation, aurora credit-balance bar, footer.
@@ -114,11 +121,23 @@ private struct MenuBarContent: View {
                 // Account footer (account / settings / quit)
                 accountFooter
             }
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: PopoverHeightKey.self, value: geo.size.height)
+                }
+            )
         }
-        .frame(maxHeight: 560)
+        .onPreferenceChange(PopoverHeightKey.self) { popoverHeight = $0 }
+        .frame(height: popoverHeight > 0 ? min(popoverHeight, 560) : 560)
         .background(Color.calmBackground(for: scheme))
         .onAppear { BalanceManager.shared.refresh() }
     }
+
+    /// Measured height of the popover content. A bare ScrollView has no
+    /// intrinsic height, so inside the MenuBarExtra window it collapsed to
+    /// ~10pt — the popover opened invisibly (live bug 2026-06-12). We measure
+    /// the real content height and pin the frame to it, capped at 560.
+    @State private var popoverHeight: CGFloat = 0
 
     // MARK: - Header (orb + identity + status)
 

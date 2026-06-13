@@ -19,21 +19,20 @@ struct InsightsView: View {
     @Environment(\.colorScheme) private var scheme
 
     @State private var insights = UsageTracker.InsightsData(dailyWords: [:], appWords: [:])
-    @State private var milestoneCopied = false
 
+    // Redesigned 2026-06-12 (founder feedback): one hero line, then ONE
+    // unified stat strip (words / pace / streaks on a single row, same card
+    // language as the History page), the heatmap, and the per-app breakdown.
+    // The redundant comparison subtitle and the milestone footer are gone.
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 heroSection
-                insightsDivider
-                wpmSection
-                insightsDivider
-                streakSection
+                statStripSection
                 insightsDivider
                 heatmapSection
                 insightsDivider
                 appBreakdownSection
-                milestoneSection
             }
             .padding(.bottom, C.s7)
         }
@@ -64,86 +63,64 @@ struct InsightsView: View {
 
     private var heroSection: some View {
         let total = UsageTracker.totalWords
-        return VStack(alignment: .leading, spacing: C.s2) {
-            Text(heroText(total: total))
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Color.calmLabel(for: scheme))
-                .fixedSize(horizontal: false, vertical: true)
-
-            if total > 0, let comparison = comparisonLabel(total: total) {
-                Text("About \(comparison) in length.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.calmLabel3(for: scheme))
-            }
-        }
-        .padding(.horizontal, C.s6)
-        .padding(.vertical, C.s5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - (b) WPM Section
-
-    @ViewBuilder
-    private var wpmSection: some View {
-        let wpm = UsageTracker.wordsPerMinute
-        if wpm > 0 {
-            VStack(alignment: .leading, spacing: C.s1) {
-                sectionLabel("Speaking pace")
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(wpm)")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(Color.calmLabel(for: scheme))
-                        .monospacedDigit()
-                    Text("words per minute")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.calmLabel3(for: scheme))
-                }
-                Text("Measured across timed dictations only.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-            }
+        return Text(heroText(total: total))
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(Color.calmLabel(for: scheme))
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, C.s6)
             .padding(.vertical, C.s5)
-        }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - (c) Streak Section
+    // MARK: - (b) Unified stat strip — words / pace / streaks on ONE row
 
-    private var streakSection: some View {
+    private var statStripSection: some View {
+        let wpm = UsageTracker.wordsPerMinute
         let current = UsageTracker.streakDays
         let longest = UsageTracker.longestStreakDays
-        return VStack(alignment: .leading, spacing: C.s3) {
-            sectionLabel("Consistency")
-            HStack(spacing: C.s6) {
-                streakStat(value: current, label: "current streak",
-                           accent: current > 0 ? Color.calmWarn : Color.calmLabel4(for: scheme))
-                streakStat(value: longest, label: "longest streak",
-                           accent: Color.calmLabel3(for: scheme))
-            }
-            if current == 0 {
-                Text("Dictate today to start a new streak.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-            }
+        return HStack(spacing: 12) {
+            insightCard(value: formatShort(UsageTracker.totalWords),
+                        label: "Words spoken",
+                        accent: Color.calmLabel(for: scheme))
+            insightCard(value: wpm > 0 ? "\(wpm)" : "—",
+                        label: "Avg words / min",
+                        accent: Color.calmLabel(for: scheme))
+            insightCard(value: "\(current)",
+                        label: current == 1 ? "Day streak" : "Day streak",
+                        accent: current > 0 ? Color.calmWarn : Color.calmLabel4(for: scheme))
+            insightCard(value: "\(longest)",
+                        label: "Longest streak",
+                        accent: Color.calmLabel(for: scheme))
         }
         .padding(.horizontal, C.s6)
-        .padding(.vertical, C.s5)
+        .padding(.bottom, C.s5)
     }
 
-    private func streakStat(value: Int, label: String, accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(value)")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(accent)
-                    .monospacedDigit()
-                Text(value == 1 ? "day" : "days")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
-            }
+    /// Same card language as the History page's stat row — unified format.
+    private func insightCard(value: String, label: String, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(accent)
+                .monospacedDigit()
             Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(Color.calmLabel5(for: scheme))
+                .font(.system(size: 11))
+                .foregroundStyle(Color.calmLabel4(for: scheme))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Color.calmSurface(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.calmBorder, lineWidth: 1))
+    }
+
+    private func formatShort(_ n: Int) -> String {
+        switch n {
+        case 1_000_000...: return String(format: "%.1fM", Double(n) / 1_000_000)
+        case 10_000...:    return String(format: "%.1fK", Double(n) / 1_000)
+        case 1_000...:     return String(format: "%.1fK", Double(n) / 1_000)
+        default:           return "\(n)"
         }
     }
 
@@ -163,9 +140,22 @@ struct InsightsView: View {
     private var appBreakdownSection: some View {
         let total = UsageTracker.totalWords
         let appMap = insights.appWords
-        // Sort map entries (key = bundleId) by words descending, take top 5.
-        // Keyed by bundleId so two apps sharing a display name never collide.
-        let topEntries = appMap.sorted { $0.value.words > $1.value.words }.prefix(5)
+        // Merge entries that share a display name (e.g. two builds of the same
+        // app with different bundle ids showed as duplicate rows), then sort
+        // by words descending and take the top 5.
+        var merged: [String: (bundleId: String, words: Int)] = [:]
+        for (bundleId, app) in appMap {
+            if var existing = merged[app.displayName] {
+                existing.words += app.words
+                merged[app.displayName] = existing
+            } else {
+                merged[app.displayName] = (bundleId, app.words)
+            }
+        }
+        let topEntries = merged
+            .map { (key: $0.value.bundleId, value: (displayName: $0.key, words: $0.value.words)) }
+            .sorted { $0.value.words > $1.value.words }
+            .prefix(5)
         let attributedSum = appMap.values.reduce(0) { $0 + $1.words }
         let remainder = max(0, total - attributedSum)
 
@@ -196,46 +186,6 @@ struct InsightsView: View {
         }
         .padding(.horizontal, C.s6)
         .padding(.vertical, C.s5)
-    }
-
-    // MARK: - (f) Milestone Section
-
-    @ViewBuilder
-    private var milestoneSection: some View {
-        let total = UsageTracker.totalWords
-        if let milestone = MilestoneTracker.latestMilestone(for: total) {
-            insightsDivider
-            VStack(alignment: .leading, spacing: C.s2) {
-                HStack(spacing: C.s2) {
-                    Text(milestoneText(milestone: milestone, total: total))
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.calmLabel2(for: scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button {
-                        copyMilestoneText(milestone: milestone, total: total)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: milestoneCopied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 10))
-                            Text(milestoneCopied ? "Copied" : "Copy")
-                                .font(.system(size: 11))
-                        }
-                        .foregroundStyle(milestoneCopied ? Color.calmSuccess : Color.calmLabel3(for: scheme))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.calmSubtle(for: scheme), in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.calmDivider(for: scheme), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .animation(.easeInOut(duration: 0.15), value: milestoneCopied)
-                }
-            }
-            .padding(.horizontal, C.s6)
-            .padding(.vertical, C.s4)
-            .background(Color.calmSubtle(for: scheme))
-        }
     }
 
     // MARK: - Helpers
@@ -289,34 +239,6 @@ struct InsightsView: View {
         case 10_000...:    return resolveIsVi() ? "một truyện ngắn" : "a short story"
         default:           return nil
         }
-    }
-
-    private func milestoneText(milestone: MilestoneTracker.Milestone, total: Int) -> String {
-        let isVi = resolveIsVi()
-        let label = comparisonLabel(total: total) ?? ""
-        return isVi
-            ? "Bạn đã đạt \(formatWordsLocalized(milestone.threshold)) từ — \(label)."
-            : "You've reached \(formatWordsLocalized(milestone.threshold)) words — \(label)."
-    }
-
-    // D16/D27: clipboard copy line, locale-aware thousands separator
-    private func copyMilestoneText(milestone: MilestoneTracker.Milestone, total: Int) {
-        let isVi = resolveIsVi()
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .decimal
-        fmt.locale = isVi ? Locale(identifier: "vi_VN") : Locale(identifier: "en_US")
-        let n = fmt.string(from: NSNumber(value: total)) ?? "\(total)"
-        let comparison = comparisonLabel(total: total) ?? ""
-        let line: String
-        if isVi {
-            line = "Tôi đã nói \(n) từ qua Haynoi — khoảng \(comparison). haynoi.com"
-        } else {
-            line = "I've spoken \(n) words into Haynoi — about \(comparison). haynoi.com"
-        }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(line, forType: .string)
-        milestoneCopied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { milestoneCopied = false }
     }
 
     private func resolveIsVi() -> Bool {
