@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-06-12
+
+### Fixed
+- A third automatic upload route for networks where both standard paths
+  stall — dictation now tries a completely independent network edge
+  before giving up.
+
 ## [0.2.7] - 2026-06-12
 
 ### Fixed
