@@ -824,9 +824,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Warm the layout keycode cache on the main thread now, so the paste
         // path (which runs in a background Task) never calls TIS off-main.
         TextInserter.prewarmKeyCode()
-        // Probe the API routes so even the first dictation uses the fastest
-        // route that actually works from this network (v0.3.0 route racing).
-        STTProvider.probeRoutesInBackground()
+        // Probe the API routes now AND on every network change (Wi-Fi switch,
+        // VPN, wake elsewhere) — the app runs for weeks, launch-only goes stale.
+        STTProvider.startRouteMonitoring()
         // Menu-bar-only by default (founder feedback 2026-06-12): no Dock icon —
         // the app lives in the menu bar like other dictation utilities. The
         // Dock icon appears only while the main/onboarding window is open

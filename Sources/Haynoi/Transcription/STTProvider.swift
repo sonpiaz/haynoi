@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Network
 
 // MARK: - STT Provider
 //
@@ -98,10 +99,40 @@ enum STTProvider {
         set { UserDefaults.standard.set(newValue, forKey: "kymaPreferredRoute") }
     }
 
+    // Re-probe triggers: app launch AND every network-path change (Wi-Fi
+    // switch, VPN toggle, wake in a new location). The app is a menu-bar
+    // resident that can run for weeks — launch-only probing would go stale.
+    private static let pathMonitor = NWPathMonitor()
+    private static var monitorStarted = false
+    private static var lastProbeAt = Date.distantPast
+    private static let probeLock = NSLock()
+
+    static func startRouteMonitoring() {
+        guard !monitorStarted else { return }
+        monitorStarted = true
+        probeRoutesInBackground()
+        pathMonitor.pathUpdateHandler = { path in
+            guard path.status == .satisfied else { return }
+            NSLog("[Haynoi] Network path changed — re-probing routes")
+            probeRoutesInBackground()
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "haynoi.route-monitor"))
+    }
+
     /// Fire-and-forget probe of all routes (tiny GET /v1/models). The fastest
     /// healthy route becomes preferred, so even the FIRST dictation after
     /// launch uses a route that is known to work from this network.
+    /// Debounced: path changes arrive in bursts when switching networks.
     static func probeRoutesInBackground() {
+        probeLock.lock()
+        let tooSoon = Date().timeIntervalSince(lastProbeAt) < 10
+        if !tooSoon { lastProbeAt = Date() }
+        probeLock.unlock()
+        if tooSoon { return }
+        runProbe()
+    }
+
+    private static func runProbe() {
         Task.detached(priority: .utility) {
             var best: (base: String, ms: Double)?
             await withTaskGroup(of: (String, Double)?.self) { group in
