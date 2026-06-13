@@ -73,21 +73,19 @@ enum STTProvider {
     // Data-plane goes straight to the API edge (skips the website proxy hop).
     // Auth stays on kymaapi.com (browser flow) — see KymaAuth.baseURL.
     private static let kymaBaseURL = "https://api.kymaapi.com"
+    // Fallback edge: the same API behind the website proxy (Cloudflare →
+    // Vercel → Railway). Some ISPs — notably in Vietnam — stall multipart
+    // uploads to the direct edge while the Cloudflare path sails through
+    // (live-debugged 2026-06-12: user's request HEADERS reached auth, the
+    // body never completed; direct OpenAI from the same machine was fine).
+    // The last retry attempt goes through this host.
+    private static let kymaFallbackBaseURL = "https://kymaapi.com"
 
     private static func callKymaTranscribe(
         apiKey: String, wavData: Data, model: String, prompt: String,
         languageHint: String
     ) async throws -> String {
         let boundary = UUID().uuidString
-        let url = URL(string: "\(kymaBaseURL)/v1/audio/transcriptions")!
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        // Fix #2: raised from 30 → 90s — long audio or congested networks
-        // were hitting the old limit and discarding the recording entirely.
-        request.timeoutInterval = 90
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()
         body.append("--\(boundary)\r\n")
@@ -118,10 +116,25 @@ enum STTProvider {
         }
 
         body.append("--\(boundary)--\r\n")
-        request.httpBody = body
+
+        func makeRequest(base: String) -> URLRequest {
+            var request = URLRequest(url: URL(string: "\(base)/v1/audio/transcriptions")!)
+            request.httpMethod = "POST"
+            // Fix #2: raised from 30 → 90s — long audio or congested networks
+            // were hitting the old limit and discarding the recording entirely.
+            request.timeoutInterval = 90
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+            return request
+        }
 
         var lastError: Error = STTError.noConnection
         for attempt in 0..<3 {
+            // Attempts 1-2: direct edge. Attempt 3: Cloudflare-proxied edge —
+            // rescues networks where the direct upload path stalls.
+            let base = attempt < 2 ? kymaBaseURL : kymaFallbackBaseURL
+            let request = makeRequest(base: base)
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse else {
@@ -152,10 +165,19 @@ enum STTProvider {
                     // Fix #2: parse the Kyma error envelope {"error":{"message":...}}
                     // instead of dumping raw bodies. Detail stays in NSLog only.
                     let rawBody = String(data: data, encoding: .utf8) ?? ""
-                    NSLog("[Haynoi] Transcription API error %d: %@", http.statusCode, rawBody)
+                    NSLog("[Haynoi] Transcription API error %d via %@: %@",
+                          http.statusCode, base, rawBody)
                     let humanMessage = parseKymaErrorMessage(data: data)
-                        ?? "Something went wrong on our end — try again"
-                    throw STTError.serverError(humanMessage)
+                    // 5xx / edge errors (often unparseable middlebox or proxy
+                    // bodies) are retriable — the next attempt may go through
+                    // the fallback host. Real 4xx client errors fail fast.
+                    if http.statusCode >= 500 {
+                        lastError = STTError.serverError(
+                            humanMessage ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
+                        continue
+                    }
+                    throw STTError.serverError(
+                        humanMessage ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
                 }
                 guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let text = json["text"] as? String else {
