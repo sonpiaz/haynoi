@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-06-12
+
+### Fixed
+- Dictation now works on networks where the direct upload path stalls
+  (reported from Vietnam): if the audio upload fails, Haynoi
+  automatically retries through an alternate route. If you kept seeing
+  "Something went wrong" after speaking, this is for you.
+
 ## [0.2.6] - 2026-06-12
 
 ### Fixed
