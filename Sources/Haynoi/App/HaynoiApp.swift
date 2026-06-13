@@ -46,6 +46,62 @@ private struct PopoverHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+/// One recent-dictation row in the popover: two-line text + meta, with the
+/// copy icon at the RIGHT of the row (founder feedback 2026-06-12).
+private struct PopoverRecentRow: View {
+    let entry: Transcription
+    let scheme: ColorScheme
+    @State private var copied = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.text)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.calmLabel(for: scheme))
+                    .lineLimit(2)
+                Text(meta)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.calmLabel4(for: scheme))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(entry.text, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(copied ? Color.calmSuccess : Color.calmLabel4(for: scheme))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Copy")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 7)
+    }
+
+    private var meta: String {
+        let mins = Int(Date().timeIntervalSince(entry.timestamp) / 60)
+        let when: String
+        switch mins {
+        case ..<1:   when = "Just now"
+        case 1:      when = "1 min ago"
+        case 2..<60: when = "\(mins) min ago"
+        default:     when = "\(mins / 60)h ago"
+        }
+        var meta = "\(when)  ·  \(entry.wordCount) words"
+        if let source = AppStyleDetector.displayName(bundleId: entry.appBundleId, fallback: entry.appName) {
+            meta += "  ·  \(source)"
+        }
+        return meta
+    }
+}
+
 /// Calm-styled menu bar popover — the most-used consumer surface.
 /// Layout per the approved board: aurora orb + status, hold-key chips,
 /// indigo record button, last dictation, aurora credit-balance bar, footer.
@@ -102,9 +158,9 @@ private struct MenuBarContent: View {
                     popoverDivider
                 }
 
-                // Last dictation preview
-                if let last = state.transcriptions.first {
-                    lastDictationRow(last)
+                // Recent dictations — top 5, copy at the right of each row
+                if !state.transcriptions.isEmpty {
+                    recentSection
                     popoverDivider
                 }
 
@@ -273,81 +329,28 @@ private struct MenuBarContent: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Last Dictation
+    // MARK: - Recent Dictations (top 5)
 
-    private func lastDictationRow(_ entry: Transcription) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Last dictation")
+    private var recentSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Recent")
                 .font(.calmSectionLabel)
                 .foregroundStyle(Color.calmLabel4(for: scheme))
                 .kerning(0.7)
                 .textCase(.uppercase)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
 
-            Text(entry.text)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.calmLabel(for: scheme))
-                .lineLimit(2)
-
-            Text(lastMeta(entry))
-                .font(.system(size: 11))
-                .foregroundStyle(Color.calmLabel4(for: scheme))
-
-            HStack(spacing: 6) {
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(entry.text, forType: .string)
-                } label: {
-                    Text("Copy again")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.calmAccent(for: scheme))
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 5)
-                .background(Color.calmAccentWash(for: scheme))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmAccent(for: scheme).opacity(0.12), lineWidth: 1))
-                .help("Copy last dictation")
-
-                if state.hasFailedDictation {
-                    Button {
-                        PipelineController.shared.retryLastFailedDictation()
-                    } label: {
-                        Text("Retry")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color.calmWarn)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 5)
-                    .background(Color.calmWarnBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.calmWarn.opacity(0.2), lineWidth: 1))
+            VStack(spacing: 0) {
+                ForEach(Array(state.transcriptions.prefix(5))) { entry in
+                    PopoverRecentRow(entry: entry, scheme: scheme)
                 }
             }
-            .padding(.top, 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
-        .padding(.bottom, 14)
+        .padding(.bottom, 8)
         .background(Color.calmSurface(for: scheme))
-    }
-
-    private func lastMeta(_ entry: Transcription) -> String {
-        let mins = Int(Date().timeIntervalSince(entry.timestamp) / 60)
-        let when: String
-        switch mins {
-        case ..<1:   when = "Just now"
-        case 1:      when = "1 min ago"
-        case 2..<60: when = "\(mins) min ago"
-        default:     when = "\(mins / 60)h ago"
-        }
-        var meta = "\(when)  ·  \(entry.wordCount) words"
-        if let source = AppStyleDetector.displayName(bundleId: entry.appBundleId, fallback: entry.appName) {
-            meta += "  ·  \(source)"
-        }
-        return meta
     }
 
     // MARK: - Standalone Retry Row (empty history, transient failure)
@@ -496,17 +499,6 @@ private struct MenuBarContent: View {
                                  to: nil, from: nil)
             }
 
-            // Mode indicator
-            popoverActionRow(
-                iconSystem: "square.grid.2x2",
-                label: "Mode: \(TranscriptionMode.current.rawValue)",
-                sub: TranscriptionMode.current.shortDescription,
-                trailing: nil
-            ) {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                NSApp.activate(ignoringOtherApps: true)
-            }
-
             // Check for updates
             popoverActionRow(
                 iconSystem: "arrow.clockwise",
@@ -517,18 +509,6 @@ private struct MenuBarContent: View {
                 updater.checkForUpdates()
             }
             .disabled(!checker.canCheckForUpdates)
-
-            // Settings
-            popoverActionRow(
-                iconSystem: "gear",
-                label: "Settings",
-                sub: "Hotkey, sound, language",
-                trailing: "⌘,"
-            ) {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            .keyboardShortcut(",", modifiers: .command)
         }
         .padding(.vertical, 7)
         .padding(.horizontal, 10)
@@ -848,7 +828,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Warm the layout keycode cache on the main thread now, so the paste
         // path (which runs in a background Task) never calls TIS off-main.
         TextInserter.prewarmKeyCode()
-        NSApplication.shared.setActivationPolicy(.regular)
+        // Menu-bar-only by default (founder feedback 2026-06-12): no Dock icon —
+        // the app lives in the menu bar like other dictation utilities. The
+        // Dock icon appears only while the main/onboarding window is open
+        // (see updateActivationPolicy). Dictation works as long as the app is
+        // RUNNING; quitting it stops the hotkey.
+        NSApplication.shared.setActivationPolicy(.accessory)
 
         let choice = UserDefaults.standard.string(forKey: "hotkeyChoice") ?? "option"
         switch choice {
@@ -927,6 +912,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     // MARK: - Windows (public so menu bar footer can call it)
 
     func showMainWindowPublic() {
+        // Show the Dock icon while a real window is open (menu-bar-only otherwise).
+        NSApp.setActivationPolicy(.regular)
+
         if let window = mainWindow, window.isVisible {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -951,6 +939,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         mainWindow = window
+        observePolicyRelevantClose(of: window)
+    }
+
+    /// Drops the Dock icon again once neither the main window nor the
+    /// onboarding window is visible — the app goes back to menu-bar-only.
+    private func observePolicyRelevantClose(of window: NSWindow) {
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.async { self?.updateActivationPolicy() }
+        }
+    }
+
+    private func updateActivationPolicy() {
+        let anyVisible = (mainWindow?.isVisible ?? false) || (onboardingWindow?.isVisible ?? false)
+        NSApp.setActivationPolicy(anyVisible ? .regular : .accessory)
     }
 
     /// Maps the user's theme choice to an NSAppearance so the window chrome
@@ -1000,8 +1004,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         window.appearance = Self.themeAppearance()
         window.contentView = NSHostingView(rootView: view)
         window.center()
+        NSApp.setActivationPolicy(.regular) // Dock icon while onboarding is open
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindow = window
+        observePolicyRelevantClose(of: window)
     }
 }
