@@ -6,6 +6,25 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.2.8</title>
+            <pubDate>Sat, 13 Jun 2026 01:03:39 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>19</sparkle:version>
+            <sparkle:shortVersionString>0.2.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.2.8</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>A third automatic upload route for networks where both standard paths</li>
+</ul>
+<p>  stall — dictation now tries a completely independent network edge</p>
+<p>  before giving up.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.8/Haynoi-0.2.8-universal.zip" length="2838101" type="application/octet-stream" sparkle:edSignature="jE88QoVaHDp7Yzjp1Pvbjjf3gow280R/ya7z8AQ/ZSXjGLp97+Fa17cLo2OX1vhY/1VvMHmgNwNtHb112zeLCQ=="/>
+        </item>
+        <item>
             <title>0.2.7</title>
             <pubDate>Sat, 13 Jun 2026 00:47:08 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -43,33 +62,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.6/Haynoi-0.2.6-universal.zip" length="2836032" type="application/octet-stream" sparkle:edSignature="eY2ffVp6XAkra/VI4FG+fQFGqvzgBHfibeQa/mA5B/3GegkEImLNut39NPGoZ3tW5umHoJT38kN1xwPX7jd+CA=="/>
-        </item>
-        <item>
-            <title>0.2.5</title>
-            <pubDate>Sat, 13 Jun 2026 00:24:15 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>16</sparkle:version>
-            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.2.5</h2>
-
-<h3>Changed</h3>
-<ul>
-<li>Haynoi is now a menu-bar app: no Dock icon while you work — it appears</li>
-</ul>
-<p>  only when the main window is open. Dictation works whenever the app is</p>
-<p>  running.</p>
-<ul>
-<li>The menu bar panel shows your 5 most recent dictations, each with a</li>
-</ul>
-<p>  copy button right on the row.</p>
-<ul>
-<li>Removed the panel's Mode and Settings rows, which opened nothing.</li>
-</ul>
-<p>  Settings lives in the main window.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.2.5/Haynoi-0.2.5-universal.zip" length="2834674" type="application/octet-stream" sparkle:edSignature="Wr7fT4OEx/ZfTl3Z8OlwDxjXfP0Zohtj5REda0Sbh7pgM7UFSmF/AmkUQMTR3JfaXatZr+qioLX9pldKzgjzCA=="/>
         </item>
     </channel>
 </rss>
