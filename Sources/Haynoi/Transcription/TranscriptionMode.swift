@@ -26,6 +26,16 @@ enum TranscriptionMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// One-line pill description for the mode card in the Modes page.
+    var shortDescription: String {
+        switch self {
+        case .auto:   return "Adapts to each app"
+        case .normal: return "Verbatim"
+        case .clean:  return "Removes filler"
+        case .email:  return "Formal prose"
+        }
+    }
+
     /// Prompt for gpt-4o-transcribe (affects raw transcription)
     /// Resolve Auto mode to a concrete mode
     var resolved: TranscriptionMode {
