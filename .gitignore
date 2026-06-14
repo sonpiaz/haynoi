@@ -33,3 +33,6 @@ Models/
 PLAN.md
 .wrangler/
 HANDLES.md
+.ddata/
+redesign/
+*.xcuserstate

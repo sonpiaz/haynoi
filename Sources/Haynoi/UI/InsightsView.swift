@@ -3,13 +3,14 @@ import AppKit
 
 // MARK: - InsightsView (F2 — usage identity surface)
 //
-// Six widgets rendered in a single scrollable Mercury page:
+// Obsidian Instrument / light-b-paper-v2 restyle (2026-06-14).
+// Token source: ObsidianTokens.swift
+//
+// Six widgets rendered in a single scrollable page:
 //   (a) Hero sentence with comparison ladder
-//   (b) WPM stat (hidden below 30 s cumulative tracked audio, D29)
-//   (c) Streak block: current + longest ever (D12)
-//   (d) 16-week heatmap — Monday-first, 5-bucket indigo intensity (D20/D30)
-//   (e) Per-app destination breakdown (top 5 + remainder)
-//   (f) Milestone line + Copy button (D15/D16/D27)
+//   (b) Stat strip: 4 cards — words / WPM / streak / best streak
+//   (c) 16-week heatmap — Monday-first, 5-bucket Signal Cyan intensity
+//   (d) Per-app destination breakdown (top 5 + remainder)
 //
 // Refresh: onAppear + .haynoiDictationCompleted notification (F2.6 — no timers).
 // Migration: seeds daily map + longest streak on first render (D13).
@@ -20,10 +21,6 @@ struct InsightsView: View {
 
     @State private var insights = UsageTracker.InsightsData(dailyWords: [:], appWords: [:])
 
-    // Redesigned 2026-06-12 (founder feedback): one hero line, then ONE
-    // unified stat strip (words / pace / streaks on a single row, same card
-    // language as the History page), the heatmap, and the per-app breakdown.
-    // The redundant comparison subtitle and the milestone footer are gone.
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -36,7 +33,7 @@ struct InsightsView: View {
             }
             .padding(.bottom, C.s7)
         }
-        .background(Color.calmBackground(for: scheme))
+        .background(Color.obsidianBackground(for: scheme))
         .onAppear(perform: refresh)
         .onReceive(NotificationCenter.default.publisher(for: .haynoiDictationCompleted)) { _ in
             refresh()
@@ -46,14 +43,12 @@ struct InsightsView: View {
     // MARK: - Refresh
 
     private func refresh() {
-        // One-time migration: seed daily map from history + seed longest streak
         let pairs = state.transcriptions.map {
             (timestamp: $0.timestamp, wordCount: $0.wordCount)
         }
         UsageTracker.runMigrationIfNeeded(transcriptions: pairs)
         insights = UsageTracker.loadInsights()
 
-        // Milestone unseen flag: clear it now that Insights page is displayed (D15)
         if MilestoneTracker.hasUnseenMilestone {
             MilestoneTracker.clearUnseenFlag()
         }
@@ -63,56 +58,81 @@ struct InsightsView: View {
 
     private var heroSection: some View {
         let total = UsageTracker.totalWords
-        return Text(heroText(total: total))
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(Color.calmLabel(for: scheme))
+        // Build the hero sentence with distinct typography for the number
+        let text = heroText(total: total)
+        return Text(text)
+            .font(.obsidianBody)
+            .lineSpacing(4)
+            .foregroundStyle(Color.obsidianLabel2(for: scheme))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, C.s6)
-            .padding(.vertical, C.s5)
+            .padding(.top, C.s5)
+            .padding(.bottom, C.s5)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - (b) Unified stat strip — words / pace / streaks on ONE row
+    // MARK: - (b) Stat Strip — 4 cards on one row
 
     private var statStripSection: some View {
-        let wpm = UsageTracker.wordsPerMinute
-        let current = UsageTracker.streakDays
-        let longest = UsageTracker.longestStreakDays
-        return HStack(spacing: 12) {
-            insightCard(value: formatShort(UsageTracker.totalWords),
-                        label: "Words spoken",
-                        accent: Color.calmLabel(for: scheme))
-            insightCard(value: wpm > 0 ? "\(wpm)" : "—",
-                        label: "Avg words / min",
-                        accent: Color.calmLabel(for: scheme))
-            insightCard(value: "\(current)",
-                        label: current == 1 ? "Day streak" : "Day streak",
-                        accent: current > 0 ? Color.calmWarn : Color.calmLabel4(for: scheme))
-            insightCard(value: "\(longest)",
-                        label: "Longest streak",
-                        accent: Color.calmLabel(for: scheme))
+        let wpm      = UsageTracker.wordsPerMinute
+        let current  = UsageTracker.streakDays
+        let longest  = UsageTracker.longestStreakDays
+
+        return HStack(spacing: C.s3) {
+            insightCard(
+                value: formatShort(UsageTracker.totalWords),
+                label: "Words spoken",
+                isAccent: false
+            )
+            insightCard(
+                value: wpm > 0 ? "\(wpm)" : "—",
+                label: "Avg WPM",
+                isAccent: false
+            )
+            insightCard(
+                value: "\(current)",
+                label: current == 1 ? "Day streak" : "Day streak",
+                isAccent: current > 0          // amber label when active
+            )
+            insightCard(
+                value: "\(longest)",
+                label: "Best streak",
+                isAccent: false
+            )
         }
         .padding(.horizontal, C.s6)
         .padding(.bottom, C.s5)
     }
 
-    /// Same card language as the History page's stat row — unified format.
-    private func insightCard(value: String, label: String, accent: Color) -> some View {
+    /// Stat card — mono tabular value, uppercase label, Signal Cyan deep value when isAccent.
+    private func insightCard(value: String, label: String, isAccent: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
+            // LABEL row — uppercase 10/600, muted
+            Text(label.uppercased())
+                .font(.obsidianLabel)
+                .kerning(0.8)
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+
+            // VALUE — JetBrains Mono 26pt tabular; cyan-deep when accent (streak active)
             Text(value)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(accent)
-                .monospacedDigit()
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.calmLabel4(for: scheme))
+                .font(Font.custom("JetBrainsMono-Regular", size: 26).monospacedDigit())
+                .foregroundStyle(
+                    isAccent
+                        ? Color.obsidianAccent(for: scheme)
+                        : Color.obsidianLabel(for: scheme)
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)     // safety: never clips the number
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(Color.calmSurface(for: scheme))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.calmBorder, lineWidth: 1))
+        .padding(.horizontal, C.s4)
+        .padding(.vertical, C.s4)
+        .background(Color.obsidianSurface(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: C.rMD))
+        .overlay(
+            RoundedRectangle(cornerRadius: C.rMD)
+                .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
+        )
     }
 
     private func formatShort(_ n: Int) -> String {
@@ -124,25 +144,23 @@ struct InsightsView: View {
         }
     }
 
-    // MARK: - (d) Heatmap Section
+    // MARK: - (c) Heatmap Section
 
     private var heatmapSection: some View {
         VStack(alignment: .leading, spacing: C.s3) {
-            sectionLabel("Activity — last 16 weeks")
+            sectionLabel("16-Week Activity")
             HeatmapGrid(dailyWords: insights.dailyWords, scheme: scheme)
         }
         .padding(.horizontal, C.s6)
         .padding(.vertical, C.s5)
     }
 
-    // MARK: - (e) Per-app Breakdown Section
+    // MARK: - (d) Per-app Breakdown Section
 
     private var appBreakdownSection: some View {
         let total = UsageTracker.totalWords
         let appMap = insights.appWords
-        // Merge entries that share a display name (e.g. two builds of the same
-        // app with different bundle ids showed as duplicate rows), then sort
-        // by words descending and take the top 5.
+        // Merge duplicate display names, sort by words, take top 5
         var merged: [String: (bundleId: String, words: Int)] = [:]
         for (bundleId, app) in appMap {
             if var existing = merged[app.displayName] {
@@ -160,13 +178,15 @@ struct InsightsView: View {
         let remainder = max(0, total - attributedSum)
 
         return VStack(alignment: .leading, spacing: C.s3) {
-            sectionLabel("Where your words go")
+            sectionLabel("Where Your Words Go")
             if topEntries.isEmpty && remainder == 0 {
                 Text("Per-app breakdown will appear after new dictations.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.calmLabel4(for: scheme))
+                    .font(.obsidianCaption)
+                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                    .padding(.top, 2)
             } else {
-                VStack(spacing: 6) {
+                // Apps card — white surface, hairline border, stacked rows
+                VStack(spacing: 0) {
                     ForEach(topEntries, id: \.key) { bundleId, app in
                         AppWordRow(bundleId: bundleId,
                                    displayName: app.displayName,
@@ -182,6 +202,12 @@ struct InsightsView: View {
                                    scheme: scheme)
                     }
                 }
+                .background(Color.obsidianSurface(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: C.rMD))
+                .overlay(
+                    RoundedRectangle(cornerRadius: C.rMD)
+                        .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
+                )
             }
         }
         .padding(.horizontal, C.s6)
@@ -192,14 +218,14 @@ struct InsightsView: View {
 
     private var insightsDivider: some View {
         Rectangle()
-            .fill(Color.calmDivider(for: scheme))
+            .fill(Color.obsidianDivider(for: scheme))
             .frame(height: 1)
     }
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(Color.calmLabel5(for: scheme))
+            .font(.obsidianLabel)
+            .foregroundStyle(Color.obsidianLabel3(for: scheme))
             .kerning(0.8)
     }
 
@@ -261,40 +287,42 @@ struct InsightsView: View {
 // MARK: - HeatmapGrid (F2.4d / D20 / D30)
 //
 // 7 rows (Mon–Sun) × 16 columns (most-recent week rightmost).
-// Intensity: 5 indigo-on-white buckets relative to user's own max-day.
-// Today: outlined cell. Future cells: bare paper, no stroke.
-// Past zero-word days: lightest bucket WITH stroke.
+// Intensity: 5 Signal-Cyan buckets relative to user's own max-day.
+// Today: Signal Cyan outline stroke. Future cells: bare canvas, no stroke.
+// Past zero-word days: lightest cyan tint bucket WITH soft stroke.
+//
+// Obsidian light-b-paper-v2 bucket stops (from mockup):
+//   h0  rgba(56,225,198, 0.06)  border rgba(56,225,198, 0.05)
+//   h1  rgba(56,225,198, 0.15)  border rgba(56,225,198, 0.09)
+//   h2  rgba(56,225,198, 0.30)  border rgba(56,225,198, 0.16)
+//   h3  rgba(56,225,198, 0.52)  border rgba(56,225,198, 0.26)
+//   h4  rgba(56,225,198, 0.85)  border rgba(56,225,198, 0.48)
+//   today: 1.5px Signal Cyan ring (#38E1C6)
 
 private struct HeatmapGrid: View {
     let dailyWords: [String: Int]
     let scheme: ColorScheme
 
-    @State private var tooltip: (date: String, words: Int)? = nil
-
-    // Build a 16-week Monday-first grid. Returns array of 112 cells (col 0 = oldest week).
+    // Build a 16-week Monday-first grid. Returns array of 16 week-columns.
     private var gridCells: [[HeatmapCell]] {
         var cal = Calendar(identifier: .gregorian)
-        cal.firstWeekday = 2 // Monday — locale-independent; prevents week-number drift
+        cal.firstWeekday = 2 // Monday — locale-independent
         let today = Date()
 
-        // Find the Monday of the current week
         var comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)
         comps.weekday = 2 // Monday
         guard let thisMonday = cal.date(from: comps) else { return [] }
-
-        // Go back 15 more weeks
         guard let startMonday = cal.date(byAdding: .weekOfYear, value: -15, to: thisMonday) else { return [] }
 
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"
 
-        // Max words in any single day (for relative bucketing)
         let maxWords = dailyWords.values.max() ?? 0
 
         var columns: [[HeatmapCell]] = []
         for col in 0..<16 {
             var rows: [HeatmapCell] = []
-            for row in 0..<7 { // Mon=0 … Sun=6
+            for row in 0..<7 {
                 let dayOffset = col * 7 + row
                 guard let date = cal.date(byAdding: .day, value: dayOffset, to: startMonday) else { continue }
                 let key = fmt.string(from: date)
@@ -302,10 +330,10 @@ private struct HeatmapGrid: View {
                 let isToday = cal.isDateInToday(date)
                 let isFuture = date > today && !isToday
                 let isPast = !isToday && !isFuture
-                let bucket = isFuture ? 0 : bucket(words: words, max: maxWords, isPast: isPast)
+                let bkt = isFuture ? -1 : bucket(words: words, max: maxWords, isPast: isPast)
                 rows.append(HeatmapCell(
                     dateKey: key, displayDate: fmt.string(from: date),
-                    words: words, bucket: bucket,
+                    words: words, bucket: bkt,
                     isToday: isToday, isFuture: isFuture, isPast: isPast
                 ))
             }
@@ -315,92 +343,101 @@ private struct HeatmapGrid: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Grid: day-of-week labels on the left, week columns to the right
-            HStack(alignment: .top, spacing: 3) {
-                // Vertical day labels (Mon–Sun)
-                let dayLabels = ["M","T","W","T","F","S","S"]
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 4) {
+                // Day-of-week axis (Mon–Sun)
+                let dayLabels = ["M", "T", "W", "T", "F", "S", "S"]
                 VStack(alignment: .trailing, spacing: 3) {
                     ForEach(0..<dayLabels.count, id: \.self) { i in
                         Text(dayLabels[i])
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundStyle(Color.calmLabel5(for: scheme))
-                            .frame(width: 10, height: 12, alignment: .trailing)
+                            .font(Font.custom("JetBrainsMono-Regular", size: 8))
+                            .foregroundStyle(Color.obsidianLabel4(for: scheme))
+                            .frame(width: 10, height: 11, alignment: .trailing)
                     }
                 }
-                // Week columns (oldest at left, current week at right)
+                // Week columns (oldest left, current right)
                 ForEach(0..<gridCells.count, id: \.self) { col in
                     VStack(spacing: 3) {
                         ForEach(0..<gridCells[col].count, id: \.self) { row in
-                            let cell = gridCells[col][row]
-                            cellView(cell: cell)
+                            cellView(cell: gridCells[col][row])
                         }
                     }
                 }
             }
+
             // Intensity legend
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Text("Less")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.calmLabel5(for: scheme))
+                    .font(Font.custom("JetBrainsMono-Regular", size: 8.5))
+                    .foregroundStyle(Color.obsidianLabel4(for: scheme))
                 ForEach(0..<5, id: \.self) { b in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(bucketFill(bucket: b, scheme: scheme))
-                        .frame(width: 10, height: 10)
-                        .overlay(RoundedRectangle(cornerRadius: 2)
-                            .stroke(Color.calmDivider(for: scheme), lineWidth: 0.5))
+                        .fill(bucketFill(bucket: b))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 2)
+                                .stroke(bucketStroke(bucket: b), lineWidth: 1)
+                        )
+                        .frame(width: 11, height: 11)
                 }
                 Text("More")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.calmLabel5(for: scheme))
+                    .font(Font.custom("JetBrainsMono-Regular", size: 8.5))
+                    .foregroundStyle(Color.obsidianLabel4(for: scheme))
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
     }
 
     @ViewBuilder
     private func cellView(cell: HeatmapCell) -> some View {
-        let showStroke = !cell.isFuture
         ZStack {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(cellBackground(cell))
-            if cell.isToday {
+            if cell.isFuture {
+                // Future: bare canvas, no stroke
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(Color.calmAccent(for: scheme).opacity(0.7), lineWidth: 1.5)
-            } else if showStroke {
+                    .fill(Color.obsidianBackground(for: scheme))
+            } else {
                 RoundedRectangle(cornerRadius: 2)
-                    .stroke(Color.calmDivider(for: scheme), lineWidth: 0.5)
+                    .fill(bucketFill(bucket: cell.bucket))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(bucketStroke(bucket: cell.bucket), lineWidth: 1)
+                    )
+                if cell.isToday {
+                    // Signal Cyan ring for today
+                    RoundedRectangle(cornerRadius: 2)
+                        .stroke(Color.accent, lineWidth: 1.5)
+                }
             }
         }
-        .frame(width: 12, height: 12)
+        .frame(width: 11, height: 11)
         .help(cell.isFuture ? "" : "\(cell.displayDate): \(cell.words) words")
     }
 
-    private func cellBackground(_ cell: HeatmapCell) -> Color {
-        if cell.isFuture {
-            return Color.calmBackground(for: scheme)
+    // Fill colours matched to light-b-paper-v2 CSS h0–h4 classes
+    private func bucketFill(bucket: Int) -> Color {
+        switch bucket {
+        case 0:  return Color.accent.opacity(0.06)
+        case 1:  return Color.accent.opacity(0.15)
+        case 2:  return Color.accent.opacity(0.30)
+        case 3:  return Color.accent.opacity(0.52)
+        case 4:  return Color.accent.opacity(0.85)
+        default: return Color.obsidianBackground(for: scheme)
         }
-        return bucketFill(bucket: cell.bucket, scheme: scheme)
     }
 
-    private func bucketFill(bucket: Int, scheme: ColorScheme) -> Color {
-        // 0 = lightest (zero-word past day), 4 = darkest (highest day)
-        let base = Color.calmBackground(for: scheme)
+    private func bucketStroke(bucket: Int) -> Color {
         switch bucket {
-        case 0: return scheme == .dark
-                    ? Color.calmDarkSidebar
-                    : Color.calmSidebar
-        case 1: return Color.calmAccent(for: scheme).opacity(0.10)
-        case 2: return Color.calmAccent(for: scheme).opacity(0.28)
-        case 3: return Color.calmAccent(for: scheme).opacity(0.50)
-        case 4: return Color.calmAccent(for: scheme).opacity(0.78)
-        default: return base
+        case 0:  return Color.accent.opacity(0.05)
+        case 1:  return Color.accent.opacity(0.09)
+        case 2:  return Color.accent.opacity(0.16)
+        case 3:  return Color.accent.opacity(0.26)
+        case 4:  return Color.accent.opacity(0.48)
+        default: return .clear
         }
     }
 
     private func bucket(words: Int, max: Int, isPast: Bool) -> Int {
         guard isPast else { return 0 }
-        guard words > 0, max > 0 else { return 0 }  // zero-word past day = lightest bucket
+        guard words > 0, max > 0 else { return 0 }
         let frac = Double(words) / Double(max)
         switch frac {
         case 0.75...: return 4
@@ -415,13 +452,17 @@ private struct HeatmapCell {
     let dateKey: String
     let displayDate: String
     let words: Int
-    let bucket: Int
+    let bucket: Int    // -1 = future
     let isToday: Bool
     let isFuture: Bool
     let isPast: Bool
 }
 
-// MARK: - AppWordRow (F2.4e)
+// MARK: - AppWordRow (F2.4d — per-app breakdown)
+//
+// Obsidian redesign: rows sit inside a card (white surface + hairline),
+// separated by a soft hairline. Bar uses Signal Cyan gradient.
+// Word count: JetBrains Mono tabular. App name: Be Vietnam Pro.
 
 private struct AppWordRow: View {
     let bundleId: String?
@@ -442,39 +483,52 @@ private struct AppWordRow: View {
                         .scaledToFit()
                 } else {
                     Image(systemName: bundleId == nil ? "clock.arrow.circlepath" : "app.dashed")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.obsidianLabel3(for: scheme))
                 }
             }
-            .frame(width: 20, height: 20)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .frame(width: 22, height: 22)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
 
-            // Name + share bar
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(displayName)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.calmLabel2(for: scheme))
-                        .lineLimit(1)
-                    Spacer()
-                    Text(formattedWords)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
-                        .monospacedDigit()
+            // Name
+            Text(displayName)
+                .font(.obsidianCaption)
+                .foregroundStyle(Color.obsidianLabel2(for: scheme))
+                .lineLimit(1)
+
+            Spacer()
+
+            // Progress bar (fixed 88pt wide — matches mockup)
+            GeometryReader { _ in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.obsidianHover(for: scheme))
+                        .frame(width: 88, height: 4)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(LinearGradient(
+                            colors: [Color.accent, Color.accentDeep],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ))
+                        .frame(width: 88 * shareFraction, height: 4)
                 }
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.calmSubtle(for: scheme))
-                            .frame(height: 3)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(colors: [Color.calmAccent(for: scheme), Color.calmAccent(for: scheme).opacity(0.7)],
-                                                 startPoint: .leading, endPoint: .trailing))
-                            .frame(width: geo.size.width * shareFraction, height: 3)
-                    }
-                }
-                .frame(height: 3)
             }
+            .frame(width: 88, height: 4)
+
+            // Word count — JetBrains Mono tabular, 11pt
+            Text(formattedWords)
+                .font(Font.custom("JetBrainsMono-Regular", size: 11).monospacedDigit())
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.horizontal, C.s5)
+        .padding(.vertical, C.s3)
+        .background(Color.obsidianSurface(for: scheme))
+        // Hairline separator between rows (drawn as bottom overlay)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.obsidianDivider(for: scheme).opacity(0.5))
+                .frame(height: 1)
         }
         .onAppear { loadIcon() }
     }
@@ -491,10 +545,9 @@ private struct AppWordRow: View {
 
     private func loadIcon() {
         guard let bundleId = bundleId else { return }
-        // Try running app first, then installed-app lookup via NSWorkspace (D22)
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
             let icon = NSWorkspace.shared.icon(forFile: url.path)
-            icon.size = NSSize(width: 20, height: 20)
+            icon.size = NSSize(width: 22, height: 22)
             self.appIcon = icon
         }
     }
@@ -510,19 +563,16 @@ enum MilestoneTracker {
     private static let thresholds = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
     private static let unseenKey = "insightsUnseenMilestone"
 
-    /// The highest milestone achieved for the given total, or nil.
     static func latestMilestone(for total: Int) -> Milestone? {
         let achieved = thresholds.filter { total >= $0 }
         guard let highest = achieved.last else { return nil }
         return Milestone(threshold: highest)
     }
 
-    /// True when a milestone was crossed since the last display.
     static var hasUnseenMilestone: Bool {
         UserDefaults.standard.bool(forKey: unseenKey)
     }
 
-    /// Call after a dictation pushes total past a threshold.
     static func markUnseenIfNeeded(previousTotal: Int, newTotal: Int) {
         let crossed = thresholds.contains { previousTotal < $0 && newTotal >= $0 }
         if crossed {
@@ -530,7 +580,6 @@ enum MilestoneTracker {
         }
     }
 
-    /// Clear after the milestone line is displayed (main window OR Insights page — D15).
     static func clearUnseenFlag() {
         UserDefaults.standard.set(false, forKey: unseenKey)
     }

@@ -4,24 +4,20 @@ import AVFoundation
 import ApplicationServices
 import UniformTypeIdentifiers
 
-// MARK: - Onboarding v3 (Calm look — Lens C / Granola-lens)
+// MARK: - Onboarding v4 (Obsidian Instrument — light-b-paper-v2)
 //
-// Faithful to the founder-approved board: /tmp/haynoi-ui2-calm/board.png
-//   • Calm tokens only (no Mercury serif / parchment).
-//   • SINGLE accent indigo for CTA + selection. The aurora gradient appears
-//     only on the app-icon chip + the recording orb in the mic-test step.
-//   • Split-screen SPATIAL TEACHING (Cluely pattern) for Accessibility — the
-//     only list-pane permission Haynoi needs now that hotkey detection uses
-//     NSEvent monitors (which also gate on Accessibility), so Input Monitoring
-//     is gone entirely. LEFT = permission cards, RIGHT = a SwiftUI-drawn
-//     facsimile of the macOS Privacy & Security pane with a synthetic cursor
-//     that demonstrates flipping the exact Haynoi toggle — before the real pane
-//     (still deep-linked) appears.
-//   • superwhisper MIC-TEST step: live waveform that rises with the voice.
-//   • superwhisper HOTKEY-TEST step: a key graphic that lights up on press.
-//   • AX-TRUST-STALE fallback: if the toggle reads ON in Settings but
-//     AXIsProcessTrusted() still returns false after ~10s, surface a
-//     "Relaunch Haynoi" button.
+// Restyled to the Obsidian Instrument design system (feat/obsidian-relaunch).
+// Source of truth: redesign/02-DESIGN-SYSTEM.md + redesign/mockup/light-b-paper-v2.html
+//
+//   • ObsidianTokens throughout — no hardcoded colour literals.
+//   • Canvas #F6F7F9 (cool off-white) window background — NOT warm cream.
+//   • Signal Cyan (#119C9A on light) as the SINGLE accent for CTAs, dots, borders.
+//   • Progress indicator: 6pt hollow/filled Signal Cyan circles (not capsule dots).
+//   • CTA: ObsidianCTAStyle — 38pt Signal Cyan pill, Be Vietnam Pro 15/600 label.
+//   • Typography: obsidianTitle (22/600), obsidianBody (14/450), obsidianCaption (11/500).
+//   • Split-screen SPATIAL TEACHING (Cluely pattern) for Accessibility — unchanged logic.
+//   • Floating orb/HUD always stays dark obsidian (tokens: orbBodyTop/orbBodyBottom).
+//   • All logic, state, bindings, timers, and sub-components are UNCHANGED.
 //
 // The real drag mechanism (NSDraggingSession in BundleDragSourceView, working
 // since 0.1.2) is unchanged — only re-dressed inside the calm split-screen.
@@ -146,7 +142,7 @@ struct OnboardingView: View {
             width: step.isWide ? 920 : 460,
             height: step.isWide ? 600 : 580
         )
-        .background(Color.calmBackground(for: scheme))
+        .background(Color.obsidianBackground(for: scheme))
         .onAppear {
             refreshPermissions()
             startPolling()
@@ -206,10 +202,10 @@ struct OnboardingView: View {
             // LEFT — permission cards + reassurance
             permissionTeachingPanel
                 .frame(width: 400)
-                .background(Color.calmBackground(for: scheme))
+                .background(Color.obsidianBackground(for: scheme))
 
             Rectangle()
-                .fill(Color.calmDivider(for: scheme))
+                .fill(Color.obsidianDivider(for: scheme))
                 .frame(width: 1)
 
             // RIGHT — rendered macOS System Settings facsimile + synthetic cursor
@@ -218,7 +214,7 @@ struct OnboardingView: View {
                 granted: axGranted
             )
             .frame(maxWidth: .infinity)
-            .background(Color.calmSubtle(for: scheme))
+            .background(Color.obsidianSubtle(for: scheme))
         }
         .overlay(alignment: .top) { CalmHairline() }
     }
@@ -226,20 +222,74 @@ struct OnboardingView: View {
     // MARK: - Header (narrow steps)
 
     private var appHeader: some View {
-        VStack(spacing: 12) {
-            appIconBadge(size: 60)
-                .padding(.top, 30)
+        VStack(spacing: 10) {
+            // Obsidian stone chip (icon squircle — dark obsidian with cyan diacritic glow)
+            obsidianStoneIcon(size: 56)
+                .padding(.top, 28)
 
-            Text(headerTitle)
-                .font(.calmTitle)
-                .foregroundStyle(Color.calmLabel(for: scheme))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+            if step == .welcome {
+                // Welcome shows full wordmark + tagline; other steps show step title only
+                VStack(spacing: 4) {
+                    Text("haynoi")
+                        .font(.obsidianDisplay)
+                        .foregroundStyle(Color.obsidianLabel(for: scheme))
+                    Text("Hãy nói — speak.")
+                        .font(.obsidianBody)
+                        .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                }
+            } else {
+                Text(headerTitle)
+                    .font(.obsidianTitle)
+                    .foregroundStyle(Color.obsidianLabel(for: scheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
         }
         .padding(.bottom, 16)
     }
 
-    /// The app icon as a calm rounded badge with a hairline edge (no heavy shadow).
+    /// Obsidian stone squircle — dark obsidian body with Signal Cyan diacritic accent.
+    private func obsidianStoneIcon(size: CGFloat) -> some View {
+        ZStack {
+            // Obsidian body
+            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [.orbBodyTop, .orbBodyBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                )
+
+            // Signal Cyan diacritic stroke (62° rising mark — brand signature)
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [.accent, .accentDeep],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: size * 0.30, height: size * 0.065)
+                .rotationEffect(.degrees(-62))
+                .offset(x: -size * 0.09, y: -size * 0.10)
+                .shadow(color: Color.accent.opacity(0.65), radius: 3)
+
+            // Real app icon at reduced opacity inside the stone (optional identity anchor)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: size * 0.50, height: size * 0.50)
+                .opacity(0)   // hidden — stone is the brand mark; icon used in drag chip
+        }
+    }
+
+    /// App icon badge (used only in the drag chip and accessibility teaching panel).
     private func appIconBadge(size: CGFloat) -> some View {
         Image(nsImage: NSApp.applicationIconImage)
             .resizable()
@@ -247,57 +297,73 @@ struct OnboardingView: View {
             .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-                    .stroke(Color.calmHairline(for: scheme), lineWidth: 1)
+                    .stroke(Color.obsidianHairline(for: scheme), lineWidth: 1)
             )
             .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 5, y: 2)
     }
 
     private var headerTitle: String {
         switch step {
-        case .welcome:         return "Welcome to Haynoi"
-        case .microphone:      return "Allow Microphone Access"
-        case .micTest:         return "Test Your Microphone"
-        case .accessibility:   return "One last permission"
-        case .hotkeyTest:      return "Try Your Hotkey"
-        case .signIn:          return "Connect Your Account"
-        case .tryIt:           return "Try Your First Dictation"
+        case .welcome:         return "haynoi"        // welcome uses wordmark, not this
+        case .microphone:      return "Microphone access"
+        case .micTest:         return "Hear yourself clearly"
+        case .accessibility:   return "One more permission"
+        case .hotkeyTest:      return "Your capture key"
+        case .signIn:          return "Sign in to Haynoi"
+        case .tryIt:           return "You're ready"
         }
     }
 
-    // MARK: - Progress Dots
+    // MARK: - Progress Dots (Signal Cyan circles — hollow future, filled past/active)
 
     private var progressDots: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 8) {
             ForEach(0..<progressStepCount, id: \.self) { i in
-                Capsule()
-                    .fill(dotColor(for: i))
-                    .frame(width: i == step.progressIndex ? 20 : 7, height: 7)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: step.rawValue)
+                obsidianProgressDot(index: i)
+                    .animation(.obsidianSnap, value: step.rawValue)
             }
         }
         .padding(.bottom, 20)
     }
 
-    private func dotColor(for i: Int) -> Color {
-        guard step.showsProgress else { return Color.calmLabel5(for: scheme) }
-        if i < step.progressIndex { return .calmSuccess }
-        if i == step.progressIndex { return Color.calmAccent(for: scheme) }
-        return Color.calmLabel5(for: scheme)
+    @ViewBuilder
+    private func obsidianProgressDot(index i: Int) -> some View {
+        let active  = i == step.progressIndex
+        let past    = i <  step.progressIndex
+        let cyan    = Color.obsidianAccent(for: scheme)
+        let hollow  = Color.obsidianDivider(for: scheme)
+
+        ZStack {
+            Circle()
+                .fill(past || active ? cyan : Color.clear)
+                .frame(width: 6, height: 6)
+            Circle()
+                .strokeBorder(past || active ? Color.clear : hollow, lineWidth: 1)
+                .frame(width: 6, height: 6)
+        }
+        // Active dot slightly larger as a subtle indicator
+        .scaleEffect(active ? 1.35 : 1.0)
     }
 
     // MARK: - Step A: Welcome
 
     private var welcomeStep: some View {
-        VStack(spacing: 18) {
-            Text("Haynoi lets you dictate into any app by holding \(HotkeyDisplay.symbol). Set up takes about a minute.")
-                .font(.system(size: 14))
-                .foregroundStyle(Color.calmLabel3(for: scheme))
+        VStack(spacing: 20) {
+            // Body copy (spec: 15/450, body ink, line-height 1.55)
+            Text("Hold a key. Speak. Your words appear\nin any app — in Vietnamese, English,\nor both at once.")
+                .font(.obsidianBody)
+                .foregroundStyle(Color.obsidianLabel2(for: scheme))
                 .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .frame(maxWidth: 340)
+                .lineSpacing(4)
+                .frame(maxWidth: 320)
 
-            calmPrimaryButton("Get Started") { advance() }
-                .padding(.top, 8)
+            Text("Powered by Kyma.")
+                .font(.obsidianCaption)
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                .multilineTextAlignment(.center)
+
+            obsidianCTAButton("Let's set it up") { advance() }
+                .padding(.top, 4)
         }
         .padding(.horizontal, 32)
     }
@@ -332,15 +398,15 @@ struct OnboardingView: View {
 
     private var permissionTeachingPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header inside the left panel (board shows a left-aligned title)
+            // Header inside the left panel
             VStack(alignment: .leading, spacing: 6) {
-                appIconBadge(size: 36)
-                Text("One last permission")
-                    .font(.calmTitle)
-                    .foregroundStyle(Color.calmLabel(for: scheme))
-                Text("Haynoi needs the ability to type into other apps and detect your hotkey. That's it — no screen access, no files.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.calmLabel3(for: scheme))
+                obsidianStoneIcon(size: 32)
+                Text("One more permission")
+                    .font(.obsidianTitle)
+                    .foregroundStyle(Color.obsidianLabel(for: scheme))
+                Text("Haynoi needs Accessibility to insert text into any app.")
+                    .font(.obsidianBody)
+                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -451,22 +517,27 @@ struct OnboardingView: View {
         VStack(spacing: 18) {
             calmIconBadge(
                 systemName: authState.signedInEmail != nil ? "checkmark.circle.fill" : "person.crop.circle.fill",
-                tint: authState.signedInEmail != nil ? .calmSuccess : Color.calmAccent(for: scheme)
+                tint: authState.signedInEmail != nil ? .obsidianSuccess : Color.obsidianAccent(for: scheme)
             )
-            .animation(.easeInOut(duration: 0.2), value: authState.signedInEmail != nil)
+            .animation(.obsidianFade, value: authState.signedInEmail != nil)
 
-            Text("Connect your Kyma account — free credit included. Dictation needs an account to transcribe.")
-                .font(.system(size: 14))
-                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Text("Haynoi uses Kyma for transcription.\nNew accounts receive $0.50 free credit\n— about 500 dictations.")
+                .font(.obsidianBody)
+                .foregroundStyle(Color.obsidianLabel2(for: scheme))
                 .multilineTextAlignment(.center)
-                .lineSpacing(2)
+                .lineSpacing(4)
                 .frame(maxWidth: 340)
 
             if let email = authState.signedInEmail {
-                VStack(spacing: 10) {
-                    Label(email, systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.calmSuccess)
+                // Post-auth state card (spec: Surface #0F1012 in dark, white in light, radius 10)
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.obsidianSuccess)
+                        Text(email)
+                            .font(.obsidianMonoSM)
+                            .foregroundStyle(Color.obsidianLabel(for: scheme))
+                    }
 
                     // A brand-new account's free credit stays locked until the
                     // email is verified. If the balance reads 0 (or nil right
@@ -474,48 +545,57 @@ struct OnboardingView: View {
                     // their first dictation doesn't fail out of nowhere.
                     if let balance = balanceManager.balance {
                         if balance > 0 {
-                            Text(String(format: "$%.2f credit ready — you're set.", balance))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.calmLabel3(for: scheme))
+                            Text(String(format: "Credit balance: $%.2f", balance))
+                                .font(.obsidianMonoMD)
+                                .foregroundStyle(Color.obsidianLabel(for: scheme))
                         } else {
                             verifyEmailNote
                         }
                     } else {
                         Text("Checking your balance…")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.calmLabel3(for: scheme))
+                            .font(.obsidianCaption)
+                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
                     }
+                }
+                .padding(C.s4)
+                .frame(maxWidth: 340)
+                .background(Color.obsidianSurface(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: C.rMD, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: C.rMD, style: .continuous)
+                        .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
+                )
 
-                    calmPrimaryButton("Continue") { advance() }
-                }
-                .onAppear {
-                    // Resume path: user lands here already signed in — pull the
-                    // balance so we show the credit or the verify-email note.
-                    if authState.signedInEmail != nil { balanceManager.refresh() }
-                }
+                obsidianCTAButton("Continue") { advance() }
+                    .onAppear {
+                        // Resume path: user lands here already signed in — pull the
+                        // balance so we show the credit or the verify-email note.
+                        if authState.signedInEmail != nil { balanceManager.refresh() }
+                    }
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: 12) {
                     HStack(spacing: 8) {
-                        calmPrimaryButton(isSigningIn ? "Opening browser…" : "Sign in with Kyma") { signIn() }
+                        obsidianCTAButton(isSigningIn ? "Opening browser…" : "Sign in with Kyma") { signIn() }
                             .disabled(isSigningIn)
                         if isSigningIn { ProgressView().controlSize(.small) }
                     }
-                    Text("Tip: continuing with Google activates your free credit instantly.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                    Text("Your audio is processed by Kyma.\nWe do not store your recordings.")
+                        .font(.obsidianCaption)
+                        .foregroundStyle(Color.obsidianLabel3(for: scheme))
                         .multilineTextAlignment(.center)
+                        .lineSpacing(2)
                         .frame(maxWidth: 300)
                     if !signInError.isEmpty {
                         Text(signInError)
                             .font(.caption)
-                            .foregroundStyle(Color.calmWarn)
+                            .foregroundStyle(Color.obsidianWarn)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: 300)
                     }
                     Button("Skip for now") { advance() }
                         .buttonStyle(.plain)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                        .foregroundStyle(Color.obsidianLabel4(for: scheme))
                 }
             }
         }
@@ -526,15 +606,15 @@ struct OnboardingView: View {
     /// locked behind email verification (balance 0 or not yet loaded).
     private var verifyEmailNote: some View {
         VStack(spacing: 6) {
-            Text("Almost there — check your inbox and verify your email to unlock your free $0.50, then you're ready to dictate.")
-                .font(.system(size: 12))
-                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Text("Email not yet verified — check your inbox to unlock your free $0.50.")
+                .font(.obsidianCaption)
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .frame(maxWidth: 320)
             Link("Open kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
                 .font(.system(size: 11))
-                .foregroundStyle(Color.calmAccent(for: scheme))
+                .foregroundStyle(Color.obsidianAccent(for: scheme))
         }
     }
 
@@ -543,46 +623,49 @@ struct OnboardingView: View {
     private var tryItStep: some View {
         VStack(spacing: 16) {
             if trialCelebrating {
-                calmIconBadge(systemName: "checkmark.circle.fill", tint: .calmSuccess)
+                calmIconBadge(systemName: "checkmark.circle.fill", tint: .obsidianSuccess)
                     .scaleEffect(trialCelebrating ? 1.06 : 1.0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.5), value: trialCelebrating)
+                    .animation(.obsidianSettle, value: trialCelebrating)
             }
 
-            Text("Hold **\(HotkeyDisplay.symbol)** and say what you're thinking. Release to transcribe.")
-                .font(.system(size: 14))
-                .foregroundStyle(Color.calmLabel3(for: scheme))
+            Text("Hold **\(HotkeyDisplay.symbol)** and say:\n\u{201C}Hãy nói Tiếng Việt\u{201D} or \u{201C}Let me try this.\u{201D}")
+                .font(.obsidianBody)
+                .foregroundStyle(Color.obsidianLabel2(for: scheme))
                 .multilineTextAlignment(.center)
-                .lineSpacing(2)
+                .lineSpacing(4)
                 .frame(maxWidth: 340)
 
-            // Real focusable target — a mock email/notion compose field.
+            // Real focusable target — prompt card for the first dictation.
             VStack(alignment: .leading, spacing: 0) {
+                // Titlebar chrome — macOS traffic-light colours (correct per spec)
                 HStack(spacing: 6) {
-                    Circle().fill(Color.calmAuroraPink).frame(width: 7, height: 7)
-                    Circle().fill(Color.calmWarn).frame(width: 7, height: 7)
-                    Circle().fill(Color.calmSuccess).frame(width: 7, height: 7)
+                    Circle().fill(Color(hex: "FF5F57")).frame(width: 9, height: 9)
+                    Circle().fill(Color(hex: "FEBC2E")).frame(width: 9, height: 9)
+                    Circle().fill(Color(hex: "28C840")).frame(width: 9, height: 9)
                     Spacer()
                     Text("New message")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color.calmLabel4(for: scheme))
+                        .font(.custom("BeVietnamPro-Medium", size: 10))
+                        .foregroundStyle(Color.obsidianLabel4(for: scheme))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(Color.calmSubtle(for: scheme))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(Color.obsidianSubtle(for: scheme))
 
-                Divider().overlay(Color.calmDivider(for: scheme))
+                Rectangle()
+                    .fill(Color.obsidianDivider(for: scheme))
+                    .frame(height: 1)
 
                 TextEditor(text: $trialText)
                     .font(.system(size: 13))
                     .frame(height: 78)
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .background(Color.calmSurface(for: scheme))
+                    .background(Color.obsidianSurface(for: scheme))
                     .overlay(alignment: .topLeading) {
                         if trialText.isEmpty {
                             Text("Click here, then hold \(HotkeyDisplay.symbol) and speak…")
                                 .font(.system(size: 13))
-                                .foregroundStyle(Color.calmLabel5(for: scheme))
+                                .foregroundStyle(Color.obsidianLabel5(for: scheme))
                                 .padding(.horizontal, 13)
                                 .padding(.vertical, 16)
                                 .allowsHitTesting(false)
@@ -592,12 +675,12 @@ struct OnboardingView: View {
             .clipShape(RoundedRectangle(cornerRadius: C.rMD, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: C.rMD, style: .continuous)
-                    .stroke(Color.calmBorder, lineWidth: 1)
+                    .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
             )
             .frame(maxWidth: 360)
 
             VStack(spacing: 8) {
-                calmPrimaryButton("Finish") {
+                obsidianCTAButton("Start using Haynoi") {
                     UserDefaults.standard.set(true, forKey: "onboardingCompleted")
                     onComplete()
                 }
@@ -607,7 +690,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
-                .foregroundStyle(Color.calmLabel4(for: scheme))
+                .foregroundStyle(Color.obsidianLabel4(for: scheme))
             }
         }
         .padding(.horizontal, 32)
@@ -770,20 +853,26 @@ struct OnboardingView: View {
         reopenPane("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
     }
 
-    // MARK: - Calm primitives
+    // MARK: - Obsidian primitives
 
-    private func calmPrimaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+    /// Primary CTA — Signal Cyan pill, 38pt height, Be Vietnam Pro 15/600 white label.
+    private func obsidianCTAButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
-            .buttonStyle(CalmButtonStyle(prominent: true, tint: Color.calmAccent(for: scheme), scheme: scheme))
+            .buttonStyle(ObsidianCTAStyle(scheme: scheme))
+    }
+
+    /// Backward-compat alias — existing call sites keep compiling.
+    private func calmPrimaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        obsidianCTAButton(title, action: action)
     }
 
     private func calmIconBadge(systemName: String, tint: Color) -> some View {
         ZStack {
             Circle()
-                .fill(tint.opacity(scheme == .dark ? 0.18 : 0.10))
-                .frame(width: 64, height: 64)
+                .fill(tint.opacity(scheme == .dark ? 0.15 : 0.08))
+                .frame(width: 60, height: 60)
             Image(systemName: systemName)
-                .font(.system(size: 28))
+                .font(.system(size: 26))
                 .foregroundStyle(tint)
         }
     }
@@ -1124,10 +1213,35 @@ struct OnboardingView: View {
     }
 }
 
-// MARK: - Calm Button Style
+// MARK: - Obsidian CTA Style (primary onboarding button)
+//
+// Signal Cyan capsule — 38pt height, Be Vietnam Pro 15/600, white label.
+// Light: #119C9A fill (WCAG AA). Dark: #38E1C6 (pops on obsidian ground).
 
-/// A single restrained button style. Prominent = filled accent; otherwise a
-/// hairline-bordered quiet button. No gradients, no heavy shadows.
+struct ObsidianCTAStyle: ButtonStyle {
+    var scheme: ColorScheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.custom("BeVietnamPro-SemiBold", size: 15))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 24)
+            .frame(height: 38)
+            .frame(minWidth: 160)
+            .background(
+                Capsule()
+                    .fill(Color.obsidianAccent(for: scheme)
+                          .opacity(configuration.isPressed ? 0.82 : 1))
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.obsidianSnap, value: configuration.isPressed)
+    }
+}
+
+// MARK: - Calm Button Style (backward-compat for warn buttons, DragGrantSheetHost etc.)
+//
+// Prominent = tint fill; non-prominent = quiet hairline-bordered button.
+
 struct CalmButtonStyle: ButtonStyle {
     var prominent: Bool = true
     var tint: Color
@@ -1144,7 +1258,7 @@ struct CalmButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: C.rMD, style: .continuous)
                     .fill(prominent
                           ? tint.opacity(configuration.isPressed ? 0.85 : 1)
-                          : Color.calmSurface(for: scheme))
+                          : Color.obsidianSurface(for: scheme))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: C.rMD, style: .continuous)
