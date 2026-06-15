@@ -527,7 +527,7 @@ private struct BillingTab: View {
                             Text("Free plan")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.obsidianLabel(for: scheme))
-                            Text("30 minutes / month  ·  Auto-detect language  ·  Normal mode only")
+                            Text("2,000 words / week  ·  Auto-detect language  ·  Normal mode only")
                                 .font(.system(size: 11))
                                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                         }
@@ -624,7 +624,7 @@ private struct BillingTab: View {
                 .padding(.bottom, C.s3)
 
             // Features
-            PlanFeature(text: "30 minutes / month", included: true)
+            PlanFeature(text: "2,000 words / week", included: true)
             PlanFeature(text: "Auto language detect", included: true)
             PlanFeature(text: "Normal mode only", included: false)
             PlanFeature(text: "All 4 modes", included: false)
