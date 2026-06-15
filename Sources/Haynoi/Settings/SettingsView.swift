@@ -176,7 +176,7 @@ private struct GeneralTab: View {
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "chime"
     @AppStorage("successDinkEnabled") private var successDinkEnabled = true
-    @AppStorage("muteMusic") private var muteMusic = false
+    @AppStorage("muteMusic") private var muteMusic = true
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @Environment(\.colorScheme) private var scheme
 
@@ -288,7 +288,7 @@ private struct GeneralTab: View {
 
                 SettingsRow(showDivider: false) {
                     Toggle(isOn: $muteMusic) {
-                        Text("Mute music while dictating")
+                        Text("Pause audio while dictating")
                             .font(.system(size: 13))
                             .foregroundStyle(Color.obsidianLabel(for: scheme))
                     }
