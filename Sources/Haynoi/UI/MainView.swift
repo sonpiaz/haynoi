@@ -486,7 +486,7 @@ private struct AboutPage: View {
                     aboutDivider
                     aboutLinkRow("Source", url: "https://github.com/sonpiaz/haynoi")
                     aboutDivider
-                    aboutLinkRow("Top up credits", url: "https://kymaapi.com")
+                    aboutLinkRow("Upgrade to Pro", url: "https://haynoi.com/upgrade")
                 }
                 .background(Color.obsidianSurface(for: scheme))
                 .clipShape(RoundedRectangle(cornerRadius: ObsidianRadius.md.rawValue))

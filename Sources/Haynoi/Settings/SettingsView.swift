@@ -714,7 +714,7 @@ private struct BillingTab: View {
 
             // Upgrade CTA
             Button {
-                if let url = URL(string: "https://kymaapi.com/pro") {
+                if let url = URL(string: "https://haynoi.com/upgrade") {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
