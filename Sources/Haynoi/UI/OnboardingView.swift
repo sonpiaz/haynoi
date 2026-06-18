@@ -530,7 +530,7 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 340)
 
-            Text("Free tier: 2,000 words / week. No credit card.")
+            Text("Free tier: 5,000 words / week. No credit card.")
                 .font(.obsidianCaption)
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                 .multilineTextAlignment(.center)
@@ -589,7 +589,7 @@ struct OnboardingView: View {
         switch balanceManager.tier {
         case "pro": return "Pro — unlimited"
         case "max": return "Max — unlimited"
-        default:    return "Free — 2,000 words / week"
+        default:    return "Free — 5,000 words / week"
         }
     }
 

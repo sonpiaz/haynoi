@@ -501,7 +501,7 @@ private struct MenuBarContent: View {
             if let remaining = balanceManager.wordsRemaining {
                 return "\(remaining) words left"
             }
-            return "2,000 words / week"
+            return "5,000 words / week"
         default:
             return "Sign in to see your plan"
         }

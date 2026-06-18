@@ -447,7 +447,7 @@ enum STTError: LocalizedError {
         case .sessionExpired:
             return "Session expired — please sign in again"
         case .outOfCredits:
-            return "You've used your free words for this week (2,000 words). Upgrade to Pro for unlimited dictation."
+            return "You've used your free words for this week (5,000 words). Resets Monday — Pro (unlimited) coming soon."
         case .rateLimited:
             return "Servers are busy — try again in a moment"
         case .noConnection:

@@ -530,7 +530,7 @@ private struct BillingTab: View {
                             Text("Free plan")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.obsidianLabel(for: scheme))
-                            Text("2,000 words / week  ·  Auto-detect language  ·  Normal mode only")
+                            Text("5,000 words / week  ·  Auto-detect language  ·  Normal mode only")
                                 .font(.system(size: 11))
                                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                         }
@@ -627,7 +627,7 @@ private struct BillingTab: View {
                 .padding(.bottom, C.s3)
 
             // Features
-            PlanFeature(text: "2,000 words / week", included: true)
+            PlanFeature(text: "5,000 words / week", included: true)
             PlanFeature(text: "Auto language detect", included: true)
             PlanFeature(text: "Normal mode only", included: false)
             PlanFeature(text: "All 4 modes", included: false)
@@ -1046,7 +1046,7 @@ private struct AccountTab: View {
         switch tier {
         case "pro": return "Pro — unlimited"
         case "max": return "Max — unlimited"
-        default:    return "Free — 2,000 words / week"
+        default:    return "Free — 5,000 words / week"
         }
     }
 
@@ -1096,7 +1096,7 @@ private struct AccountTab: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Color.obsidianError)
             }
-            Text("Free tier: 2,000 words / week. No credit card.")
+            Text("Free tier: 5,000 words / week. No credit card.")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
         }

@@ -233,7 +233,7 @@ struct MainView: View {
             if let remaining = balanceManager.wordsRemaining {
                 return "\(remaining) words left this week"
             }
-            return "Free — 2,000 words / week"
+            return "Free — 5,000 words / week"
         default:
             return "Sign in"
         }
