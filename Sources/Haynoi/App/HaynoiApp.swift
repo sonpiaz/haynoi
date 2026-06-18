@@ -412,10 +412,10 @@ private struct MenuBarContent: View {
 
     private var creditsStrip: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Balance value + label
+            // Quota value + label
             HStack(alignment: .firstTextBaseline, spacing: 7) {
-                if let balance = balanceManager.balance {
-                    Text(String(format: "$%.2f", balance))
+                if balanceManager.tier != nil {
+                    Text(popoverQuotaValue)
                         .font(.calmPopoverBalance)
                         .foregroundStyle(Color.calmLabel(for: scheme))
                         .monospacedDigit()
@@ -424,7 +424,7 @@ private struct MenuBarContent: View {
                         .font(.calmPopoverBalance)
                         .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
-                Text("pay as you go  ·  powered by Kyma")
+                Text(popoverQuotaLabel)
                     .font(.system(size: 11))
                     .foregroundStyle(Color.calmLabel4(for: scheme))
                 Spacer()
@@ -473,14 +473,38 @@ private struct MenuBarContent: View {
     }
 
     private var popoverBalanceFraction: CGFloat {
-        guard let b = balanceManager.balance, b > 0 else { return 0 }
-        return min(CGFloat(b) / 20.0, 1.0)
+        // Unlimited tiers (cap 0) show a full bar; free tier shows used/cap.
+        guard let cap = balanceManager.wordsCap, cap > 0,
+              let used = balanceManager.wordsUsed else { return 1.0 }
+        return min(max(CGFloat(used) / CGFloat(cap), 0), 1.0)
+    }
+
+    /// Big number in the popover strip — words remaining (free) or "∞".
+    private var popoverQuotaValue: String {
+        guard let cap = balanceManager.wordsCap, cap > 0 else { return "∞" }
+        if let remaining = balanceManager.wordsRemaining { return "\(remaining)" }
+        return "—"
+    }
+
+    private var popoverQuotaLabel: String {
+        switch balanceManager.tier {
+        case "pro": return "Pro  ·  unlimited"
+        case "max": return "Max  ·  unlimited"
+        default:    return "words left this week"
+        }
     }
 
     private var popoverMinutesEstimate: String {
-        guard let b = balanceManager.balance else { return "Sign in to see balance" }
-        let mins = Int(b / 0.02)
-        return "~\(mins) min remaining"
+        switch balanceManager.tier {
+        case "pro", "max": return "Unlimited"
+        case "free":
+            if let remaining = balanceManager.wordsRemaining {
+                return "\(remaining) words left"
+            }
+            return "2,000 words / week"
+        default:
+            return "Sign in to see your plan"
+        }
     }
 
     // MARK: - Actions Section
@@ -824,9 +848,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // Warm the layout keycode cache on the main thread now, so the paste
         // path (which runs in a background Task) never calls TIS off-main.
         TextInserter.prewarmKeyCode()
-        // Probe the API routes now AND on every network change (Wi-Fi switch,
-        // VPN, wake elsewhere) — the app runs for weeks, launch-only goes stale.
-        STTProvider.startRouteMonitoring()
         // Menu-bar-only by default (founder feedback 2026-06-12): no Dock icon —
         // the app lives in the menu bar like other dictation utilities. The
         // Dock icon appears only while the main/onboarding window is open

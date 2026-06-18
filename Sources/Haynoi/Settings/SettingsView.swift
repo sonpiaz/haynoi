@@ -928,6 +928,9 @@ private struct AccountTab: View {
     @ObservedObject private var balanceManager = BalanceManager.shared
     @State private var isSigningIn = false
     @State private var signInError = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isRegisterMode = false
     @State private var testing = false
     @State private var report: STTProvider.ConnectionReport?
     @Environment(\.colorScheme) private var scheme
@@ -968,11 +971,11 @@ private struct AccountTab: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.obsidianLabel(for: scheme))
             }
-            Text("Your API key was revoked. Sign in again to continue dictating.")
+            Text("Your session expired. Sign in again to continue dictating.")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
             HStack(spacing: C.s2) {
-                Button(isSigningIn ? "Signing in…" : "Sign in again") { signIn() }
+                Button(isSigningIn ? "Signing in…" : "Continue with Google") { signInWithGoogle() }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.accentOnLight)
                     .disabled(isSigningIn)
@@ -1018,7 +1021,7 @@ private struct AccountTab: View {
                 Spacer()
 
                 Button("Sign out") {
-                    KymaAuth.signOut()
+                    HaynoiAuth.signOut()
                     authState.didSignOut()
                 }
                 .font(.system(size: 12))
@@ -1027,73 +1030,84 @@ private struct AccountTab: View {
             }
         }
 
-        // Credits row
-        if let balance = balanceManager.balance {
-            if balance > 0 {
-                SettingsRow(showDivider: false) {
-                    VStack(alignment: .leading, spacing: C.s2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(String(format: "$%.2f", balance))
-                                .font(.system(size: 22, weight: .regular, design: .monospaced))
-                                .foregroundStyle(Color.obsidianLabel(for: scheme))
-                            Text("remaining")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.obsidianLabel3(for: scheme))
-                        }
-                        Text("Pay as you go. No subscription.")
+        // Plan / quota row
+        if let tier = balanceManager.tier {
+            SettingsRow(showDivider: false) {
+                VStack(alignment: .leading, spacing: C.s2) {
+                    Text(planLabel(tier: tier))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.obsidianLabel(for: scheme))
+                    if let cap = balanceManager.wordsCap, cap > 0,
+                       let used = balanceManager.wordsUsed {
+                        Text("\(used) / \(cap) words used this week")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                    } else {
+                        Text("Unlimited dictation.")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.obsidianLabel3(for: scheme))
-                        Button("Add credits →") {
-                            if let url = URL(string: "https://kymaapi.com") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.obsidianAccent(for: scheme))
-                        .buttonStyle(.plain)
                     }
                 }
-            } else {
-                SettingsRow(showDivider: false) { verifyEmailCard }
             }
         }
     }
 
-    @ViewBuilder
-    private var verifyEmailCard: some View {
-        HStack(alignment: .top, spacing: C.s2) {
-            Image(systemName: "envelope.badge")
-                .foregroundStyle(Color.obsidianWarn(for: scheme))
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Check your inbox to verify your email and activate your free $0.50, then you're ready to dictate.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.obsidianLabel2(for: scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                Link("Open kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.obsidianAccent(for: scheme))
-            }
-            Spacer()
+    /// Friendly plan line from the usage tier. cap == 0 means unlimited.
+    private func planLabel(tier: String) -> String {
+        switch tier {
+        case "pro": return "Pro — unlimited"
+        case "max": return "Max — unlimited"
+        default:    return "Free — 2,000 words / week"
         }
     }
 
     @ViewBuilder
     private var signedOutView: some View {
-        VStack(alignment: .leading, spacing: C.s2) {
+        VStack(alignment: .leading, spacing: C.s3) {
+            Button(isSigningIn ? "Opening browser…" : "Continue with Google") {
+                signInWithGoogle()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.accentOnLight)
+            .disabled(isSigningIn)
+
+            VStack(alignment: .leading, spacing: C.s2) {
+                TextField("Email", text: $email)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                SecureField("Password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .onSubmit { submitEmailPassword() }
+            }
+
             HStack(spacing: C.s2) {
-                Button(isSigningIn ? "Signing in…" : "Sign in") { signIn() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.accentOnLight)
-                    .disabled(isSigningIn)
+                Button(isSigningIn
+                       ? "Working…"
+                       : (isRegisterMode ? "Create account" : "Sign in")) {
+                    submitEmailPassword()
+                }
+                .buttonStyle(.bordered)
+                .disabled(isSigningIn || email.isEmpty || password.isEmpty)
                 if isSigningIn { ProgressView().controlSize(.small) }
             }
+
+            Button(isRegisterMode
+                   ? "Already have an account? Sign in"
+                   : "New here? Create an account") {
+                isRegisterMode.toggle()
+                signInError = ""
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundStyle(Color.obsidianAccent(for: scheme))
+
             if !signInError.isEmpty {
                 Text(signInError)
                     .font(.system(size: 11))
                     .foregroundStyle(Color.obsidianError)
             }
-            Text("Sign in to start dictating. Pay-as-you-go credits, no subscription.")
+            Text("Free tier: 2,000 words / week. No credit card.")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
         }
@@ -1168,17 +1182,40 @@ private struct AccountTab: View {
         }
     }
 
-    private func signIn() {
+    private func signInWithGoogle() {
         signInError = ""
         isSigningIn = true
         Task { @MainActor in
             defer { isSigningIn = false }
             do {
-                let token = try await KymaAuth.shared.signIn()
-                authState.didSignIn(email: token.email)
+                let user = try await HaynoiAuth.shared.signInWithGoogle()
+                authState.didSignIn(email: user.email)
                 BalanceManager.shared.refresh()
-            } catch KymaAuth.AuthError.cancelled {
+            } catch HaynoiAuth.AuthError.cancelled {
                 // user closed the auth window — no error to show
+            } catch {
+                signInError = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitEmailPassword() {
+        guard !email.isEmpty, !password.isEmpty else { return }
+        signInError = ""
+        isSigningIn = true
+        Task { @MainActor in
+            defer { isSigningIn = false }
+            do {
+                let user: HaynoiAuth.User
+                if isRegisterMode {
+                    user = try await HaynoiAuth.shared.register(
+                        email: email, password: password, displayName: nil
+                    )
+                } else {
+                    user = try await HaynoiAuth.shared.login(email: email, password: password)
+                }
+                authState.didSignIn(email: user.email)
+                BalanceManager.shared.refresh()
             } catch {
                 signInError = error.localizedDescription
             }

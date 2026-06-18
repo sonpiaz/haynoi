@@ -73,6 +73,9 @@ struct OnboardingView: View {
     @ObservedObject private var balanceManager = BalanceManager.shared
     @State private var isSigningIn = false
     @State private var signInError = ""
+    @State private var email = ""
+    @State private var password = ""
+    @State private var isRegisterMode = false
 
     // Try It step state
     @State private var trialText = ""
@@ -521,100 +524,134 @@ struct OnboardingView: View {
             )
             .animation(.obsidianFade, value: authState.signedInEmail != nil)
 
-            Text("Haynoi uses Kyma for transcription.\nNew accounts receive $0.50 free credit\n— about 500 dictations.")
+            Text("Sign in to Haynoi")
                 .font(.obsidianBody)
                 .foregroundStyle(Color.obsidianLabel2(for: scheme))
                 .multilineTextAlignment(.center)
-                .lineSpacing(4)
                 .frame(maxWidth: 340)
 
-            if let email = authState.signedInEmail {
-                // Post-auth state card (spec: Surface #0F1012 in dark, white in light, radius 10)
-                VStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.obsidianSuccess)
-                        Text(email)
-                            .font(.obsidianMonoSM)
-                            .foregroundStyle(Color.obsidianLabel(for: scheme))
-                    }
-
-                    // A brand-new account's free credit stays locked until the
-                    // email is verified. If the balance reads 0 (or nil right
-                    // after sign-in), calmly point the user to their inbox so
-                    // their first dictation doesn't fail out of nowhere.
-                    if let balance = balanceManager.balance {
-                        if balance > 0 {
-                            Text(String(format: "Credit balance: $%.2f", balance))
-                                .font(.obsidianMonoMD)
-                                .foregroundStyle(Color.obsidianLabel(for: scheme))
-                        } else {
-                            verifyEmailNote
-                        }
-                    } else {
-                        Text("Checking your balance…")
-                            .font(.obsidianCaption)
-                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
-                    }
-                }
-                .padding(C.s4)
+            Text("Free tier: 2,000 words / week. No credit card.")
+                .font(.obsidianCaption)
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: 340)
-                .background(Color.obsidianSurface(for: scheme))
-                .clipShape(RoundedRectangle(cornerRadius: C.rMD, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: C.rMD, style: .continuous)
-                        .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
-                )
+
+            if let signedInEmail = authState.signedInEmail {
+                signedInCard(email: signedInEmail)
 
                 obsidianCTAButton("Continue") { advance() }
                     .onAppear {
-                        // Resume path: user lands here already signed in — pull the
-                        // balance so we show the credit or the verify-email note.
+                        // Resume path: user lands here already signed in — pull
+                        // the tier/quota for the card.
                         if authState.signedInEmail != nil { balanceManager.refresh() }
                     }
             } else {
-                VStack(spacing: 12) {
-                    HStack(spacing: 8) {
-                        obsidianCTAButton(isSigningIn ? "Opening browser…" : "Sign in with Kyma") { signIn() }
-                            .disabled(isSigningIn)
-                        if isSigningIn { ProgressView().controlSize(.small) }
-                    }
-                    Text("Your audio is processed by Kyma.\nWe do not store your recordings.")
-                        .font(.obsidianCaption)
-                        .foregroundStyle(Color.obsidianLabel3(for: scheme))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                        .frame(maxWidth: 300)
-                    if !signInError.isEmpty {
-                        Text(signInError)
-                            .font(.caption)
-                            .foregroundStyle(Color.obsidianWarn)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 300)
-                    }
-                    Button("Skip for now") { advance() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.obsidianLabel4(for: scheme))
-                }
+                signedOutForm
             }
         }
         .padding(.horizontal, 32)
     }
 
-    /// Calm verify-email hint shown after sign-in when the free credit is still
-    /// locked behind email verification (balance 0 or not yet loaded).
-    private var verifyEmailNote: some View {
-        VStack(spacing: 6) {
-            Text("Email not yet verified — check your inbox to unlock your free $0.50.")
-                .font(.obsidianCaption)
-                .foregroundStyle(Color.obsidianLabel3(for: scheme))
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .frame(maxWidth: 320)
-            Link("Open kymaapi.com", destination: URL(string: "https://kymaapi.com")!)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.obsidianAccent(for: scheme))
+    /// Post-auth state card — email + tier/quota (no dollar credit).
+    @ViewBuilder
+    private func signedInCard(email: String) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.obsidianSuccess)
+                Text(email)
+                    .font(.obsidianMonoSM)
+                    .foregroundStyle(Color.obsidianLabel(for: scheme))
+            }
+
+            if balanceManager.tier != nil {
+                Text(tierLabel)
+                    .font(.obsidianMonoMD)
+                    .foregroundStyle(Color.obsidianLabel(for: scheme))
+            } else {
+                Text("Checking your plan…")
+                    .font(.obsidianCaption)
+                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+            }
+        }
+        .padding(C.s4)
+        .frame(maxWidth: 340)
+        .background(Color.obsidianSurface(for: scheme))
+        .clipShape(RoundedRectangle(cornerRadius: C.rMD, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: C.rMD, style: .continuous)
+                .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
+        )
+    }
+
+    /// Friendly tier line from the BalanceManager quota fields.
+    private var tierLabel: String {
+        switch balanceManager.tier {
+        case "pro": return "Pro — unlimited"
+        case "max": return "Max — unlimited"
+        default:    return "Free — 2,000 words / week"
+        }
+    }
+
+    /// Google + email/password sign-in / register form.
+    @ViewBuilder
+    private var signedOutForm: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                obsidianCTAButton(isSigningIn ? "Opening browser…" : "Continue with Google") {
+                    signInWithGoogle()
+                }
+                .disabled(isSigningIn)
+                if isSigningIn { ProgressView().controlSize(.small) }
+            }
+
+            HStack(spacing: 8) {
+                Rectangle().fill(Color.obsidianDivider(for: scheme)).frame(height: 1)
+                Text("or")
+                    .font(.obsidianCaption)
+                    .foregroundStyle(Color.obsidianLabel4(for: scheme))
+                Rectangle().fill(Color.obsidianDivider(for: scheme)).frame(height: 1)
+            }
+            .frame(maxWidth: 300)
+
+            VStack(spacing: 8) {
+                TextField("Email", text: $email)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13))
+                SecureField("Password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13))
+                    .onSubmit { submitEmailPassword() }
+            }
+            .frame(maxWidth: 300)
+
+            obsidianCTAButton(isRegisterMode ? "Create account" : "Sign in") {
+                submitEmailPassword()
+            }
+            .disabled(isSigningIn || email.isEmpty || password.isEmpty)
+
+            Button(isRegisterMode
+                   ? "Already have an account? Sign in"
+                   : "New here? Create an account") {
+                isRegisterMode.toggle()
+                signInError = ""
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(Color.obsidianAccent(for: scheme))
+
+            if !signInError.isEmpty {
+                Text(signInError)
+                    .font(.caption)
+                    .foregroundStyle(Color.obsidianWarn)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
+
+            Button("Skip for now") { advance() }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.obsidianLabel4(for: scheme))
         }
     }
 
@@ -1065,26 +1102,42 @@ struct OnboardingView: View {
 
     // MARK: - Sign-In
 
-    private func signIn() {
+    private func signInWithGoogle() {
         signInError = ""
         isSigningIn = true
         Task { @MainActor in
             defer { isSigningIn = false }
             do {
-                let token = try await KymaAuth.shared.signIn()
-                authState.didSignIn(email: token.email)
-                // Refresh the balance so the sign-in step can either confirm the
-                // credit is ready (then advance) or surface the verify-email note
-                // when a brand-new account's free credit is still locked.
+                let user = try await HaynoiAuth.shared.signInWithGoogle()
+                authState.didSignIn(email: user.email)
                 balanceManager.refresh()
-                if let balance = token.balance, balance > 0 {
-                    // Google sign-in (pre-verified email) — credit is live, move on.
-                    advance()
-                }
-                // Otherwise stay on the step: verifyEmailNote guides the user to
-                // their inbox; they tap Continue when ready.
-            } catch KymaAuth.AuthError.cancelled {
+                advance()
+            } catch HaynoiAuth.AuthError.cancelled {
                 // user dismissed — no error
+            } catch {
+                signInError = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitEmailPassword() {
+        guard !email.isEmpty, !password.isEmpty else { return }
+        signInError = ""
+        isSigningIn = true
+        Task { @MainActor in
+            defer { isSigningIn = false }
+            do {
+                let user: HaynoiAuth.User
+                if isRegisterMode {
+                    user = try await HaynoiAuth.shared.register(
+                        email: email, password: password, displayName: nil
+                    )
+                } else {
+                    user = try await HaynoiAuth.shared.login(email: email, password: password)
+                }
+                authState.didSignIn(email: user.email)
+                balanceManager.refresh()
+                advance()
             } catch {
                 signInError = error.localizedDescription
             }

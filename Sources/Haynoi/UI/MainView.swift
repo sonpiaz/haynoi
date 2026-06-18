@@ -222,10 +222,17 @@ struct MainView: View {
     }
 
     private var balanceLine: String {
-        if let b = balanceManager.balance {
-            return String(format: "$%.2f remaining", b)
+        switch balanceManager.tier {
+        case "pro": return "Pro — unlimited"
+        case "max": return "Max — unlimited"
+        case "free":
+            if let remaining = balanceManager.wordsRemaining {
+                return "\(remaining) words left this week"
+            }
+            return "Free — 2,000 words / week"
+        default:
+            return "Sign in"
         }
-        return "Pay as you go"
     }
 
     // MARK: - Content (switches on sidebar section)

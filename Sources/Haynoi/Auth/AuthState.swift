@@ -19,7 +19,7 @@ final class AuthState: ObservableObject {
     @Published var keyInvalid: Bool = false
 
     private init() {
-        signedInEmail = KymaAuth.currentUserEmail
+        signedInEmail = HaynoiAuth.currentUserEmail
     }
 
     /// Call after a successful sign-in to refresh email and clear invalid flag.
@@ -38,7 +38,7 @@ final class AuthState: ObservableObject {
     /// Idempotent: concurrent transcribe + rewrite 401s must not double-fire.
     func handleKeyRevoked() {
         guard !keyInvalid else { return }
-        KymaAuth.signOut()
+        HaynoiAuth.signOut()
         signedInEmail = nil
         keyInvalid = true
         NSLog("[Haynoi] API key revoked by server (401) — user must re-authenticate")
