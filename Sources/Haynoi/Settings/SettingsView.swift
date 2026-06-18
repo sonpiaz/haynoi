@@ -13,7 +13,10 @@ import ApplicationServices
 
 struct SettingsView: View {
     @Environment(\.colorScheme) private var scheme
-    @State private var selectedTab: SettingsTab = .general
+    // Land signed-out users straight on Account (the sign-in form); signed-in
+    // users get the usual General tab.
+    @State private var selectedTab: SettingsTab =
+        AuthState.shared.signedInEmail == nil ? .account : .general
 
     var body: some View {
         VStack(spacing: 0) {
@@ -682,29 +685,22 @@ private struct BillingTab: View {
             .clipShape(Capsule())
             .padding(.bottom, C.s2)
 
-            // Price
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(billingPeriod == .annual ? annualMonthlyPrice : monthlyPrice)
-                    .font(.system(.title, design: .monospaced).weight(.regular))
-                    .foregroundStyle(Color.obsidianLabel(for: scheme))
-                Text("/ mo")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
-            }
-            .padding(.bottom, 2)
+            // Coming soon — paid tier ships in a later phase. No price shown
+            // yet; everyone is on Free for now.
+            Text("Coming soon")
+                .font(.system(.title3, design: .monospaced).weight(.regular))
+                .foregroundStyle(Color.obsidianLabel2(for: scheme))
+                .padding(.bottom, 2)
 
-            // Billing note
-            Text(billingPeriod == .annual
-                ? "billed \(annualTotalPrice) / yr"
-                : "or \(annualTotalPrice) / yr with Annual")
-                .font(.system(size: 10.5, design: .monospaced))
+            Text("Haynoi is free while we build. Pro pricing arrives later.")
+                .font(.system(size: 10.5))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                 .padding(.bottom, C.s3)
 
             Divider().background(Color.obsidianDivider(for: scheme))
                 .padding(.bottom, C.s3)
 
-            // Features
+            // What Pro will include (preview only).
             PlanFeature(text: "Unlimited dictation", included: true)
             PlanFeature(text: "All 4 modes", included: true)
             PlanFeature(text: "Priority transcription", included: true)
@@ -712,32 +708,25 @@ private struct BillingTab: View {
 
             Spacer(minLength: C.s5)
 
-            // Upgrade CTA
-            Button {
-                if let url = URL(string: "https://haynoi.com/upgrade") {
-                    NSWorkspace.shared.open(url)
-                }
-            } label: {
-                Text("Upgrade to Pro →")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.accentOnLight)
-                    .clipShape(RoundedRectangle(cornerRadius: C.rSM))
-                    .shadow(color: Color.accentOnLight.opacity(0.28), radius: 8, y: 2)
-            }
-            .buttonStyle(.plain)
+            // Disabled placeholder CTA — no checkout yet.
+            Text("Coming soon")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.obsidianSubtle(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: C.rSM))
         }
         .padding(C.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.obsidianSurface(for: scheme))
         .overlay(
             RoundedRectangle(cornerRadius: C.rLG)
-                .stroke(Color.accent.opacity(0.35), lineWidth: 1)
+                .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: C.rLG))
-        .shadow(color: Color.accent.opacity(0.08), radius: 16, y: 4)
+        // Dimmed: this tier isn't live yet.
+        .opacity(0.6)
     }
 
     // MARK: Promo Code

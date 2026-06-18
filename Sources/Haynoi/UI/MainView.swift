@@ -123,8 +123,12 @@ struct MainView: View {
                 }
                 .buttonStyle(SidebarRowButtonStyle(scheme: scheme))
 
-                accountChip
-                    .padding(.top, 4)
+                SettingsLink {
+                    accountChip
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(SidebarRowButtonStyle(scheme: scheme))
+                .padding(.top, 4)
             }
             .padding(.horizontal, C.s2)
             .padding(.top, C.s2)
@@ -486,7 +490,7 @@ private struct AboutPage: View {
                     aboutDivider
                     aboutLinkRow("Source", url: "https://github.com/sonpiaz/haynoi")
                     aboutDivider
-                    aboutLinkRow("Upgrade to Pro", url: "https://haynoi.com/upgrade")
+                    aboutRow("Pro", value: "Coming soon")
                 }
                 .background(Color.obsidianSurface(for: scheme))
                 .clipShape(RoundedRectangle(cornerRadius: ObsidianRadius.md.rawValue))
