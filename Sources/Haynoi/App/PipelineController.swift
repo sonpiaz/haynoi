@@ -328,6 +328,29 @@ final class PipelineController {
                 // lastTranscript = raw STT text (not finalText): snippets/replaces
                 // are deterministic and shouldn't be "learned"; diffing the raw
                 // transcript isolates the genuine recognition error.
+                // v1.2 — Signal B (re-dictation similarity). Compare this transcript
+                // to the previous one (RAM-only) BEFORE overwriting lastTranscript.
+                // A qualifying near-homophone re-dictation opportunistically SUGGESTS
+                // learning the corrected word as a SOFT-BIAS .term — never a
+                // .replacement (low confidence, can't corrupt output). Suggest-never-
+                // silent: the toast only adds on tap, suppressed in live contexts.
+                await MainActor.run {
+                    if let s = CorrectionDetector.shared.observe(text),
+                       !LiveContext.isActive() {
+                        let right = s.right
+                        FloatingBarController.shared.showLearnToast(
+                            wrong: s.wrong, right: right,
+                            onRemember: {
+                                // SOFT-BIAS ONLY: .term (source .learned), NEVER a
+                                // .replacement. The .term feeds the prompt/rewrite
+                                // glossary; it can never trigger a hard swap.
+                                _ = PersonalDictionary.shared.addTerm(right, source: .learned)
+                                NSLog("[Haynoi] Learned (re-dictation, term-only): %@", right)
+                            },
+                            onIgnore: {}
+                        )
+                    }
+                }
                 await MainActor.run {
                     state.lastTranscript = text
                     state.lastInsertedText = insertResult.inserted

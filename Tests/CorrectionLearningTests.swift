@@ -2,6 +2,8 @@ import XCTest
 @testable import Haynoi
 
 /// v1.1 "fix that" correction-capture unit tests (Signal C).
+/// @MainActor: some assertions call MainActor-isolated APIs (CorrectionDetector.suggestion).
+@MainActor
 final class CorrectionLearningTests: XCTestCase {
 
     // MARK: - §1.1 tolerant decode of v1 dictionary.json (no confirmations/fireCount)
@@ -104,6 +106,41 @@ final class CorrectionLearningTests: XCTestCase {
         XCTAssertNotNil(change)
         XCTAssertEqual(change?.wrong, "hello world")
         XCTAssertEqual(change?.right, "hello there world")
+    }
+
+    // MARK: - §5.4 Signal B: short re-dictation must fire (whole-string floor bug)
+
+    func testSignalBShortRedictationHaiNoiFires() {
+        // The doc/header headline example. Whole-string sim is only ~0.57, so the
+        // old 0.85 floor rejected it — now gated on the changed region instead.
+        let s = CorrectionDetector.suggestion(from: "Hai Noi", to: "Hà Nội")
+        XCTAssertNotNil(s, "'Hai Noi' → 'Hà Nội' is the headline case and must fire")
+        XCTAssertEqual(s?.right, "Hà Nội")
+    }
+
+    func testSignalBShortRedictationSonFires() {
+        let s = CorrectionDetector.suggestion(from: "Son", to: "Sơn")
+        XCTAssertNotNil(s, "'Son' → 'Sơn' (adds diacritic) must fire")
+        XCTAssertEqual(s?.right, "Sơn")
+    }
+
+    func testSignalBHaynoiToHaNoiFires() {
+        let s = CorrectionDetector.suggestion(from: "Haynoi", to: "Hà Nội")
+        XCTAssertNotNil(s, "'Haynoi' → 'Hà Nội' must fire")
+        XCTAssertEqual(s?.right, "Hà Nội")
+    }
+
+    func testSignalBUnrelatedDifferentWordRejected() {
+        // Loose whole-string floor must still reject two genuinely different words
+        // (not a near-homophone re-dictation).
+        XCTAssertNil(CorrectionDetector.suggestion(from: "mèo", to: "Hà Nội"),
+                     "different word must not be suggested as a correction")
+    }
+
+    func testSignalBStripDiacriticsNeverSuggested() {
+        // Directionality guard: re-dictation that STRIPS diacritics is the
+        // self-poisoning direction and must never fire.
+        XCTAssertNil(CorrectionDetector.suggestion(from: "Sơn", to: "Son"))
     }
 
     // MARK: - §7.3 self-heal: disable a fired rule the user reversed
