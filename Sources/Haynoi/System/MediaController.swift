@@ -46,24 +46,9 @@ enum MediaController {
 
     /// True when a conferencing / streaming / screen-recording app is running —
     /// contexts where auto-pausing media would interrupt something live.
-    private static func isLiveContext() -> Bool {
-        let liveApps: Set<String> = [
-            "us.zoom.xos",                    // Zoom
-            "com.microsoft.teams2",           // Microsoft Teams
-            "com.microsoft.teams",
-            "com.hnc.Discord",                // Discord
-            "com.cisco.webexmeetingsapp",     // Webex
-            "com.readdle.calls",              // (generic call apps)
-            "com.obsproject.obs-studio",      // OBS (streaming/recording)
-            "com.apple.screencaptureui",      // macOS screenshot/recording UI
-            "com.loom.desktop",               // Loom
-            "com.electron.screen-studio",     // Screen Studio
-        ]
-        return NSWorkspace.shared.runningApplications.contains {
-            guard let id = $0.bundleIdentifier else { return false }
-            return liveApps.contains(id)
-        }
-    }
+    /// Delegates to the shared `LiveContext` helper (extracted in v1.1 so the
+    /// "fix that" learn toast can reuse the same set). Behavior-preserving.
+    private static func isLiveContext() -> Bool { LiveContext.isActive() }
 
     static func resumeIfPaused() {
         if let app = pausedApp {

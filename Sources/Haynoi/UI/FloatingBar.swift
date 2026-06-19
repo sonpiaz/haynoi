@@ -24,6 +24,11 @@ class FloatingBarController {
     private var window: NSWindow?
     private var hostingView: NSView?
 
+    // v1.1 — separate clickable window for the learn toast (the orb window is
+    // ignoresMouseEvents = true, so it can't host buttons).
+    private var toastWindow: NSWindow?
+    private var toastDismissTimer: Timer?
+
     private init() {}
 
     // MARK: - Lifecycle
@@ -90,6 +95,98 @@ class FloatingBarController {
         }
         // Reset orb state so next show() starts fresh
         AppState.shared.orbState = .idle
+    }
+
+    // MARK: - v1.1 Correction hint + Learn toast
+
+    /// Brief visual cue that "fix that" armed correction mode. Lean: reuse the orb
+    /// success-chip surface to flash a small "✏️ Sửa" chip. The substantive UI is
+    /// the learn toast at the end of the correction.
+    @MainActor func showCorrectionHint() {
+        AppState.shared.lastDictationWordCount = 0  // force the generic chip path off
+        show()
+        transition(to: .success) // reuses the chip styling; auto-hides after dwell
+    }
+
+    /// Non-modal, auto-dismissing learn toast with two inline actions (§5). Lives
+    /// in its own clickable window below the orb's top-center slot. 6s auto-dismiss
+    /// is treated as "ignore" (no learn). Replaces any toast already on screen.
+    @MainActor func showLearnToast(wrong: String, right: String,
+                                   onRemember: @escaping () -> Void,
+                                   onIgnore: @escaping () -> Void) {
+        dismissLearnToast(fireIgnore: false) // clear any prior toast (no double-ignore)
+
+        let view = LearnToastView(
+            wrong: wrong,
+            right: right,
+            onRemember: { [weak self] in
+                self?.toastDismissTimer?.invalidate(); self?.toastDismissTimer = nil
+                onRemember()
+                self?.tearDownToastWindow()
+            },
+            onIgnore: { [weak self] in
+                self?.toastDismissTimer?.invalidate(); self?.toastDismissTimer = nil
+                onIgnore()
+                self?.tearDownToastWindow()
+            }
+        )
+        let hosting = NSHostingView(rootView: view)
+        let size = NSSize(width: 320, height: 64)
+        hosting.frame = NSRect(origin: .zero, size: size)
+
+        let win = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        win.contentView = hosting
+        win.isOpaque = false
+        win.backgroundColor = .clear
+        win.level = .floating
+        win.hasShadow = false
+        win.ignoresMouseEvents = false // clickable — hosts the two buttons
+        win.collectionBehavior = [.canJoinAllSpaces, .stationary]
+
+        // A row under the orb slot so they don't overlap.
+        if let screen = NSScreen.main {
+            let visible = screen.visibleFrame
+            let x = visible.midX - size.width / 2
+            let y = visible.maxY - 80 /* orb height */ - 10 - size.height - 8
+            win.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+        win.animationBehavior = .none
+        win.orderFront(nil)
+        toastWindow = win
+
+        // 6s auto-dismiss = ignored.
+        let timer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                onIgnore()
+                self?.tearDownToastWindow()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        toastDismissTimer = timer
+    }
+
+    /// Dismisses any visible learn toast. When `fireIgnore` is true the ignore
+    /// path is NOT invoked here (callers that replace a toast pass false).
+    @MainActor func dismissLearnToast(fireIgnore: Bool) {
+        toastDismissTimer?.invalidate()
+        toastDismissTimer = nil
+        tearDownToastWindow()
+    }
+
+    @MainActor private func tearDownToastWindow() {
+        guard let win = toastWindow else { return }
+        win.orderOut(nil)
+        let hosting = win.contentView
+        toastWindow = nil
+        DispatchQueue.main.async {
+            win.contentView = nil
+            _ = hosting
+        }
     }
 
     // MARK: - Private
@@ -418,6 +515,72 @@ struct FloatingBarView: View {
     private func stopAnimationLoop() {
         displayLink?.invalidate()
         displayLink = nil
+    }
+}
+
+// MARK: - Learn Toast (v1.1 — "Nhớ: <wrong> → <right>?")
+
+/// Non-modal learn prompt shown after an explicit "fix that" correction. Two
+/// inline actions: Nhớ (remember → upsert learned replacement) / Bỏ qua (ignore).
+struct LearnToastView: View {
+    let wrong: String
+    let right: String
+    let onRemember: () -> Void
+    let onIgnore: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Nhớ?")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.inkDarkBody.opacity(0.7))
+                HStack(spacing: 4) {
+                    Text(wrong)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.inkDarkBody.opacity(0.8))
+                        .lineLimit(1)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.accent)
+                    Text(right)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accent)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            Button(action: onRemember) {
+                Text("Nhớ")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.accent.opacity(0.16)))
+            }
+            .buttonStyle(.plain)
+            Button(action: onIgnore) {
+                Text("Bỏ qua")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkDarkBody.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.orbBodyTop, Color.orbBodyBottom],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+                .shadow(color: .black.opacity(0.38), radius: 12, y: 4)
+        )
+        .frame(width: 320, height: 64)
     }
 }
 

@@ -38,6 +38,9 @@ final class PipelineController {
     // Fix #5 (AudioRecorder): observer for self-abort notifications.
     private var abortObserver: NSObjectProtocol?
 
+    // v1.1 — auto-disarm "fix that" if no dictation follows within ~10s.
+    private var correctionDisarmTimer: Timer?
+
     private init() {
         // Bridge AudioRecorder.audioLevel → AppState.audioLevel
         levelCancellable = recorder.$audioLevel
@@ -63,6 +66,10 @@ final class PipelineController {
         hotkey.onCancelled = { [weak self] in
             // Cmd+C/V detected — cancel pre-recording
             Task { @MainActor in self?.cancelRecording() }
+        }
+        // v1.1 — "fix that" gesture arms correction mode for the next dictation.
+        hotkey.onFixThat = { [weak self] in
+            Task { @MainActor in self?.armCorrection() }
         }
         hotkey.start()
 
@@ -268,11 +275,28 @@ final class PipelineController {
             await previousInsertion?.value
 
             do {
-                let text = try await STTProvider.transcribe(samples)
+                let result = try await STTProvider.transcribeTracked(samples)
+                let text = result.text
                 guard !text.isEmpty else {
                     await MainActor.run { state.isTranscribing = false }
                     return
                 }
+
+                // v1.1 — if "fix that" is armed, this dictation is the CORRECTED
+                // version of the last one. Route it through the correction path
+                // and SKIP the normal addTranscription/insert success path so the
+                // corrected text is inserted exactly once (no double-insert).
+                if await MainActor.run(body: { state.isCorrectionArmed }) {
+                    await MainActor.run {
+                        state.isTranscribing = false
+                        state.isCorrectionArmed = false
+                        correctionDisarmTimer?.invalidate()
+                        correctionDisarmTimer = nil
+                    }
+                    await handleCorrection(correctedTranscript: text)
+                    return
+                }
+
                 // Apply snippets
                 let finalText = SnippetManager.applySnippets(to: text)
                 NSLog("[Haynoi] Transcribed: %@", finalText)
@@ -298,7 +322,20 @@ final class PipelineController {
                     }
                 }
                 // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
-                await TextInserter.insert(finalText, targetApp: dictationTargetApp)
+                let insertResult = await TextInserter.insert(finalText, targetApp: dictationTargetApp)
+                // v1.1 — record what/where the last dictation landed so a "fix
+                // that" can replace it in place and learn from the diff. Keep
+                // lastTranscript = raw STT text (not finalText): snippets/replaces
+                // are deterministic and shouldn't be "learned"; diffing the raw
+                // transcript isolates the genuine recognition error.
+                await MainActor.run {
+                    state.lastTranscript = text
+                    state.lastInsertedText = insertResult.inserted
+                    state.lastTargetApp = insertResult.targetApp ?? dictationTargetApp
+                    state.lastInsertionSpan = insertResult.span
+                    state.lastDictationAt = Date()
+                    state.lastFiredRuleIDs = result.firedIDs
+                }
                 let wordCount = text.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
                 // Snapshot total BEFORE recording for milestone threshold check (D15)
@@ -370,6 +407,119 @@ final class PipelineController {
         // Fix #6: play cancel tone (was never called)
         if UserDefaults.standard.bool(forKey: "soundEnabled") {
             SoundFeedback.shared.playCancelTone()
+        }
+    }
+
+    // MARK: - v1.1 "Fix that" correction (Signal C)
+
+    /// Arms correction mode: the NEXT dictation is treated as the corrected
+    /// version of the last one. Guarded so a stray tap with no recent dictation
+    /// (or while busy) is a no-op, and auto-disarms after ~10s.
+    func armCorrection() {
+        guard let at = state.lastDictationAt, Date().timeIntervalSince(at) < 60,
+              state.lastInsertedText != nil,
+              !state.isRecording, !state.isTranscribing else {
+            NSLog("[Haynoi] armCorrection: no recent dictation or busy — ignored")
+            return
+        }
+        state.isCorrectionArmed = true
+        NSLog("[Haynoi] Correction armed — next dictation corrects the last one")
+        FloatingBarController.shared.showCorrectionHint()
+        if UserDefaults.standard.bool(forKey: "soundEnabled") {
+            SoundFeedback.shared.playStartTone()
+        }
+        // Auto-disarm if no dictation follows.
+        correctionDisarmTimer?.invalidate()
+        correctionDisarmTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.state.isCorrectionArmed {
+                    self.state.isCorrectionArmed = false
+                    NSLog("[Haynoi] Correction auto-disarmed (no dictation within 10s)")
+                }
+            }
+        }
+    }
+
+    /// Handles a correction dictation: replace the last inserted text in place,
+    /// learn the diff (toast), and self-heal a fired rule the user reversed.
+    private func handleCorrection(correctedTranscript: String) async {
+        // 1. Snapshot the last-dictation basis.
+        let t1 = state.lastTranscript
+        let oldInserted = state.lastInsertedText
+        let targetApp = state.lastTargetApp
+        let span = state.lastInsertionSpan
+        let firedIDs = state.lastFiredRuleIDs
+
+        guard let oldInserted else {
+            NSLog("[Haynoi] handleCorrection: no last-inserted text — inserting at cursor")
+            _ = await TextInserter.insert(correctedTranscript, targetApp: targetApp)
+            return
+        }
+
+        // 2. In-place replace of the old inserted span with the corrected text.
+        let replacedInPlace = await TextInserter.replaceSpan(
+            span, with: correctedTranscript, oldText: oldInserted, targetApp: targetApp)
+        if !replacedInPlace {
+            state.setTransientStatus("Sửa ở vị trí con trỏ — văn bản cũ vẫn còn")
+        }
+
+        // 3. Diff → wrong→right, then either self-heal a reversed fired rule or
+        //    propose learning the new correction. Diff against the raw T1.
+        let basis = t1 ?? oldInserted
+        if let change = CorrectionDiff.extractChange(from: basis, to: correctedTranscript) {
+            // 4. Self-heal: did the user correct BACK against a rule that just
+            //    fired on T1? A fired rule changed wrong→right; the user typing
+            //    `right`→`wrong` now means that rule was wrong here. Disable it —
+            //    do NOT also learn the reverse (avoids oscillation §7.3).
+            let firedRules = PersonalDictionary.shared.entries(withIDs: firedIDs)
+            let reversed = firedRules.first { rule in
+                guard let w = rule.wrong else { return false }
+                return w.precomposedStringWithCanonicalMapping.caseInsensitiveCompare(
+                            change.right.precomposedStringWithCanonicalMapping) == .orderedSame &&
+                       rule.right.precomposedStringWithCanonicalMapping.caseInsensitiveCompare(
+                            change.wrong.precomposedStringWithCanonicalMapping) == .orderedSame
+            }
+            if let reversed, let w = reversed.wrong {
+                _ = PersonalDictionary.shared.disableMatchingReplacement(wrong: w, right: reversed.right)
+                NSLog("[Haynoi] Self-heal: disabled reversed rule %@ → %@", w, reversed.right)
+            } else {
+                // Propose learning — suppress the toast in live contexts (§5.1).
+                if !LiveContext.isActive() {
+                    let wrong = change.wrong
+                    let right = change.right
+                    FloatingBarController.shared.showLearnToast(
+                        wrong: wrong, right: right,
+                        onRemember: {
+                            // Explicit user action = trusted → confirmations = 2
+                            // clears the >=2 activation gate immediately (§1.2).
+                            _ = PersonalDictionary.shared.upsertLearnedReplacement(
+                                wrong: wrong, right: right, confirmations: 2)
+                            NSLog("[Haynoi] Learned (fix-that): %@ → %@", wrong, right)
+                        },
+                        onIgnore: {}
+                    )
+                }
+            }
+        }
+
+        // 5. Update last-dictation state to the corrected values so a second
+        //    fix-that corrects the correction. Update the most recent history
+        //    entry in place rather than adding a new row.
+        let newSpan: NSRange? = {
+            guard let span, span.location != NSNotFound, replacedInPlace else { return nil }
+            return NSRange(location: span.location, length: correctedTranscript.utf16.count)
+        }()
+        state.lastTranscript = correctedTranscript
+        state.lastInsertedText = correctedTranscript
+        state.lastInsertionSpan = newSpan
+        state.lastDictationAt = Date()
+        state.lastFiredRuleIDs = []
+        state.updateLastTranscription(correctedTranscript)
+
+        if UserDefaults.standard.bool(forKey: "soundEnabled"),
+           UserDefaults.standard.bool(forKey: "successDinkEnabled") {
+            SoundFeedback.shared.playSuccessTone()
         }
     }
 

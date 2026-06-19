@@ -175,6 +175,7 @@ private struct SettingsRow<Content: View>: View {
 
 private struct GeneralTab: View {
     @AppStorage("hotkeyChoice") private var hotkeyChoice = "option"
+    @AppStorage("fixThatHotkeyChoice") private var fixThatChoice = "ctrlOption"
     @AppStorage("appTheme") private var appTheme = "light"
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("soundTheme") private var soundTheme = "chime"
@@ -215,6 +216,28 @@ private struct GeneralTab: View {
                         }
 
                         Text("Hold to record, release to transcribe. Right Option stays free for accents.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                    }
+                }
+
+                SettingsRow {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Fix that")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.obsidianLabel(for: scheme))
+
+                        Picker("", selection: $fixThatChoice) {
+                            Text("⌃⌥ Control+Option").tag("ctrlOption")
+                            Text("⌥⌥ Double-tap Option").tag("doubleOption")
+                            Text("Off").tag("off")
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: fixThatChoice) { _, v in
+                            HotkeyManager.shared.fixThatChoice = v
+                        }
+
+                        Text("Tap right after a dictation, then say the corrected version.")
                             .font(.system(size: 11))
                             .foregroundStyle(Color.obsidianLabel3(for: scheme))
                     }

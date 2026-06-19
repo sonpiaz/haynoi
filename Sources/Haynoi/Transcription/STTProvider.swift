@@ -13,7 +13,19 @@ import Foundation
 // No BYOK — single hosted backend, single sign-in.
 
 enum STTProvider {
+    /// Transcription result. `firedIDs` are the `.replacement` rule ids that
+    /// actually changed the text in `applyReplacements` — fed to v1.1 self-heal.
+    struct Result {
+        let text: String
+        let firedIDs: [UUID]
+    }
+
+    /// Back-compat convenience: text only (retry path, diagnostics).
     static func transcribe(_ samples: [Float]) async throws -> String {
+        try await transcribeTracked(samples).text
+    }
+
+    static func transcribeTracked(_ samples: [Float]) async throws -> Result {
         guard let token = HaynoiAuth.currentToken else {
             throw STTError.notSignedIn
         }
@@ -70,10 +82,13 @@ enum STTProvider {
         // rewrite (so the rewrite can't re-mangle a term we just fixed), or in
         // its place when the mode has no rewrite. Local, on-device, never a
         // network call. See redesign/07-DICTATION-LEARNING.md §5.3.
+        var firedIDs: [UUID] = []
         if !text.isEmpty {
-            text = PersonalDictionary.shared.applyReplacements(to: text)
+            let tracked = PersonalDictionary.shared.applyReplacementsTracked(to: text)
+            text = tracked.text
+            firedIDs = tracked.firedIDs
         }
-        return text
+        return Result(text: text, firedIDs: firedIDs)
     }
 
     /// Resolves the model alias from the user's quality setting. The proxy

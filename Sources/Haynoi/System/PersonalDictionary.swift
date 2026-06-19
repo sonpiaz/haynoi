@@ -29,6 +29,9 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
     var language: String?        // "vi" | "en" | nil
     var frequency: Int           // confirmations/uses → glossary priority
     var createdAt: Date
+    // v1.1 — explicit "fix that" correction capture (Signal C).
+    var confirmations: Int       // explicit "fix that" confirms; gates .learned .replacement activation (>= 2)
+    var fireCount: Int           // times this .replacement actually fired (self-heal + §F effectiveness)
 
     enum Kind: String, Codable { case term, replacement }
     enum Source: String, Codable { case manual, learned }
@@ -43,7 +46,9 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
         caseSensitive: Bool? = nil,
         language: String? = nil,
         frequency: Int = 0,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        confirmations: Int = 0,
+        fireCount: Int = 0
     ) {
         self.id = id
         self.right = right
@@ -63,6 +68,38 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
         self.language = language
         self.frequency = frequency
         self.createdAt = createdAt
+        self.confirmations = confirmations
+        self.fireCount = fireCount
+    }
+
+    // Decode tolerantly — v1 `dictionary.json` files predate `confirmations`/
+    // `fireCount`, so the synthesized decoder would throw `keyNotFound` on them.
+    // Mirror Transcription's tolerant decode (AppState.swift): decodeIfPresent for
+    // the new keys, defaulting to 0, and decode everything else normally.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        right = try c.decode(String.self, forKey: .right)
+        wrong = try c.decodeIfPresent(String.self, forKey: .wrong)
+        kind = try c.decode(Kind.self, forKey: .kind)
+        source = try c.decode(Source.self, forKey: .source)
+        enabled = try c.decode(Bool.self, forKey: .enabled)
+        caseSensitive = try c.decode(Bool.self, forKey: .caseSensitive)
+        language = try c.decodeIfPresent(String.self, forKey: .language)
+        frequency = try c.decode(Int.self, forKey: .frequency)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        confirmations = try c.decodeIfPresent(Int.self, forKey: .confirmations) ?? 0
+        fireCount = try c.decodeIfPresent(Int.self, forKey: .fireCount) ?? 0
+    }
+
+    /// Activation predicate for a `.replacement` rule (§1.2): manual rules are
+    /// always trusted; learned rules fire only once confirmed (>= 2). The explicit
+    /// "fix that" path upserts with confirmations = 2, so it clears this gate
+    /// immediately. Pure — single source of truth for `applyReplacementsTracked`'s
+    /// filter and unit tests.
+    var firesAsReplacement: Bool {
+        guard enabled, kind == .replacement else { return false }
+        return source == .manual || confirmations >= 2
     }
 
     /// True when `text` contains combining diacritics or mixed-case letters —
@@ -182,6 +219,98 @@ final class PersonalDictionary {
         return add(DictionaryEntry(right: r, wrong: w, kind: .replacement, source: source, language: language))
     }
 
+    // MARK: - v1.1 learn / self-heal (Signal C)
+
+    /// Upserts a `.learned` `.replacement` (the "Nhớ" handler target, §7.2). If a
+    /// `.replacement` with the same (wrong, right) already exists, bumps its
+    /// `confirmations` (capped at 2) and `frequency`; otherwise inserts a new
+    /// `.learned` entry with the given `confirmations`. Dedupe reuses `add`'s
+    /// case-insensitive (wrong, right) match, but on `.replacement` only, and
+    /// must also carry `confirmations` — so the upsert is done directly here.
+    @discardableResult
+    func upsertLearnedReplacement(wrong: String, right: String, confirmations: Int, language: String? = nil) -> DictionaryEntry? {
+        let w = wrong.trimmingCharacters(in: .whitespacesAndNewlines)
+        let r = right.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !w.isEmpty, !r.isEmpty else { return nil }
+        return queue.sync {
+            if let idx = entries.firstIndex(where: {
+                $0.kind == .replacement &&
+                $0.right.caseInsensitiveCompare(r) == .orderedSame &&
+                ($0.wrong ?? "").caseInsensitiveCompare(w) == .orderedSame
+            }) {
+                entries[idx].frequency += 1
+                entries[idx].confirmations = min(entries[idx].confirmations + 1, 2)
+                // Re-enable a previously self-healed rule the user is now reaffirming.
+                entries[idx].enabled = true
+                persist()
+                return entries[idx]
+            }
+            let entry = DictionaryEntry(
+                right: r, wrong: w, kind: .replacement, source: .learned,
+                language: language, frequency: 0, confirmations: confirmations
+            )
+            entries.append(entry)
+            persist()
+            return entry
+        }
+    }
+
+    /// Self-heal (§7.3): disable an enabled `.replacement` whose (wrong, right)
+    /// match case-insensitively (NFC-normalized). Returns the disabled id, if any.
+    @discardableResult
+    func disableMatchingReplacement(wrong: String, right: String) -> UUID? {
+        let w = wrong.precomposedStringWithCanonicalMapping
+        let r = right.precomposedStringWithCanonicalMapping
+        return queue.sync {
+            guard let idx = entries.firstIndex(where: {
+                $0.enabled && $0.kind == .replacement &&
+                ($0.wrong ?? "").precomposedStringWithCanonicalMapping.caseInsensitiveCompare(w) == .orderedSame &&
+                $0.right.precomposedStringWithCanonicalMapping.caseInsensitiveCompare(r) == .orderedSame
+            }) else { return nil }
+            entries[idx].enabled = false
+            persist()
+            return entries[idx].id
+        }
+    }
+
+    /// Lookup the enabled `.replacement` that would produce a given (wrong → right)
+    /// span — used by self-heal to detect "user corrected back against a rule that
+    /// just fired". Snapshot copy, safe off-queue.
+    func enabledReplacement(matching wrong: String, right: String) -> DictionaryEntry? {
+        let w = wrong.precomposedStringWithCanonicalMapping
+        let r = right.precomposedStringWithCanonicalMapping
+        return queue.sync {
+            entries.first {
+                $0.enabled && $0.kind == .replacement &&
+                ($0.wrong ?? "").precomposedStringWithCanonicalMapping.caseInsensitiveCompare(w) == .orderedSame &&
+                $0.right.precomposedStringWithCanonicalMapping.caseInsensitiveCompare(r) == .orderedSame
+            }
+        }
+    }
+
+    /// Looks up entries by id (snapshot copy). Used by self-heal to resolve the
+    /// rules recorded in `AppState.lastFiredRuleIDs`.
+    func entries(withIDs ids: [UUID]) -> [DictionaryEntry] {
+        guard !ids.isEmpty else { return [] }
+        let set = Set(ids)
+        return queue.sync { entries.filter { set.contains($0.id) } }
+    }
+
+    /// Bumps `fireCount` for the given rule ids and persists once. Fire-and-forget
+    /// — never blocks transcription (§1.3).
+    func incrementFireCounts(ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        let set = Set(ids)
+        queue.sync {
+            var changed = false
+            for idx in entries.indices where set.contains(entries[idx].id) {
+                entries[idx].fireCount += 1
+                changed = true
+            }
+            if changed { persist() }
+        }
+    }
+
     func setEnabled(_ enabled: Bool, id: UUID) {
         queue.sync {
             guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }
@@ -232,22 +361,38 @@ final class PersonalDictionary {
     /// "Hà Nội" as one unit), NFC-normalized, never substring ("Cat"→"Dog" must
     /// not touch "Caterpillar"). Case-sensitive when the entry is caseSensitive.
     func applyReplacements(to text: String) -> String {
-        let rules = enabledEntries(kinds: [.replacement])
-        guard !rules.isEmpty else { return text }
+        applyReplacementsTracked(to: text).text
+    }
+
+    /// Like `applyReplacements`, but also reports which rules actually changed the
+    /// text (v1.1 self-heal §7.3) and bumps each fired rule's `fireCount` (§F).
+    /// The activation gate (§1.2): a `.learned` `.replacement` fires only once it
+    /// has `confirmations >= 2`; `.manual` rules are always trusted. The explicit
+    /// "fix that" learn path upserts with confirmations = 2, so it clears the gate
+    /// immediately without threading an "explicit" flag through here.
+    @discardableResult
+    func applyReplacementsTracked(to text: String) -> (text: String, firedIDs: [UUID]) {
+        let rules = enabledEntries(kinds: [.replacement]).filter { $0.firesAsReplacement }
+        guard !rules.isEmpty else { return (text, []) }
 
         var result = text.precomposedStringWithCanonicalMapping  // NFC
+        var firedIDs: [UUID] = []
         // Longer `wrong` first so multi-syllable phrases win over single tokens.
         for rule in rules.sorted(by: { ($0.wrong?.count ?? 0) > ($1.wrong?.count ?? 0) }) {
             guard let wrong = rule.wrong?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !wrong.isEmpty else { continue }
+            let before = result
             result = PersonalDictionary.replaceWholeWord(
                 in: result,
                 wrong: wrong.precomposedStringWithCanonicalMapping,
                 right: rule.right.precomposedStringWithCanonicalMapping,
                 caseSensitive: rule.caseSensitive
             )
+            if result != before { firedIDs.append(rule.id) }
         }
-        return result
+        // Fire-and-forget: bump fire counts off the transcription hot path.
+        if !firedIDs.isEmpty { incrementFireCounts(ids: firedIDs) }
+        return (result, firedIDs)
     }
 
     /// Whole-word/phrase replacement using NSRegularExpression word boundaries.

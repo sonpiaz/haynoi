@@ -843,6 +843,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "soundTheme": "chime",      // founder pick: gentle bell pair (contest 2026-06-12)
             "appTheme": "light",       // founder default: white-gray light look
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
+            "fixThatHotkeyChoice": "ctrlOption", // v1.1: ⌃⌥ chord tap (never collides with PTT)
         ])
         NSLog("[Haynoi] App launched")
 
@@ -869,6 +870,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         case "fn": HotkeyManager.shared.targetModifier = .maskSecondaryFn
         default: HotkeyManager.shared.targetModifier = .maskAlternate
         }
+        // v1.1 — apply the "fix that" gesture choice alongside push-to-talk.
+        HotkeyManager.shared.fixThatChoice =
+            UserDefaults.standard.string(forKey: "fixThatHotkeyChoice") ?? "ctrlOption"
 
         PipelineController.shared.setup()
 
