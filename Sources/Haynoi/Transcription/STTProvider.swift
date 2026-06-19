@@ -66,6 +66,13 @@ enum STTProvider {
                 token: token, text: text, systemPrompt: mode.rewritePrompt
             )
         }
+        // Deterministic personal-dictionary replace runs LAST — after the LLM
+        // rewrite (so the rewrite can't re-mangle a term we just fixed), or in
+        // its place when the mode has no rewrite. Local, on-device, never a
+        // network call. See redesign/07-DICTATION-LEARNING.md §5.3.
+        if !text.isEmpty {
+            text = PersonalDictionary.shared.applyReplacements(to: text)
+        }
         return text
     }
 
@@ -273,6 +280,20 @@ enum STTProvider {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Prepend the user's personal-dictionary terms as CONTEXT so the LLM
+        // corrects with context (won't turn "Caterpillar" into "Cat…") — a
+        // smarter, safer corrector than blind find-replace. Bare, frequency-
+        // ordered, capped (client-side request-body change only; the proxy is
+        // unchanged). See redesign/07-DICTATION-LEARNING.md §5 review C.
+        let glossary = PersonalDictionary.shared.glossaryTerms()
+        let system: String
+        if glossary.isEmpty {
+            system = systemPrompt
+        } else {
+            system = "The user's preferred spellings for names and terms (use these exact forms when they occur): "
+                + glossary.joined(separator: ", ") + ".\n\n" + systemPrompt
+        }
+
         let body: [String: Any] = [
             // Benchmarked 2026-06-10: gemini-2.5-flash 1.7s clean output;
             // qwen-3-32b (alias "fast") leaks <think> tags and takes 8s.
@@ -280,7 +301,7 @@ enum STTProvider {
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
-                ["role": "system", "content": systemPrompt],
+                ["role": "system", "content": system],
                 ["role": "user", "content": text],
             ],
         ]

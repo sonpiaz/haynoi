@@ -845,6 +845,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
         ])
         NSLog("[Haynoi] App launched")
+
+        // Personal dictionary: one-shot migration from the legacy [String]
+        // UserDefaults store, then a cold-start seed from the signed-in user's
+        // Google display name. Both are idempotent (UserDefaults-flag guarded)
+        // and safe no-ops on re-run / when there's no name.
+        PersonalDictionary.shared.migrateLegacyIfNeeded()
+        PersonalDictionary.shared.seedFromDisplayNameIfNeeded(displayName: HaynoiAuth.currentUserName)
         // Warm the layout keycode cache on the main thread now, so the paste
         // path (which runs in a background Task) never calls TIS off-main.
         TextInserter.prewarmKeyCode()

@@ -381,6 +381,14 @@ private struct DictationTab: View {
             qualitySection
             languageSection
             modeSection
+            dictionarySection
+        }
+    }
+
+    private var dictionarySection: some View {
+        VStack(alignment: .leading, spacing: C.s2) {
+            SectionEyebrow(title: "Dictionary")
+            DictionaryEditor()
         }
     }
 
@@ -492,6 +500,140 @@ private struct DictationTab: View {
         case "en":   return "Always transcribes as English."
         default:     return "Kyma detects the language automatically. Best for mixed or uncertain input."
         }
+    }
+}
+
+// MARK: - Dictionary Editor
+//
+// Manual management surface for PersonalDictionary. A plain term ("Affitor")
+// becomes a .term; flipping "Sửa lỗi chính tả" reveals a `wrong` field and
+// creates a .replacement (wrong → right). Each row toggles `enabled` and can
+// be deleted. v1: manual only — no auto-capture.
+
+private struct DictionaryEditor: View {
+    @Environment(\.colorScheme) private var scheme
+
+    @State private var entries: [DictionaryEntry] = []
+    @State private var rightField = ""
+    @State private var wrongField = ""
+    @State private var isReplacement = false
+
+    private var canAdd: Bool {
+        let r = rightField.trimmingCharacters(in: .whitespacesAndNewlines)
+        if r.isEmpty { return false }
+        if isReplacement {
+            return !wrongField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return true
+    }
+
+    var body: some View {
+        SettingsCard {
+            // Add row
+            SettingsRow(showDivider: !entries.isEmpty) {
+                VStack(alignment: .leading, spacing: C.s2) {
+                    HStack(spacing: C.s2) {
+                        if isReplacement {
+                            TextField("Wrong (what it hears)", text: $wrongField)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.obsidianLabel(for: scheme))
+                                .textFieldStyle(.plain)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                        }
+                        TextField(isReplacement ? "Right (correct form)" : "Add a word or name…", text: $rightField)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.obsidianLabel(for: scheme))
+                            .textFieldStyle(.plain)
+                            .onSubmit { addEntry() }
+
+                        Button("Add") { addEntry() }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(canAdd
+                                ? Color.obsidianAccent(for: scheme)
+                                : Color.obsidianLabel3(for: scheme))
+                            .buttonStyle(.plain)
+                            .disabled(!canAdd)
+                    }
+
+                    Toggle("Sửa lỗi chính tả", isOn: $isReplacement)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                        .toggleStyle(.checkbox)
+                }
+            }
+
+            // Existing entries
+            ForEach(Array(entries.enumerated()), id: \.element.id) { idx, entry in
+                SettingsRow(showDivider: idx < entries.count - 1) {
+                    HStack(spacing: C.s2) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.right)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(entry.enabled
+                                    ? Color.obsidianLabel(for: scheme)
+                                    : Color.obsidianLabel3(for: scheme))
+                            if entry.kind == .replacement, let wrong = entry.wrong {
+                                Text("\(wrong) → \(entry.right)")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                            }
+                        }
+
+                        if entry.source == .learned {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.obsidianAccent(for: scheme))
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding(
+                            get: { entry.enabled },
+                            set: { newValue in
+                                PersonalDictionary.shared.setEnabled(newValue, id: entry.id)
+                                reload()
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .scaleEffect(0.7)
+                        .frame(width: 36)
+
+                        Button {
+                            PersonalDictionary.shared.delete(id: entry.id)
+                            reload()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .onAppear(perform: reload)
+    }
+
+    private func addEntry() {
+        guard canAdd else { return }
+        let r = rightField.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isReplacement {
+            let w = wrongField.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = PersonalDictionary.shared.addReplacement(wrong: w, right: r, source: .manual)
+        } else {
+            _ = PersonalDictionary.shared.addTerm(r, source: .manual)
+        }
+        rightField = ""
+        wrongField = ""
+        reload()
+    }
+
+    private func reload() {
+        // Newest first; manual + learned together.
+        entries = PersonalDictionary.shared.all.sorted { $0.createdAt > $1.createdAt }
     }
 }
 

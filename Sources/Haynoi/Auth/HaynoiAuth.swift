@@ -22,6 +22,7 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     nonisolated static let redirectURI = "haynoi://auth"
     nonisolated static let tokenKeychainKey = "haynoi.access_token"
     nonisolated static let userEmailKeychainKey = "haynoi.user_email"
+    nonisolated static let userNameKeychainKey = "haynoi.user_name"
 
     private var currentSession: ASWebAuthenticationSession?
 
@@ -118,6 +119,13 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         // Pull the user (email/tier) so the UI can show it.
         let user = try await fetchMe(token: token)
         try KeychainStorage.save(user.email, for: Self.userEmailKeychainKey)
+        // Persist the Google display name for the dictionary cold-start seed,
+        // and seed now — the common first-run path is launch (no name) → sign-in,
+        // so the launch-time seed no-ops and this is where the name first exists.
+        if let name = user.displayName, !name.isEmpty {
+            try? KeychainStorage.save(name, for: Self.userNameKeychainKey)
+            PersonalDictionary.shared.seedFromDisplayNameIfNeeded(displayName: name)
+        }
         return user
     }
 
@@ -143,6 +151,12 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         KeychainStorage.load(userEmailKeychainKey)
     }
 
+    /// Google display name, when known — used to seed the personal dictionary
+    /// on cold start. nil for email/password accounts without a name.
+    nonisolated static var currentUserName: String? {
+        KeychainStorage.load(userNameKeychainKey)
+    }
+
     nonisolated static var isSignedIn: Bool {
         currentToken != nil
     }
@@ -159,6 +173,7 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         }
         KeychainStorage.delete(tokenKeychainKey)
         KeychainStorage.delete(userEmailKeychainKey)
+        KeychainStorage.delete(userNameKeychainKey)
     }
 
     // MARK: - Internal
@@ -188,6 +203,12 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         let success = try JSONDecoder().decode(AuthSuccess.self, from: data)
         try KeychainStorage.save(success.session_token, for: Self.tokenKeychainKey)
         try KeychainStorage.save(success.user.email, for: Self.userEmailKeychainKey)
+        if let name = success.user.displayName, !name.isEmpty {
+            try? KeychainStorage.save(name, for: Self.userNameKeychainKey)
+            // Seed the dictionary at sign-in: launch-time seed no-ops when no
+            // name exists yet (the common register/login-after-launch path).
+            PersonalDictionary.shared.seedFromDisplayNameIfNeeded(displayName: name)
+        }
         return success.user
     }
 
