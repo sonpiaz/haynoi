@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-19
+
+### Added
+- **New sign-in:** continue with Google, or create an account with email +
+  password. Accounts are now Haynoi's own (api.haynoi.com).
+
+### Changed
+- **Obsidian Instrument relaunch:** light-first redesign (Quiet Paper) and the
+  new "ń" tone-mark logo.
+- Free tier is **5,000 words per week** (resets every Monday).
+- Dictation now runs through Haynoi's own backend.
+
+### Note
+- Existing users: you'll be asked to sign in again after updating (one time).
+
 ## [0.3.5] - 2026-06-12
 
 ### Changed
