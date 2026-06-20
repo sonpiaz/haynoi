@@ -1094,9 +1094,6 @@ private struct AccountTab: View {
     @ObservedObject private var balanceManager = BalanceManager.shared
     @State private var isSigningIn = false
     @State private var signInError = ""
-    @State private var email = ""
-    @State private var password = ""
-    @State private var isRegisterMode = false
     @State private var testing = false
     @State private var report: STTProvider.ConnectionReport?
     @Environment(\.colorScheme) private var scheme
@@ -1230,43 +1227,15 @@ private struct AccountTab: View {
     @ViewBuilder
     private var signedOutView: some View {
         VStack(alignment: .leading, spacing: C.s3) {
-            Button(isSigningIn ? "Opening browser…" : "Continue with Google") {
-                signInWithGoogle()
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.accentOnLight)
-            .disabled(isSigningIn)
-
-            VStack(alignment: .leading, spacing: C.s2) {
-                TextField("Email", text: $email)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
-                    .onSubmit { submitEmailPassword() }
-            }
-
             HStack(spacing: C.s2) {
-                Button(isSigningIn
-                       ? "Working…"
-                       : (isRegisterMode ? "Create account" : "Sign in")) {
-                    submitEmailPassword()
+                Button(isSigningIn ? "Opening browser…" : "Continue with Google") {
+                    signInWithGoogle()
                 }
-                .buttonStyle(.bordered)
-                .disabled(isSigningIn || email.isEmpty || password.isEmpty)
+                .buttonStyle(.borderedProminent)
+                .tint(Color.accentOnLight)
+                .disabled(isSigningIn)
                 if isSigningIn { ProgressView().controlSize(.small) }
             }
-
-            Button(isRegisterMode
-                   ? "Already have an account? Sign in"
-                   : "New here? Create an account") {
-                isRegisterMode.toggle()
-                signInError = ""
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 11))
-            .foregroundStyle(Color.obsidianAccent(for: scheme))
 
             if !signInError.isEmpty {
                 Text(signInError)
@@ -1359,29 +1328,6 @@ private struct AccountTab: View {
                 BalanceManager.shared.refresh()
             } catch HaynoiAuth.AuthError.cancelled {
                 // user closed the auth window — no error to show
-            } catch {
-                signInError = error.localizedDescription
-            }
-        }
-    }
-
-    private func submitEmailPassword() {
-        guard !email.isEmpty, !password.isEmpty else { return }
-        signInError = ""
-        isSigningIn = true
-        Task { @MainActor in
-            defer { isSigningIn = false }
-            do {
-                let user: HaynoiAuth.User
-                if isRegisterMode {
-                    user = try await HaynoiAuth.shared.register(
-                        email: email, password: password, displayName: nil
-                    )
-                } else {
-                    user = try await HaynoiAuth.shared.login(email: email, password: password)
-                }
-                authState.didSignIn(email: user.email)
-                BalanceManager.shared.refresh()
             } catch {
                 signInError = error.localizedDescription
             }

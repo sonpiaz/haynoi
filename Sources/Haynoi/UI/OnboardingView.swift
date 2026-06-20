@@ -73,9 +73,6 @@ struct OnboardingView: View {
     @ObservedObject private var balanceManager = BalanceManager.shared
     @State private var isSigningIn = false
     @State private var signInError = ""
-    @State private var email = ""
-    @State private var password = ""
-    @State private var isRegisterMode = false
 
     // Try It step state
     @State private var trialText = ""
@@ -593,7 +590,7 @@ struct OnboardingView: View {
         }
     }
 
-    /// Google + email/password sign-in / register form.
+    /// Google-only sign-in form.
     @ViewBuilder
     private var signedOutForm: some View {
         VStack(spacing: 12) {
@@ -604,41 +601,6 @@ struct OnboardingView: View {
                 .disabled(isSigningIn)
                 if isSigningIn { ProgressView().controlSize(.small) }
             }
-
-            HStack(spacing: 8) {
-                Rectangle().fill(Color.obsidianDivider(for: scheme)).frame(height: 1)
-                Text("or")
-                    .font(.obsidianCaption)
-                    .foregroundStyle(Color.obsidianLabel4(for: scheme))
-                Rectangle().fill(Color.obsidianDivider(for: scheme)).frame(height: 1)
-            }
-            .frame(maxWidth: 300)
-
-            VStack(spacing: 8) {
-                TextField("Email", text: $email)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 13))
-                SecureField("Password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 13))
-                    .onSubmit { submitEmailPassword() }
-            }
-            .frame(maxWidth: 300)
-
-            obsidianCTAButton(isRegisterMode ? "Create account" : "Sign in") {
-                submitEmailPassword()
-            }
-            .disabled(isSigningIn || email.isEmpty || password.isEmpty)
-
-            Button(isRegisterMode
-                   ? "Already have an account? Sign in"
-                   : "New here? Create an account") {
-                isRegisterMode.toggle()
-                signInError = ""
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 12))
-            .foregroundStyle(Color.obsidianAccent(for: scheme))
 
             if !signInError.isEmpty {
                 Text(signInError)
@@ -1114,30 +1076,6 @@ struct OnboardingView: View {
                 advance()
             } catch HaynoiAuth.AuthError.cancelled {
                 // user dismissed — no error
-            } catch {
-                signInError = error.localizedDescription
-            }
-        }
-    }
-
-    private func submitEmailPassword() {
-        guard !email.isEmpty, !password.isEmpty else { return }
-        signInError = ""
-        isSigningIn = true
-        Task { @MainActor in
-            defer { isSigningIn = false }
-            do {
-                let user: HaynoiAuth.User
-                if isRegisterMode {
-                    user = try await HaynoiAuth.shared.register(
-                        email: email, password: password, displayName: nil
-                    )
-                } else {
-                    user = try await HaynoiAuth.shared.login(email: email, password: password)
-                }
-                authState.didSignIn(email: user.email)
-                balanceManager.refresh()
-                advance()
             } catch {
                 signInError = error.localizedDescription
             }

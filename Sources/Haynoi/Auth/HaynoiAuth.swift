@@ -4,13 +4,11 @@ import Foundation
 
 /// Authentication against the haynoi-server backend (api.haynoi.com).
 ///
-/// Three sign-in paths, all returning a 52-char session token stored in the
+/// Sign-in is Google-only, returning a 52-char session token stored in the
 /// macOS Keychain:
 ///   • Google — ASWebAuthenticationSession opens /auth/google; the server
 ///     handles the OAuth dance and 302-redirects to haynoi://auth?session_token=…
 ///     (no PKCE on the client — the server owns the Google credentials).
-///   • Register — POST /auth/register {email, password, displayName?}.
-///   • Login — POST /auth/login {email, password}.
 ///
 /// The token is sent as `Authorization: Bearer <token>` on every proxied
 /// dictation / rewrite / usage call (see STTProvider, BalanceManager).
@@ -37,24 +35,11 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         let tier: String
     }
 
-    /// Success envelope for /auth/register and /auth/login.
-    private struct AuthSuccess: Decodable {
-        let ok: Bool
-        let session_token: String
-        let user: User
-    }
-
     /// Envelope for GET /auth/me.
     private struct MeResponse: Decodable {
         let ok: Bool
         let signed_in: Bool
         let user: User?
-    }
-
-    /// Error envelope: {"error":{"code":"...","message":"..."}}.
-    private struct ErrorEnvelope: Decodable {
-        struct Body: Decodable { let code: String; let message: String }
-        let error: Body
     }
 
     // MARK: - Errors
@@ -63,32 +48,13 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         case cancelled
         case network
         case server(String)
-        case invalidEmail
-        case weakPassword
-        case emailTaken
-        case invalidCredentials
         case missingToken
-
-        /// Maps a server error code to the matching friendly case.
-        static func from(code: String, message: String) -> AuthError {
-            switch code {
-            case "invalid_email":       return .invalidEmail
-            case "weak_password":       return .weakPassword
-            case "email_taken":         return .emailTaken
-            case "invalid_credentials": return .invalidCredentials
-            default:                    return .server(message)
-            }
-        }
 
         var errorDescription: String? {
             switch self {
             case .cancelled:          return "Sign-in cancelled"
             case .network:            return "Network error — check your connection"
             case .server(let msg):    return msg.isEmpty ? "Something went wrong — try again" : msg
-            case .invalidEmail:       return "Enter a valid email"
-            case .weakPassword:       return "Password must be at least 8 characters"
-            case .emailTaken:         return "An account with this email already exists — try signing in."
-            case .invalidCredentials: return "Incorrect email or password"
             case .missingToken:       return "No session token received — try again"
             }
         }
@@ -129,18 +95,6 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         return user
     }
 
-    /// POST /auth/register — creates the account and signs in.
-    func register(email: String, password: String, displayName: String?) async throws -> User {
-        var body: [String: Any] = ["email": email, "password": password]
-        if let displayName, !displayName.isEmpty { body["displayName"] = displayName }
-        return try await postAuth(path: "/auth/register", body: body)
-    }
-
-    /// POST /auth/login — signs into an existing account.
-    func login(email: String, password: String) async throws -> User {
-        return try await postAuth(path: "/auth/login", body: ["email": email, "password": password])
-    }
-
     // Keychain-only accessors — nonisolated so the transcription pipeline
     // (a nonisolated async context) can read the token without hopping actors.
     nonisolated static var currentToken: String? {
@@ -152,7 +106,7 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     }
 
     /// Google display name, when known — used to seed the personal dictionary
-    /// on cold start. nil for email/password accounts without a name.
+    /// on cold start. nil when the Google profile carried no name.
     nonisolated static var currentUserName: String? {
         KeychainStorage.load(userNameKeychainKey)
     }
@@ -177,40 +131,6 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     }
 
     // MARK: - Internal
-
-    private func postAuth(path: String, body: [String: Any]) async throws -> User {
-        var req = URLRequest(url: URL(string: "\(Self.baseURL)\(path)")!)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 20
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: req)
-        } catch {
-            throw AuthError.network
-        }
-        guard let http = response as? HTTPURLResponse else { throw AuthError.network }
-        guard http.statusCode == 200 else {
-            if let env = try? JSONDecoder().decode(ErrorEnvelope.self, from: data) {
-                throw AuthError.from(code: env.error.code, message: env.error.message)
-            }
-            throw AuthError.server("Server error (HTTP \(http.statusCode))")
-        }
-
-        let success = try JSONDecoder().decode(AuthSuccess.self, from: data)
-        try KeychainStorage.save(success.session_token, for: Self.tokenKeychainKey)
-        try KeychainStorage.save(success.user.email, for: Self.userEmailKeychainKey)
-        if let name = success.user.displayName, !name.isEmpty {
-            try? KeychainStorage.save(name, for: Self.userNameKeychainKey)
-            // Seed the dictionary at sign-in: launch-time seed no-ops when no
-            // name exists yet (the common register/login-after-launch path).
-            PersonalDictionary.shared.seedFromDisplayNameIfNeeded(displayName: name)
-        }
-        return success.user
-    }
 
     private func fetchMe(token: String) async throws -> User {
         var req = URLRequest(url: URL(string: "\(Self.baseURL)/auth/me")!)
