@@ -181,6 +181,7 @@ private struct GeneralTab: View {
     @AppStorage("soundTheme") private var soundTheme = "chime"
     @AppStorage("successDinkEnabled") private var successDinkEnabled = true
     @AppStorage("muteMusic") private var muteMusic = true
+    @AppStorage("signalAEnabled") private var signalAEnabled = true
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @Environment(\.colorScheme) private var scheme
 
@@ -312,9 +313,20 @@ private struct GeneralTab: View {
                     }
                 }
 
-                SettingsRow(showDivider: false) {
+                SettingsRow {
                     Toggle(isOn: $muteMusic) {
                         Text("Pause audio while dictating")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.obsidianLabel(for: scheme))
+                    }
+                    .toggleStyle(.switch)
+                    .tint(Color.obsidianAccent(for: scheme))
+                }
+
+                // v1.3 — Signal A kill-switch (default on, AX-cooperative apps only).
+                SettingsRow(showDivider: false) {
+                    Toggle(isOn: $signalAEnabled) {
+                        Text("Học khi bạn sửa từ trong app (chỉ TextEdit, Notes, Pages, Mail)")
                             .font(.system(size: 13))
                             .foregroundStyle(Color.obsidianLabel(for: scheme))
                     }

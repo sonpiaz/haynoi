@@ -358,6 +358,27 @@ final class PipelineController {
                     state.lastInsertionSpan = insertResult.span
                     state.lastDictationAt = Date()
                     state.lastFiredRuleIDs = result.firedIDs
+
+                    // v1.3 — Signal A (AX read-back of in-place edits). Flush the
+                    // PREVIOUS anchor first (the "edit then dictate again" flow),
+                    // then arm a new anchor for THIS insertion. Arm only when AX
+                    // gave a real span (nil span = Electron/browser → never arms)
+                    // and the app is AX-cooperative (CorrectionWatcher gates both).
+                    CorrectionWatcher.shared.reRead(reason: .nextDictation)
+                    let anchorApp = insertResult.targetApp ?? dictationTargetApp
+                    if let span = insertResult.span,
+                       span.location != NSNotFound,
+                       let app = anchorApp,
+                       let bundleID = app.bundleIdentifier {
+                        CorrectionWatcher.shared.arm(anchor: InsertionAnchor(
+                            bundleID: bundleID,
+                            pid: app.processIdentifier,
+                            inserted: insertResult.inserted,
+                            span: span,
+                            valueLengthAtInsert: nil,  // arm() reads the real field value length
+                            at: Date()
+                        ))
+                    }
                 }
                 let wordCount = text.split(separator: " ").count
                 let dur = Double(samples.count) / 16000.0
@@ -539,6 +560,21 @@ final class PipelineController {
         state.lastDictationAt = Date()
         state.lastFiredRuleIDs = []
         state.updateLastTranscription(correctedTranscript)
+
+        // v1.3 — re-arm Signal A with the corrected values so an edit-in-place
+        // AFTER a fix-that is also captured. Only when the in-place replace landed
+        // a known span in an AX-cooperative app (CorrectionWatcher gates the rest).
+        if let newSpan, newSpan.location != NSNotFound,
+           let app = targetApp, let bundleID = app.bundleIdentifier {
+            CorrectionWatcher.shared.arm(anchor: InsertionAnchor(
+                bundleID: bundleID,
+                pid: app.processIdentifier,
+                inserted: correctedTranscript,
+                span: newSpan,
+                valueLengthAtInsert: nil,  // arm() reads the real field value length
+                at: Date()
+            ))
+        }
 
         if UserDefaults.standard.bool(forKey: "soundEnabled"),
            UserDefaults.standard.bool(forKey: "successDinkEnabled") {

@@ -844,6 +844,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "appTheme": "light",       // founder default: white-gray light look
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
             "fixThatHotkeyChoice": "ctrlOption", // v1.1: ⌃⌥ chord tap (never collides with PTT)
+            "signalAEnabled": true,    // v1.3: learn when you edit a word in-app (AX-cooperative apps only)
         ])
         NSLog("[Haynoi] App launched")
 
@@ -893,6 +894,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
             showOnboarding()
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // v1.3 — tear down Signal A (clears the in-RAM anchor + debounce timer +
+        // shared app-deactivate observer) so nothing leaks on quit.
+        CorrectionWatcher.shared.disarm()
     }
 
     // MARK: - UNUserNotificationCenterDelegate

@@ -297,20 +297,82 @@ enum TextInserter {
     /// Reads the focused element's selected text range (caret/selection) as a
     /// CFRange in UTF-16 space. Returns nil when AX is unavailable.
     private static func focusedSelectionRange(in app: NSRunningApplication?) -> CFRange? {
-        guard let app else { return nil }
-        let element = AXUIElementCreateApplication(app.processIdentifier)
-        var focusedRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success else {
-            return nil
+        AXRead.focusedSelection(in: app)
+    }
+
+    // MARK: - Shared AX reader (v1.3 — single source of truth)
+
+    /// The one place that touches the Accessibility C-API for *reading* the
+    /// focused element. `TextInserter`'s legacy private helpers delegate here so
+    /// there is a single source of truth; `CorrectionWatcher` (Signal A) reads
+    /// through it too. Read-only — never mutates the focused element. Behavior of
+    /// insert / replaceSpan is unchanged: the old method bodies moved verbatim.
+    enum AXRead {
+        /// The focused UI element of `app`, or nil when AX is unavailable / denied.
+        private static func focusedElement(in app: NSRunningApplication?) -> AXUIElement? {
+            guard let app else { return nil }
+            let element = AXUIElementCreateApplication(app.processIdentifier)
+            var focusedRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+                let ref = focusedRef else { return nil }
+            return (ref as! AXUIElement)
         }
-        let focused = focusedRef as! AXUIElement
-        var rangeRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success else {
-            return nil
+
+        /// Current AXValue string of the focused element, or nil.
+        static func focusedValue(in app: NSRunningApplication?) -> String? {
+            guard let focused = focusedElement(in: app) else { return nil }
+            var valueRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                focused, kAXValueAttribute as CFString, &valueRef) == .success,
+                let str = valueRef as? String else { return nil }
+            return str
         }
-        var range = CFRange()
-        guard AXValueGetValue(rangeRef as! AXValue, .cfRange, &range) else { return nil }
-        return range
+
+        /// Selected text range (caret/selection) as a UTF-16 CFRange, or nil.
+        static func focusedSelection(in app: NSRunningApplication?) -> CFRange? {
+            guard let focused = focusedElement(in: app) else { return nil }
+            var rangeRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                focused, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success else {
+                return nil
+            }
+            var range = CFRange()
+            guard AXValueGetValue(rangeRef as! AXValue, .cfRange, &range) else { return nil }
+            return range
+        }
+
+        /// (role, value) of the focused element in one read. Either field may be nil;
+        /// the tuple itself is nil only when there is no focused element at all.
+        static func focusedRoleAndValue(in app: NSRunningApplication?) -> (role: String?, value: String?)? {
+            guard let focused = focusedElement(in: app) else { return nil }
+            var roleRef: CFTypeRef?
+            let role = AXUIElementCopyAttributeValue(
+                focused, kAXRoleAttribute as CFString, &roleRef) == .success
+                ? (roleRef as? String) : nil
+            var valueRef: CFTypeRef?
+            let value = AXUIElementCopyAttributeValue(
+                focused, kAXValueAttribute as CFString, &valueRef) == .success
+                ? (valueRef as? String) : nil
+            return (role, value)
+        }
+
+        /// True when the focused element is a secure (password) text field. Checks
+        /// both role and subrole == AXSecureTextField. PRIVACY: callers MUST bail
+        /// before reading any value when this returns true.
+        static func isFocusedSecure(in app: NSRunningApplication?) -> Bool {
+            guard let focused = focusedElement(in: app) else { return false }
+            let secure = "AXSecureTextField"
+            var roleRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                focused, kAXRoleAttribute as CFString, &roleRef) == .success,
+                (roleRef as? String) == secure { return true }
+            var subRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                focused, kAXSubroleAttribute as CFString, &subRef) == .success,
+                (subRef as? String) == secure { return true }
+            return false
+        }
     }
 
     // MARK: - In-place replace (v1.1 "fix that")
@@ -607,17 +669,7 @@ enum TextInserter {
     /// Reads the current AXValue string from the focused element of the given app.
     /// Returns nil if AX is unavailable or the element has no string value.
     private static func focusedElementValue(in app: NSRunningApplication?) -> String? {
-        guard let app else { return nil }
-        let element = AXUIElementCreateApplication(app.processIdentifier)
-        var focusedRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success else {
-            return nil
-        }
-        let focused = focusedRef as! AXUIElement
-        var valueRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(focused, kAXValueAttribute as CFString, &valueRef) == .success,
-              let str = valueRef as? String else { return nil }
-        return str
+        AXRead.focusedValue(in: app)
     }
 
     // MARK: - Keycode Resolution (Fix #8)

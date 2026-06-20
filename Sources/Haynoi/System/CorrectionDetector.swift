@@ -97,41 +97,52 @@ final class CorrectionDetector {
         // no learnable change (identical / punctuation-only).
         guard let change = CorrectionDiff.extractChange(from: a, to: b) else { return nil }
 
-        // (a.3) SINGLE token-region: the changed span on each side is one token.
-        // Multi-token rewrites are not near-homophone corrections — skip them.
-        let wrongTokens = change.wrong.split(whereSeparator: { $0.isWhitespace })
-        let rightTokens = change.right.split(whereSeparator: { $0.isWhitespace })
-        // Allow the corrected side to merge/split spacing of the same syllables
-        // ("Hai Noi" → "Haynoi"), but the WRONG side must be a single region and the
-        // change must be localized — cap both sides at 2 orthographic tokens.
-        guard wrongTokens.count <= 2, rightTokens.count <= 2 else { return nil }
-
-        // (a.4) Small per-token edit distance on the changed token — near-homophone,
-        // not a different word. Compare the joined (spaces removed) forms so
-        // "Hai Noi" vs "Haynoi" reads as a 0-ish edit, not a whitespace blowup.
-        let wrongJoined = change.wrong.replacingOccurrences(of: " ", with: "")
-        let rightJoined = change.right.replacingOccurrences(of: " ", with: "")
-        let dist = levenshtein(wrongJoined.lowercased(), rightJoined.lowercased())
-        guard dist <= 4 else { return nil }
-
-        // (a.4b) Similarity floor on the CHANGED region itself (joined forms). This
-        // is the real near-homophone gate — independent of the surrounding sentence
-        // length. Near-homophones stay above 0.5 ("Hai Noi"/"Haynoi" ≈ 0.71,
-        // "Son"/"Sơn" ≈ 0.67); a genuinely different word falls below.
-        guard normalizedSimilarity(wrongJoined, rightJoined) >= 0.5 else { return nil }
-
-        // (b) Diacritic-direction asymmetry: suggest ONLY when `right` ADDS
-        // diacritics / structure that `wrong` lacked — never the reverse. This is
-        // the VI value prop AND the directionality guard.
-        guard addsDiacriticsOrStructure(wrong: change.wrong, right: change.right) else { return nil }
-
-        // (c) Real common-word stoplist (VI + EN). Skip if the candidate term is a
-        // common word. NOT "has diacritics ⇒ proper noun" (VI common words have
-        // diacritics).
-        guard !isCommonWord(change.right) else { return nil }
+        // (a.3–c) Run the shared near-homophone gate on the localized change. This
+        // is the SINGLE source of truth shared with Signal A (CorrectionWatcher) so
+        // the two paths can never drift.
+        guard qualifiesAsLearnable(wrong: change.wrong, right: change.right) else { return nil }
 
         return Suggestion(wrong: change.wrong, right: change.right)
     }
+
+    /// The shared near-homophone learnability gate (§5.4 gates a.3–c), operating on
+    /// an already-localized (wrong, right) change region. A qualifying pair is a
+    /// single localized near-homophone that ADDS diacritics/structure (proper-noun
+    /// direction) and is not a common word. Used by both Signal B (re-dictation,
+    /// `suggestion` above) and Signal A (AX read-back, `CorrectionWatcher`) so there
+    /// is exactly ONE gate, never two drifting copies. Pure / unit-testable.
+    static func qualifiesAsLearnable(wrong: String, right: String) -> Bool {
+        // (a.3) SINGLE token-region: the changed span on each side is one region.
+        // Multi-token rewrites are not near-homophone corrections — skip them.
+        let wrongTokens = wrong.split(whereSeparator: { $0.isWhitespace })
+        let rightTokens = right.split(whereSeparator: { $0.isWhitespace })
+        // Allow the corrected side to merge/split spacing of the same syllables
+        // ("Hai Noi" → "Haynoi"), but cap both sides at 2 orthographic tokens.
+        guard wrongTokens.count <= 2, rightTokens.count <= 2 else { return false }
+
+        // (a.4) Small per-token edit distance — near-homophone, not a different word.
+        // Compare the joined (spaces removed) forms so "Hai Noi" vs "Haynoi" reads as
+        // a 0-ish edit, not a whitespace blowup.
+        let wrongJoined = wrong.replacingOccurrences(of: " ", with: "")
+        let rightJoined = right.replacingOccurrences(of: " ", with: "")
+        guard levenshtein(wrongJoined.lowercased(), rightJoined.lowercased()) <= maxTokenEditDistanceConst else { return false }
+
+        // (a.4b) Similarity floor on the CHANGED region itself (joined forms) — the
+        // real near-homophone gate, independent of surrounding sentence length.
+        guard normalizedSimilarity(wrongJoined, rightJoined) >= 0.5 else { return false }
+
+        // (b) Diacritic-direction asymmetry: qualify ONLY when `right` ADDS
+        // diacritics / structure that `wrong` lacked — never the reverse.
+        guard addsDiacriticsOrStructure(wrong: wrong, right: right) else { return false }
+
+        // (c) Real common-word stoplist (VI + EN). Skip common words.
+        guard !isCommonWord(right) else { return false }
+
+        return true
+    }
+
+    /// Static mirror of `maxTokenEditDistance` for use from the static gate.
+    private static let maxTokenEditDistanceConst = 4
 
     // MARK: - Similarity / distance helpers
 
