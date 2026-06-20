@@ -10,6 +10,9 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.9.1
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    from: 3.0.0
 
 targets:
   Haynoi:
@@ -25,6 +28,7 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
+      - package: PostHog
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi

@@ -346,6 +346,8 @@ final class PipelineController {
                                 // glossary; it can never trigger a hard swap.
                                 _ = PersonalDictionary.shared.addTerm(right, source: .learned)
                                 NSLog("[Haynoi] Learned (re-dictation, term-only): %@", right)
+                                // Metadata only: just which detector fired — never the term string.
+                                Analytics.capture("dictionary_term_learned", ["signal": "redictation"])
                             },
                             onIgnore: {}
                         )
@@ -358,6 +360,16 @@ final class PipelineController {
                     state.lastInsertionSpan = insertResult.span
                     state.lastDictationAt = Date()
                     state.lastFiredRuleIDs = result.firedIDs
+
+                    // Product analytics — metadata only. `words` is the count;
+                    // `mode` is the TranscriptionMode enum; `target_app_bundle` is
+                    // the frontmost app's bundle ID (an app identifier, NOT content).
+                    // NEVER pass `text`/`finalText`.
+                    Analytics.capture("dictation_inserted", [
+                        "words": dictWordCount,
+                        "mode": UserDefaults.standard.string(forKey: "transcriptionMode") ?? "Normal",
+                        "target_app_bundle": attrBundleId ?? "unknown",
+                    ])
 
                     // v1.3 — Signal A (AX read-back of in-place edits). Flush the
                     // PREVIOUS anchor first (the "edit then dictate again" flow),
@@ -540,6 +552,8 @@ final class PipelineController {
                             _ = PersonalDictionary.shared.upsertLearnedReplacement(
                                 wrong: wrong, right: right, confirmations: 2)
                             NSLog("[Haynoi] Learned (fix-that): %@ → %@", wrong, right)
+                            // Metadata only: just which detector fired — never the term strings.
+                            Analytics.capture("dictionary_term_learned", ["signal": "fixthat"])
                         },
                         onIgnore: {}
                     )

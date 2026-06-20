@@ -294,6 +294,8 @@ final class CorrectionWatcher {
                 _ = PersonalDictionary.shared.upsertLearnedReplacement(
                     wrong: wrong, right: right, confirmations: 2)
                 NSLog("[Haynoi] Learned (Signal A, AX read-back): %@ → %@", wrong, right)
+                // Metadata only: just which detector fired — never the term strings.
+                Analytics.capture("dictionary_term_learned", ["signal": "ax_edit"])
             },
             onIgnore: {}
         )

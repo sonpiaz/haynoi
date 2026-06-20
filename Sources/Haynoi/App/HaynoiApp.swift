@@ -817,6 +817,7 @@ final class OnboardingWindow: NSWindow {
         if !completed {
             UserDefaults.standard.set(true, forKey: "onboardingCompleted")
             NSLog("[Haynoi] Onboarding closed early — marked done; Restart Setup remains available")
+            Task { @MainActor in Analytics.capture("onboarding_completed") }
         }
         super.close()
         // Ensure the main window opens so the app isn't left with no visible UI
@@ -845,6 +846,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
             "fixThatHotkeyChoice": "ctrlOption", // v1.1: ⌃⌥ chord tap (never collides with PTT)
             "signalAEnabled": true,    // v1.3: learn when you edit a word in-app (AX-cooperative apps only)
+            "shareUsageData": true,    // analytics opt-out (default ON) — metadata only, never content
         ])
         NSLog("[Haynoi] App launched")
 
@@ -876,6 +878,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             UserDefaults.standard.string(forKey: "fixThatHotkeyChoice") ?? "ctrlOption"
 
         PipelineController.shared.setup()
+
+        // Product analytics — metadata only, gated by the "shareUsageData"
+        // opt-out (default ON). start() self-identifies on relaunch if signed in.
+        Analytics.start()
+        Analytics.capture("app_launched")
 
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -1017,6 +1024,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         let view = OnboardingView(initialStep: resumeStep) {
             DispatchQueue.main.async { [weak self] in
+                // Normal completion: OnboardingView already set onboardingCompleted
+                // = true before calling back, so OnboardingWindow.close() won't fire
+                // the event — emit it here. (Early-close fires from close() instead.)
+                Analytics.capture("onboarding_completed")
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
                 self?.showMainWindowPublic()

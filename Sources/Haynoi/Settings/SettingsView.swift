@@ -183,6 +183,7 @@ private struct GeneralTab: View {
     @AppStorage("muteMusic") private var muteMusic = true
     @AppStorage("signalAEnabled") private var signalAEnabled = true
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @AppStorage("shareUsageData") private var shareUsageData = true
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -190,7 +191,32 @@ private struct GeneralTab: View {
             captureSection
             soundsSection
             systemSection
+            privacySection
             setupSection
+        }
+    }
+
+    private var privacySection: some View {
+        VStack(alignment: .leading, spacing: C.s2) {
+            SectionEyebrow(title: "Privacy")
+
+            SettingsCard {
+                SettingsRow(showDivider: false) {
+                    Toggle(isOn: $shareUsageData) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Share anonymous usage data")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.obsidianLabel(for: scheme))
+                            Text("Counts and feature usage only — never your dictated text. Helps us improve Haynoi.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .tint(Color.obsidianAccent(for: scheme))
+                    .onChange(of: shareUsageData) { _, on in Analytics.setEnabled(on) }
+                }
+            }
         }
     }
 
@@ -663,6 +689,8 @@ private struct DictionaryEditor: View {
         }
         rightField = ""
         wrongField = ""
+        // Metadata only: just the signal enum — never the term strings.
+        Analytics.capture("dictionary_term_learned", ["signal": "manual"])
         reload()
     }
 
@@ -1186,6 +1214,8 @@ private struct AccountTab: View {
                 Button("Sign out") {
                     HaynoiAuth.signOut()
                     authState.didSignOut()
+                    Analytics.capture("signed_out")
+                    Analytics.reset()
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
@@ -1325,6 +1355,8 @@ private struct AccountTab: View {
             do {
                 let user = try await HaynoiAuth.shared.signInWithGoogle()
                 authState.didSignIn(email: user.email)
+                Analytics.identify(user.id)
+                Analytics.capture("signed_in", ["method": "google"])
                 BalanceManager.shared.refresh()
             } catch HaynoiAuth.AuthError.cancelled {
                 // user closed the auth window — no error to show

@@ -21,6 +21,7 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     nonisolated static let tokenKeychainKey = "haynoi.access_token"
     nonisolated static let userEmailKeychainKey = "haynoi.user_email"
     nonisolated static let userNameKeychainKey = "haynoi.user_name"
+    nonisolated static let userIdKeychainKey = "haynoi.user_id"
 
     private var currentSession: ASWebAuthenticationSession?
 
@@ -85,6 +86,9 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         // Pull the user (email/tier) so the UI can show it.
         let user = try await fetchMe(token: token)
         try KeychainStorage.save(user.email, for: Self.userEmailKeychainKey)
+        // Persist the ULID user_id so analytics' distinct_id matches the server's
+        // and the website's — web + app + server all unify on the same identity.
+        try? KeychainStorage.save(user.id, for: Self.userIdKeychainKey)
         // Persist the Google display name for the dictionary cold-start seed,
         // and seed now — the common first-run path is launch (no name) → sign-in,
         // so the launch-time seed no-ops and this is where the name first exists.
@@ -111,6 +115,12 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         KeychainStorage.load(userNameKeychainKey)
     }
 
+    /// The signed-in user's ULID (users.id), when known. Used as the analytics
+    /// distinct_id so app events unify with the server + website on one identity.
+    nonisolated static var currentUserId: String? {
+        KeychainStorage.load(userIdKeychainKey)
+    }
+
     nonisolated static var isSignedIn: Bool {
         currentToken != nil
     }
@@ -128,6 +138,7 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         KeychainStorage.delete(tokenKeychainKey)
         KeychainStorage.delete(userEmailKeychainKey)
         KeychainStorage.delete(userNameKeychainKey)
+        KeychainStorage.delete(userIdKeychainKey)
     }
 
     // MARK: - Internal
