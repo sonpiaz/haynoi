@@ -704,7 +704,7 @@ private struct DictionaryEditor: View {
 
 private struct BillingTab: View {
     @State private var billingPeriod: BillingPeriod = .annual
-    @State private var promoCode = ""
+    @ObservedObject private var billing = BillingManager.shared
     @Environment(\.colorScheme) private var scheme
 
     enum BillingPeriod { case monthly, annual }
@@ -717,9 +717,9 @@ private struct BillingTab: View {
         VStack(alignment: .leading, spacing: C.s5) {
             currentPlanSection
             upgradeSection
-            promoSection
             teamSection
         }
+        .task { await billing.refresh() }
     }
 
     // MARK: Current Plan
@@ -729,33 +729,74 @@ private struct BillingTab: View {
             SectionEyebrow(title: "Current Plan")
 
             SettingsCard {
-                SettingsRow(showDivider: false) {
+                SettingsRow(showDivider: billing.isPro) {
                     HStack(spacing: C.s3) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Free plan")
+                            Text(billing.isPro ? "Pro plan" : "Free plan")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.obsidianLabel(for: scheme))
-                            Text("5,000 words / week  ·  Auto-detect language  ·  Normal mode only")
+                            Text(currentPlanDetail)
                                 .font(.system(size: 11))
                                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                         }
                         Spacer()
-                        // Free badge
-                        Text("FREE")
+                        Text(billing.isPro ? "PRO" : "FREE")
                             .font(.system(size: 10, weight: .semibold))
                             .kerning(0.4)
-                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                            .foregroundStyle(
+                                billing.isPro
+                                    ? Color.accentOnLight
+                                    : Color.obsidianLabel3(for: scheme))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color.obsidianHover(for: scheme))
+                            .background(
+                                billing.isPro
+                                    ? Color.accent.opacity(0.08)
+                                    : Color.obsidianHover(for: scheme))
                             .overlay(
-                                Capsule().stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
+                                Capsule().stroke(
+                                    billing.isPro
+                                        ? Color.accent.opacity(0.35)
+                                        : Color.obsidianDivider(for: scheme),
+                                    lineWidth: 1)
                             )
                             .clipShape(Capsule())
                     }
                 }
+                if billing.isPro {
+                    SettingsRow(showDivider: false) {
+                        HStack {
+                            Text("Payment method, invoices, cancel")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                            Spacer()
+                            Button("Manage subscription") {
+                                Task { await billing.openPortal() }
+                            }
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.obsidianAccent(for: scheme))
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private var currentPlanDetail: String {
+        guard billing.isPro else {
+            return "5,000 words / week  ·  Auto-detect language  ·  Normal mode only"
+        }
+        var detail = "Unlimited words  ·  All modes"
+        if let sub = billing.subscription {
+            let date = Date(timeIntervalSince1970: sub.currentPeriodEnd / 1000)
+            let df = DateFormatter()
+            df.dateStyle = .medium
+            detail += sub.cancelAtPeriodEnd
+                ? "  ·  Ends \(df.string(from: date))"
+                : "  ·  Renews \(df.string(from: date))"
+        }
+        return detail
     }
 
     // MARK: Upgrade
@@ -890,22 +931,27 @@ private struct BillingTab: View {
             .clipShape(Capsule())
             .padding(.bottom, C.s2)
 
-            // Coming soon — paid tier ships in a later phase. No price shown
-            // yet; everyone is on Free for now.
-            Text("Coming soon")
-                .font(.system(.title3, design: .monospaced).weight(.regular))
-                .foregroundStyle(Color.obsidianLabel2(for: scheme))
-                .padding(.bottom, 2)
+            // Price — follows the Monthly/Annual toggle
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(billingPeriod == .monthly ? monthlyPrice : annualMonthlyPrice)
+                    .font(.system(.title, design: .monospaced).weight(.regular))
+                    .foregroundStyle(Color.obsidianLabel(for: scheme))
+                Text("/ month")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+            }
+            .padding(.bottom, 2)
 
-            Text("Haynoi is free while we build. Pro pricing arrives later.")
-                .font(.system(size: 10.5))
+            Text(billingPeriod == .monthly
+                 ? "Billed monthly. Cancel anytime."
+                 : "Billed \(annualTotalPrice) / year. Cancel anytime.")
+                .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                 .padding(.bottom, C.s3)
 
             Divider().background(Color.obsidianDivider(for: scheme))
                 .padding(.bottom, C.s3)
 
-            // What Pro will include (preview only).
             PlanFeature(text: "Unlimited dictation", included: true)
             PlanFeature(text: "All 4 modes", included: true)
             PlanFeature(text: "Priority transcription", included: true)
@@ -913,14 +959,7 @@ private struct BillingTab: View {
 
             Spacer(minLength: C.s5)
 
-            // Disabled placeholder CTA — no checkout yet.
-            Text("Coming soon")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.obsidianLabel3(for: scheme))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(Color.obsidianSubtle(for: scheme))
-                .clipShape(RoundedRectangle(cornerRadius: C.rSM))
+            proCTA
         }
         .padding(C.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -930,40 +969,57 @@ private struct BillingTab: View {
                 .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: C.rLG))
-        // Dimmed: this tier isn't live yet.
-        .opacity(0.6)
     }
 
-    // MARK: Promo Code
-
-    private var promoSection: some View {
-        VStack(alignment: .leading, spacing: C.s2) {
-            SectionEyebrow(title: "Promo Code")
-
-            SettingsCard {
-                SettingsRow(showDivider: false) {
-                    HStack(spacing: C.s2) {
-                        Image(systemName: "tag")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
-
-                        TextField("Enter promo code…", text: $promoCode)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.obsidianLabel(for: scheme))
-                            .textFieldStyle(.plain)
-
-                        Button("Apply") {
-                            // Wire to real endpoint later
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(
-                            promoCode.isEmpty
-                                ? Color.obsidianLabel3(for: scheme)
-                                : Color.obsidianAccent(for: scheme)
-                        )
-                        .buttonStyle(.plain)
-                        .disabled(promoCode.isEmpty)
+    @ViewBuilder
+    private var proCTA: some View {
+        if billing.isPro {
+            Text("Current plan")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: C.rSM)
+                        .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
+                )
+        } else if billing.awaitingCheckout {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Waiting for payment…")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color.obsidianSubtle(for: scheme))
+            .clipShape(RoundedRectangle(cornerRadius: C.rSM))
+        } else {
+            VStack(spacing: 4) {
+                Button {
+                    Analytics.capture("upgrade_clicked", [
+                        "cycle": billingPeriod == .monthly ? "monthly" : "annual",
+                    ])
+                    Task {
+                        await billing.startCheckout(
+                            cycle: billingPeriod == .monthly ? "monthly" : "annual")
                     }
+                } label: {
+                    Text("Upgrade to Pro")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.accent)
+                        .clipShape(RoundedRectangle(cornerRadius: C.rSM))
+                }
+                .buttonStyle(.plain)
+
+                if let err = billing.lastError {
+                    Text(err)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(scheme == .dark ? Color.obsidianDarkError : Color.obsidianError)
+                        .lineLimit(2)
                 }
             }
         }
