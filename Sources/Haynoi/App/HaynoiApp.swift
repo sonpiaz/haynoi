@@ -724,6 +724,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     private var mainWindow: NSWindow?
     private var onboardingWindow: NSWindow?
 
+    /// haynoi:// deep links — the default-browser OAuth flow redirects here
+    /// with the session token (see HaynoiAuth).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            HaynoiAuth.shared.handleCallback(url)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         UserDefaults.standard.register(defaults: [

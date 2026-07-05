@@ -1,19 +1,24 @@
 import AppKit
-import AuthenticationServices
 import Foundation
 
 /// Authentication against the haynoi-server backend (api.haynoi.com).
 ///
 /// Sign-in is Google-only, returning a 52-char session token stored in the
 /// macOS Keychain:
-///   • Google — ASWebAuthenticationSession opens /auth/google; the server
-///     handles the OAuth dance and 302-redirects to haynoi://auth?session_token=…
+///   • Google — the DEFAULT browser opens /auth/google; the server handles
+///     the OAuth dance and 302-redirects to haynoi://auth?session_token=…
 ///     (no PKCE on the client — the server owns the Google credentials).
+///     AppDelegate feeds the haynoi:// URL back via handleCallback(_:).
+///
+/// Default browser (not ASWebAuthenticationSession, which is Safari-backed)
+/// so the OAuth round-trip runs where the user actually browses — the server
+/// reads the Affitor first-party attribution cookies (.haynoi.com) at the
+/// callback, which only exist in the browser that clicked the partner link.
 ///
 /// The token is sent as `Authorization: Bearer <token>` on every proxied
 /// dictation / rewrite / usage call (see STTProvider, BalanceManager).
 @MainActor
-final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProviding {
+final class HaynoiAuth: NSObject {
     static let shared = HaynoiAuth()
 
     nonisolated static let baseURL = "https://api.haynoi.com"
@@ -23,7 +28,10 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
     nonisolated static let userNameKeychainKey = "haynoi.user_name"
     nonisolated static let userIdKeychainKey = "haynoi.user_id"
 
-    private var currentSession: ASWebAuthenticationSession?
+    /// The in-flight sign-in waiting for the haynoi:// callback.
+    private var pendingCallback: CheckedContinuation<URL, Error>?
+    /// Monotonic attempt counter so a stale timeout can't kill a newer attempt.
+    private var attemptId = 0
 
     // MARK: - Models
 
@@ -163,37 +171,32 @@ final class HaynoiAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         return user
     }
 
-    private func openAuthSession(url: URL) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(
-                url: url,
-                callbackURLScheme: "haynoi"
-            ) { callbackURL, error in
-                if let error = error as? ASWebAuthenticationSessionError,
-                   error.code == .canceledLogin {
-                    continuation.resume(throwing: AuthError.cancelled)
-                    return
-                }
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                guard let callbackURL else {
-                    continuation.resume(throwing: AuthError.missingToken)
-                    return
-                }
-                continuation.resume(returning: callbackURL)
-            }
-            session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = false  // share Safari cookies → 1-time sign in
-            self.currentSession = session
-            session.start()
-        }
+    /// AppDelegate routes haynoi:// URLs here (kAEGetURL / application(_:open:)).
+    func handleCallback(_ url: URL) {
+        guard url.scheme == "haynoi" else { return }
+        pendingCallback?.resume(returning: url)
+        pendingCallback = nil
     }
 
-    // MARK: - ASWebAuthenticationPresentationContextProviding
+    private func openAuthSession(url: URL) async throws -> URL {
+        // A new attempt supersedes any prior one still waiting.
+        pendingCallback?.resume(throwing: AuthError.cancelled)
+        pendingCallback = nil
+        attemptId += 1
+        let id = attemptId
 
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        NSApplication.shared.keyWindow ?? ASPresentationAnchor()
+        return try await withCheckedThrowingContinuation { continuation in
+            pendingCallback = continuation
+            NSWorkspace.shared.open(url)
+
+            // The browser tab can simply be closed — nothing signals us. Time
+            // the attempt out so the continuation never leaks.
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
+                guard let self, self.attemptId == id, self.pendingCallback != nil else { return }
+                self.pendingCallback?.resume(throwing: AuthError.cancelled)
+                self.pendingCallback = nil
+            }
+        }
     }
 }
