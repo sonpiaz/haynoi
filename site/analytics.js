@@ -17,3 +17,19 @@ posthog.capture("haynoi_site_view", {
   page: location.pathname,
   referrer: document.referrer || null,
 });
+
+// ── Affitor partner tracking ─────────────────────────────────────────────────
+// Captures ?aff=<partner> landings: fires /track/click and sets first-party
+// cookies (affitor_click_id / affitor_aff_url) on .haynoi.com, so
+// api.haynoi.com sees them at Google sign-in and attribution follows the user
+// into the app. Program id comes from the Affitor dashboard (program
+// "haynoi") — the tracker stays off until it is set.
+var AFFITOR_PROGRAM_ID = null; // TODO(son): set after creating the Haynoi program
+if (AFFITOR_PROGRAM_ID) {
+  var aff = document.createElement("script");
+  aff.src = "https://api.affitor.com/js/affitor-tracker.js";
+  aff.setAttribute("data-affitor-program-id", String(AFFITOR_PROGRAM_ID));
+  aff.setAttribute("data-affitor-cookie-domain", ".haynoi.com");
+  aff.async = true;
+  document.head.appendChild(aff);
+}
