@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Signal Cyan — architectural linear axis -->
+    <linearGradient id="cyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#38E8D0"/>
+      <stop offset="100%" stop-color="#0D9E9C"/>
+    </linearGradient>
+  </defs>
+
+  <!--
+    No squircle, transparent background. Just the ń mark, scaled up to fill
+    the icon. Content bbox (ń + dấu sắc) ≈ x158-369 y69-378, center (263,223).
+    Centered into 512 canvas and scaled 1.32× to fill with tasteful padding.
+  -->
+  <g transform="translate(256 256) scale(1.32) translate(-263 -223)">
+    <!-- ń — one continuous geometric stroke (V2) -->
+    <path
+      fill="url(#cyan)"
+      d="
+        M 158,370
+        Q 158,378 166,378
+        Q 212,378 212,370
+        L 212,188
+        C 234,200 278,200 300,194
+        L 300,370
+        Q 300,378 308,378
+        Q 354,378 354,370
+        L 354,210
+        C 303,122 205,122 158,158
+        Z
+      "
+    />
+    <!-- dấu sắc -->
+    <rect
+      x="337.5" y="69"
+      width="13" height="58"
+      rx="2"
+      fill="#38E1C6"
+      transform="rotate(60, 344, 98)"
+    />
+  </g>
+</svg>
