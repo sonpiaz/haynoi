@@ -15,7 +15,7 @@ import PostHog
 /// calls `optOut()` so nothing is queued or sent.
 @MainActor
 enum Analytics {
-    private static let key  = "phc_rxVoY3pgniT45EsAX55HenKPB6MPDPGzPS3Xx8aMW7N6"
+    private static let key  = "phc_mKoPQ7nM2SFCam2vDQSuMBH3hw3wYKZdkdCa2YugJ8pw"
     private static let host = "https://us.i.posthog.com"
     static let optInDefaultsKey = "shareUsageData"   // Bool, default true
 
