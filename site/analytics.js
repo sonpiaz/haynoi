@@ -24,7 +24,7 @@ posthog.capture("haynoi_site_view", {
 // api.haynoi.com sees them at Google sign-in and attribution follows the user
 // into the app. Program id comes from the Affitor dashboard (program
 // "haynoi") — the tracker stays off until it is set.
-var AFFITOR_PROGRAM_ID = null; // TODO(son): set after creating the Haynoi program
+var AFFITOR_PROGRAM_ID = 1081; // Affitor program "Haynoi"
 if (AFFITOR_PROGRAM_ID) {
   var aff = document.createElement("script");
   aff.src = "https://api.affitor.com/js/affitor-tracker.js";
