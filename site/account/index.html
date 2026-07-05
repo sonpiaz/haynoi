@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Haynoi — You're Pro</title>
+  <meta name="description" content="Payment confirmed. Head back to the Haynoi app." />
+  <meta name="theme-color" content="#F7F4EE" />
+  <link rel="icon" href="../icon.png" type="image/png" />
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .pro-hero { padding: 10rem 0 6rem; text-align: center; }
+    .pro-hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); }
+    .pro-hero .sub { margin-top: 1rem; color: var(--ink-3, #6B6456);
+      max-width: 480px; margin-left: auto; margin-right: auto; line-height: 1.6; }
+    .pro-badge { display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid rgba(17,156,154,.35); background: rgba(56,232,208,.08);
+      color: #119C9A; border-radius: 999px; padding: 4px 14px;
+      font-size: 0.8rem; font-weight: 600; letter-spacing: 0.05em;
+      margin-bottom: 1.4rem; }
+    .pro-badge i { width: 6px; height: 6px; border-radius: 50%;
+      background: #119C9A; display: block; }
+    .back-note { margin-top: 2.5rem; color: var(--ink-3, #6B6456); font-size: 0.9rem; }
+  </style>
+
+  <!-- PostHog analytics -->
+  <script src="/analytics.js"></script>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../">
+      <img src="../icon.png" alt="Haynoi icon" />
+      Haynoi
+    </a>
+  </div>
+</nav>
+
+<main>
+  <section class="pro-hero">
+    <div class="container">
+      <span class="pro-badge"><i></i>PRO</span>
+      <h1 class="serif">Payment confirmed.<br />Welcome to <em>unlimited</em>.</h1>
+      <p class="sub">
+        Your Haynoi Pro subscription is active. Head back to the app —
+        it picks up the upgrade within a few seconds, no restart needed.
+      </p>
+      <p class="back-note">
+        Manage your plan anytime in the app: Settings → Plans &amp; Billing.
+      </p>
+    </div>
+  </section>
+</main>
+</body>
+</html>

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-07-05
+
+### Added
+- **Haynoi Pro is live.** Unlimited dictation, all 4 modes, priority
+  transcription — $14.99/month or $125.88/year. Upgrade in
+  Settings → Plans & Billing; payment runs through Stripe in your browser
+  and the app unlocks within seconds. Manage or cancel anytime.
+
+### Fixed
+- Usage analytics events now actually reach our dashboard (a
+  misconfigured key silently dropped them — still counts and timings
+  only, never your words).
+
 ## [0.3.6] - 2026-07-04
 
 ### Added
