@@ -909,7 +909,7 @@ private struct BillingTab: View {
             PlanFeature(text: "Unlimited dictation", included: true)
             PlanFeature(text: "All 4 modes", included: true)
             PlanFeature(text: "Priority transcription", included: true)
-            PlanFeature(text: "Kyma Quality tier default", included: true)
+            PlanFeature(text: "Highest-quality transcription", included: true)
 
             Spacer(minLength: C.s5)
 

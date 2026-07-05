@@ -7,15 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.6] - 2026-06-19
+## [0.3.6] - 2026-07-04
 
 ### Added
-- **New sign-in:** continue with Google, or create an account with email +
-  password. Accounts are now Haynoi's own (api.haynoi.com).
+- **New sign-in:** continue with Google — one click, no passwords. Accounts
+  are now Haynoi's own (api.haynoi.com).
+- **Personal dictionary learns from your corrections.** Say "fix that", edit
+  a dictation in place, or re-dictate — Haynoi notices the fix and gets the
+  term right next time. Everything stays on your Mac.
+- Anonymous usage analytics (counts and timings only — never your words),
+  with an opt-out toggle in Settings.
 
 ### Changed
 - **Obsidian Instrument relaunch:** light-first redesign (Quiet Paper) and the
-  new "ń" tone-mark logo.
+  new "ń" tone-mark logo — now bigger in the Dock and shown throughout the app.
 - Free tier is **5,000 words per week** (resets every Monday).
 - Dictation now runs through Haynoi's own backend.
 
