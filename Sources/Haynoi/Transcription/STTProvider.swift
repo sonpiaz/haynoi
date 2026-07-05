@@ -1,19 +1,32 @@
 import AVFoundation
 import Foundation
-import Network
 
 // MARK: - STT Provider
 //
-// All transcription routed through Kyma. Two quality tiers picked by user:
+// All transcription routed through the haynoi-server proxy. Two quality tiers
+// picked by user:
 //   "quality" → gpt-4o-mini-transcribe-2025-12-15 (default — best Vi/En accuracy)
 //   "fast"    → whisper-v3-turbo (cheaper, clear speech only)
 //
-// User must be signed in via KymaAuth (device code flow).
+// User must be signed in via HaynoiAuth (Google / email-password). The session
+// token is sent as Bearer auth; haynoi-server proxies to Kyma and meters words.
 // No BYOK — single hosted backend, single sign-in.
 
 enum STTProvider {
+    /// Transcription result. `firedIDs` are the `.replacement` rule ids that
+    /// actually changed the text in `applyReplacements` — fed to v1.1 self-heal.
+    struct Result {
+        let text: String
+        let firedIDs: [UUID]
+    }
+
+    /// Back-compat convenience: text only (retry path, diagnostics).
     static func transcribe(_ samples: [Float]) async throws -> String {
-        guard let apiKey = KymaAuth.currentApiKey else {
+        try await transcribeTracked(samples).text
+    }
+
+    static func transcribeTracked(_ samples: [Float]) async throws -> Result {
+        guard let token = HaynoiAuth.currentToken else {
             throw STTError.notSignedIn
         }
 
@@ -55,94 +68,49 @@ enum STTProvider {
             }
         }
 
-        var text = try await callKymaTranscribe(
-            apiKey: apiKey, audio: audio, model: model, prompt: prompt,
+        var text = try await callTranscribe(
+            token: token, audio: audio, model: model, prompt: prompt,
             languageHint: languageHint
         )
 
         if mode.needsRewrite, !text.isEmpty {
             text = try await rewriteWithKyma(
-                apiKey: apiKey, text: text, systemPrompt: mode.rewritePrompt
+                token: token, text: text, systemPrompt: mode.rewritePrompt
             )
         }
-        return text
+        // Deterministic personal-dictionary replace runs LAST — after the LLM
+        // rewrite (so the rewrite can't re-mangle a term we just fixed), or in
+        // its place when the mode has no rewrite. Local, on-device, never a
+        // network call. See redesign/07-DICTATION-LEARNING.md §5.3.
+        var firedIDs: [UUID] = []
+        if !text.isEmpty {
+            let tracked = PersonalDictionary.shared.applyReplacementsTracked(to: text)
+            text = tracked.text
+            firedIDs = tracked.firedIDs
+        }
+        return Result(text: text, firedIDs: firedIDs)
     }
 
-    /// Resolves Kyma model alias from user's quality setting.
+    /// Resolves the model alias from the user's quality setting. The proxy
+    /// passes these verbatim to Kyma.
     private static func resolveModel() -> String {
         let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "quality"
         return quality == "quality" ? "transcribe-quality" : "transcribe"
     }
 
-    // MARK: - Kyma API calls
-
-    // Data-plane goes straight to the API edge (skips the website proxy hop).
-    // Auth stays on kymaapi.com (browser flow) — see KymaAuth.baseURL.
-    private static let kymaBaseURL = "https://api.kymaapi.com"
-    // Fallback ladder — three DIFFERENT network paths (live-debugged
-    // 2026-06-12: a VN user's request HEADERS reached auth but the multipart
-    // BODY never completed; direct OpenAI from the same machine was fine):
-    //   1. api.kymaapi.com — Cloudflare edge → native Worker
-    //   2. kymaapi.com     — Cloudflare edge → Vercel proxy → Railway
-    //   3. Railway host    — Railway's own edge, NO Cloudflare at all —
-    //      rescues ISPs whose route into the Cloudflare anycast is broken.
-    private static let kymaFallbackBaseURL = "https://kymaapi.com"
-    private static let kymaDirectBaseURL = "https://kyma-api-production.up.railway.app"
-
-    private static var routeBases: [String] {
-        [kymaBaseURL, kymaFallbackBaseURL, kymaDirectBaseURL]
-    }
-
-    /// The route that most recently worked (or probed fastest). Persisted, so
-    /// a user whose ISP stalls the primary edge pays the rescue delay AT MOST
-    /// once — every later dictation goes straight to their good route.
-    private static var preferredBase: String {
-        get {
-            let v = UserDefaults.standard.string(forKey: "kymaPreferredRoute") ?? kymaBaseURL
-            return routeBases.contains(v) ? v : kymaBaseURL
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "kymaPreferredRoute") }
-    }
-
-    // Re-probe triggers: app launch AND every network-path change (Wi-Fi
-    // switch, VPN toggle, wake in a new location). The app is a menu-bar
-    // resident that can run for weeks — launch-only probing would go stale.
-    private static let pathMonitor = NWPathMonitor()
-    private static var monitorStarted = false
-    private static var lastProbeAt = Date.distantPast
-    private static let probeLock = NSLock()
-
-    static func startRouteMonitoring() {
-        guard !monitorStarted else { return }
-        monitorStarted = true
-        probeRoutesInBackground()
-        pathMonitor.pathUpdateHandler = { path in
-            guard path.status == .satisfied else { return }
-            NSLog("[Haynoi] Network path changed — re-probing routes")
-            probeRoutesInBackground()
-        }
-        pathMonitor.start(queue: DispatchQueue(label: "haynoi.route-monitor"))
-    }
-
-    /// Fire-and-forget probe of all routes (tiny GET /v1/health — 93 bytes,
-    /// free + no-auth, no model inference so it never bills credits). The
-    /// fastest healthy route becomes preferred, so even the FIRST dictation
-    /// after launch uses a route that is known to work from this network.
-    /// Debounced: path changes arrive in bursts when switching networks.
-    static func probeRoutesInBackground() {
-        probeLock.lock()
-        let tooSoon = Date().timeIntervalSince(lastProbeAt) < 10
-        if !tooSoon { lastProbeAt = Date() }
-        probeLock.unlock()
-        if tooSoon { return }
-        runProbe()
-    }
+    // MARK: - haynoi-server proxy endpoints
+    //
+    // Single host. haynoi-server authenticates the session token, meters words,
+    // and proxies to Kyma — so the client no longer needs the 3-route hedge that
+    // worked around Kyma's edge. One POST, one timeout, one set of status codes.
+    private static let transcribeURL = "\(HaynoiAuth.baseURL)/v1/proxy/audio/transcriptions"
+    private static let rewriteURL = "\(HaynoiAuth.baseURL)/v1/proxy/chat/completions"
 
     // MARK: - Connection Diagnostic (user-facing "Test Connection")
 
     struct RouteResult: Identifiable {
         let id = UUID()
-        let name: String       // Primary / Alternate / Direct
+        let name: String
         let ok: Bool
         let latencyMs: Int?
         let detail: String     // "Reached in 0.4s" / "Upload stalled" / "HTTP 401"
@@ -154,16 +122,14 @@ enum STTProvider {
         let anyWorked: Bool
     }
 
-    private static let routeLabels = ["Primary", "Alternate", "Direct"]
-
-    /// Tests whether the AUDIO UPLOAD actually reaches the server on each route
-    /// — the real failure mode, not a tiny GET. Uploads a realistic ~45 KB M4A
-    /// with an intentionally invalid model, so the server reads the whole body
-    /// then replies 400 "not a transcription model": proves the upload path
-    /// works WITHOUT transcribing or billing a cent. Distinguishes network
-    /// stalls (timeout) from auth (401) and rate limits (429).
+    /// Tests whether the AUDIO UPLOAD actually reaches the proxy — the real
+    /// failure mode, not a tiny GET. Uploads a realistic ~35 KB M4A with an
+    /// intentionally invalid model so the server reads the whole body then
+    /// replies 400 "not a transcription model": proves the upload path works
+    /// WITHOUT transcribing or metering a single word. Distinguishes network
+    /// stalls (timeout) from auth (401), quota (402), and rate limits (429).
     static func runConnectionTest() async -> ConnectionReport {
-        guard let apiKey = KymaAuth.currentApiKey else {
+        guard let token = HaynoiAuth.currentToken else {
             return ConnectionReport(routes: [], verdict: "You're not signed in. Open the Account tab and sign in first.", anyWorked: false)
         }
 
@@ -174,93 +140,58 @@ enum STTProvider {
         for i in 0..<samples.count { samples[i] = sin(2 * .pi * 220 * Float(i) / Float(sr)) * 0.2 }
         let audio = encodeAudio(samples: samples, sampleRate: sr)
 
-        func buildBody(boundary: String) -> Data {
-            var body = Data()
-            body.append("--\(boundary)\r\n")
-            body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(audio.filename)\"\r\n")
-            body.append("Content-Type: \(audio.mimeType)\r\n\r\n")
-            body.append(audio.data)
-            body.append("\r\n--\(boundary)\r\n")
-            body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n")
-            body.append("__haynoi_diagnostic__\r\n--\(boundary)--\r\n")
-            return body
-        }
+        let boundary = UUID().uuidString
+        var body = Data()
+        body.append("--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(audio.filename)\"\r\n")
+        body.append("Content-Type: \(audio.mimeType)\r\n\r\n")
+        body.append(audio.data)
+        body.append("\r\n--\(boundary)\r\n")
+        body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n")
+        body.append("__haynoi_diagnostic__\r\n--\(boundary)--\r\n")
 
-        var results: [RouteResult] = []
-        var has402 = false, has401 = false
-        for (i, base) in routeBases.enumerated() {
-            let boundary = UUID().uuidString
-            var req = URLRequest(url: URL(string: "\(base)/v1/audio/transcriptions")!)
-            req.httpMethod = "POST"
-            req.timeoutInterval = 20
-            req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-            req.httpBody = buildBody(boundary: boundary)
-            let label = routeLabels[i]
-            let t0 = Date()
-            do {
-                let (_, resp) = try await URLSession.shared.data(for: req)
-                let ms = Int(Date().timeIntervalSince(t0) * 1000)
-                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                switch code {
-                case 400: results.append(RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server (\(ms) ms)"))
-                case 401: has401 = true; results.append(RouteResult(name: label, ok: false, latencyMs: ms, detail: "Sign-in expired (401)"))
-                case 402: has402 = true; results.append(RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of credits (402)"))
-                case 429: results.append(RouteResult(name: label, ok: false, latencyMs: ms, detail: "Servers busy (429) — try again"))
-                default:  results.append(RouteResult(name: label, ok: code < 500, latencyMs: ms, detail: "HTTP \(code) (\(ms) ms)"))
-                }
-            } catch {
-                results.append(RouteResult(name: label, ok: false, latencyMs: nil, detail: "Upload stalled / no response"))
+        var req = URLRequest(url: URL(string: transcribeURL)!)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+
+        let label = "Haynoi"
+        let t0 = Date()
+        var result: RouteResult
+        var has401 = false, has402 = false
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            switch code {
+            case 400: result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server (\(ms) ms)")
+            case 401: has401 = true; result = RouteResult(name: label, ok: false, latencyMs: ms, detail: "Sign-in expired (401)")
+            case 402: has402 = true; result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of words this month (402)")
+            case 429: result = RouteResult(name: label, ok: false, latencyMs: ms, detail: "Servers busy (429) — try again")
+            default:  result = RouteResult(name: label, ok: code < 500, latencyMs: ms, detail: "HTTP \(code) (\(ms) ms)")
             }
+        } catch {
+            result = RouteResult(name: label, ok: false, latencyMs: nil, detail: "Upload stalled / no response")
         }
 
-        let anyWorked = results.contains { $0.ok }
+        let anyWorked = result.ok
         let verdict: String
         if has401 {
             verdict = "Your sign-in expired. Open the Account tab and sign in again."
         } else if has402 {
-            verdict = "You're out of credits. Top up at kymaapi.com to keep dictating."
+            verdict = "You've used your free words for this month. Upgrade to Pro for unlimited dictation."
         } else if anyWorked {
-            let okNames = results.filter { $0.ok }.map { $0.name }.joined(separator: ", ")
-            verdict = "Connection is good. Haynoi will use the fastest working route (\(okNames)). Dictation should work."
+            verdict = "Connection is good. Dictation should work."
         } else {
-            verdict = "Your network is blocking the audio upload on every route. Try a different Wi-Fi or your phone's hotspot — some networks throttle uploads to our servers."
+            verdict = "Your network is blocking the audio upload. Try a different Wi-Fi or your phone's hotspot — some networks throttle uploads to our servers."
         }
-        return ConnectionReport(routes: results, verdict: verdict, anyWorked: anyWorked)
+        return ConnectionReport(routes: [result], verdict: verdict, anyWorked: anyWorked)
     }
 
-    private static func runProbe() {
-        Task.detached(priority: .utility) {
-            var best: (base: String, ms: Double)?
-            await withTaskGroup(of: (String, Double)?.self) { group in
-                for base in routeBases {
-                    group.addTask {
-                        // /v1/health is 93 bytes (vs 71 KB for /v1/models) —
-                        // a probe only needs liveness + latency, not the model
-                        // list. 768× less bandwidth per probe round.
-                        var req = URLRequest(url: URL(string: "\(base)/v1/health")!)
-                        req.timeoutInterval = 5
-                        let t0 = Date()
-                        guard let (_, resp) = try? await URLSession.shared.data(for: req),
-                              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-                        return (base, Date().timeIntervalSince(t0) * 1000)
-                    }
-                }
-                for await result in group {
-                    if let result, best == nil || result.1 < best!.ms {
-                        best = (result.0, result.1)
-                    }
-                }
-            }
-            if let best {
-                preferredBase = best.base
-                NSLog("[Haynoi] Route probe: %@ wins (%.0f ms)", best.base, best.ms)
-            }
-        }
-    }
-
-    private static func callKymaTranscribe(
-        apiKey: String, audio: EncodedAudio, model: String, prompt: String,
+    private static func callTranscribe(
+        token: String, audio: EncodedAudio, model: String, prompt: String,
         languageHint: String
     ) async throws -> String {
         let boundary = UUID().uuidString
@@ -295,124 +226,56 @@ enum STTProvider {
 
         body.append("--\(boundary)--\r\n")
 
-        func makeRequest(base: String) -> URLRequest {
-            var request = URLRequest(url: URL(string: "\(base)/v1/audio/transcriptions")!)
-            request.httpMethod = "POST"
-            // 30s IDLE timeout (URLSession resets it whenever bytes move, so a
-            // slow-but-progressing upload is safe). A genuine stall now fails
-            // in 30s and the next network in the ladder takes over — with the
-            // old 90s a stalled network meant minutes before the fallback ran.
-            request.timeoutInterval = 30
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-            request.httpBody = body
-            return request
-        }
+        var request = URLRequest(url: URL(string: transcribeURL)!)
+        request.httpMethod = "POST"
+        // 30s IDLE timeout (URLSession resets it whenever bytes move, so a
+        // slow-but-progressing upload is safe). A genuine stall fails in 30s.
+        request.timeoutInterval = 30
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
 
-        // Hedged race (v0.3.0): the preferred route fires immediately; each
-        // remaining route joins IN PARALLEL 4s later if no answer yet. First
-        // success wins and becomes the preferred route for next time. A user
-        // on a stalled network pays the hedge delay once (~4-8s), then every
-        // later dictation goes straight to their working route at full speed.
-        // Trade-off: when the preferred route is merely slow (>4s, ~p99) a
-        // duplicate transcription may complete upstream and double-bill that
-        // one dictation — pennies, accepted to never lose the user's words.
-        let order = [preferredBase] + routeBases.filter { $0 != preferredBase }
-        return try await withThrowingTaskGroup(of: RaceOutcome.self) { group in
-            for (i, base) in order.enumerated() {
-                let request = makeRequest(base: base)
-                group.addTask {
-                    if i > 0 {
-                        try? await Task.sleep(nanoseconds: UInt64(i) * 4_000_000_000)
-                        if Task.isCancelled { return .routeFailed(STTError.noConnection) }
-                    }
-                    return await attemptRoute(base: base, request: request)
-                }
-            }
-
-            var lastFailure: Error = STTError.noConnection
-            var failures = 0
-            for try await outcome in group {
-                switch outcome {
-                case .success(let text, let base):
-                    if base != preferredBase {
-                        NSLog("[Haynoi] Route %@ rescued the dictation — now preferred", base)
-                        preferredBase = base
-                    }
-                    group.cancelAll()
-                    return text
-                case .fatal(let error):
-                    group.cancelAll()
-                    throw error
-                case .routeFailed(let error):
-                    failures += 1
-                    lastFailure = error
-                }
-            }
-            _ = failures
-            throw lastFailure
-        }
-    }
-
-    /// One transcription attempt against one route. Never throws — returns a
-    /// race outcome so the hedged group can decide.
-    private enum RaceOutcome {
-        case success(String, base: String)
-        case routeFailed(Error)   // try another route
-        case fatal(Error)         // same answer everywhere — stop the race
-    }
-
-    private static func attemptRoute(base: String, request: URLRequest) async -> RaceOutcome {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                return .routeFailed(STTError.noConnection)
+                throw STTError.noConnection
             }
             switch http.statusCode {
             case 200:
                 guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let text = json["text"] as? String else {
-                    return .routeFailed(STTError.parseError)
+                    throw STTError.parseError
                 }
-                return .success(text.trimmingCharacters(in: .whitespacesAndNewlines), base: base)
+                return text.trimmingCharacters(in: .whitespacesAndNewlines)
             case 401:
-                // Key was revoked server-side — sign out locally and notify UI.
-                NSLog("[Haynoi] 401 from %@ — key revoked, signing out", base)
+                // Session expired/revoked server-side — sign out locally and notify UI.
+                NSLog("[Haynoi] 401 from proxy — session expired, signing out")
                 await MainActor.run { AuthState.shared.handleKeyRevoked() }
                 NotificationHelper.postSessionExpired()
-                return .fatal(STTError.sessionExpired)
+                throw STTError.sessionExpired
             case 402:
-                NSLog("[Haynoi] 402 from %@ — out of credits", base)
-                return .fatal(STTError.outOfCredits)
+                NSLog("[Haynoi] 402 from proxy — monthly word quota exhausted")
+                throw STTError.outOfCredits
             case 429:
-                NSLog("[Haynoi] Rate limited via %@", base)
-                return .routeFailed(STTError.rateLimited)
-            case 500...:
-                let rawBody = String(data: data, encoding: .utf8) ?? ""
-                NSLog("[Haynoi] Transcription API error %d via %@: %@", http.statusCode, base, rawBody)
-                return .routeFailed(STTError.serverError(
-                    parseKymaErrorMessage(data: data)
-                        ?? "Something went wrong (HTTP \(http.statusCode)) — try again"))
+                NSLog("[Haynoi] Rate limited by proxy")
+                throw STTError.rateLimited
             default:
-                // Real 4xx client errors — every route gives the same answer.
                 let rawBody = String(data: data, encoding: .utf8) ?? ""
-                NSLog("[Haynoi] Transcription API error %d via %@: %@", http.statusCode, base, rawBody)
-                return .fatal(STTError.serverError(
-                    parseKymaErrorMessage(data: data)
-                        ?? "Something went wrong (HTTP \(http.statusCode)) — try again"))
+                NSLog("[Haynoi] Transcription proxy error %d: %@", http.statusCode, rawBody)
+                throw STTError.serverError(
+                    parseProxyErrorMessage(data: data)
+                        ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
             }
         } catch let urlErr as URLError {
-            NSLog("[Haynoi] Transport error via %@: %@", base, urlErr.localizedDescription)
-            return .routeFailed(STTError.noConnection)
-        } catch {
-            return .routeFailed(error)
+            NSLog("[Haynoi] Transport error: %@", urlErr.localizedDescription)
+            throw STTError.noConnection
         }
     }
 
-    /// Extracts the human-readable message from a Kyma error envelope.
+    /// Extracts the human-readable message from a proxy error envelope.
     /// Shape: {"error":{"message":"..."}} — same as OpenAI error format.
     /// Returns nil on parse failure so callers can substitute their own copy.
-    private static func parseKymaErrorMessage(data: Data) -> String? {
+    private static func parseProxyErrorMessage(data: Data) -> String? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let errorObj = json["error"] as? [String: Any],
               let message = errorObj["message"] as? String,
@@ -423,14 +286,28 @@ enum STTProvider {
     }
 
     private static func rewriteWithKyma(
-        apiKey: String, text: String, systemPrompt: String
+        token: String, text: String, systemPrompt: String
     ) async throws -> String {
-        let url = URL(string: "\(kymaBaseURL)/v1/chat/completions")!
+        let url = URL(string: rewriteURL)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 15
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Prepend the user's personal-dictionary terms as CONTEXT so the LLM
+        // corrects with context (won't turn "Caterpillar" into "Cat…") — a
+        // smarter, safer corrector than blind find-replace. Bare, frequency-
+        // ordered, capped (client-side request-body change only; the proxy is
+        // unchanged). See redesign/07-DICTATION-LEARNING.md §5 review C.
+        let glossary = PersonalDictionary.shared.glossaryTerms()
+        let system: String
+        if glossary.isEmpty {
+            system = systemPrompt
+        } else {
+            system = "The user's preferred spellings for names and terms (use these exact forms when they occur): "
+                + glossary.joined(separator: ", ") + ".\n\n" + systemPrompt
+        }
 
         let body: [String: Any] = [
             // Benchmarked 2026-06-10: gemini-2.5-flash 1.7s clean output;
@@ -439,7 +316,7 @@ enum STTProvider {
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
-                ["role": "system", "content": systemPrompt],
+                ["role": "system", "content": system],
                 ["role": "user", "content": text],
             ],
         ]
@@ -606,7 +483,7 @@ enum STTError: LocalizedError {
         case .sessionExpired:
             return "Session expired — please sign in again"
         case .outOfCredits:
-            return "Out of credits — if you just signed up, verify your email to unlock your free credit, or top up at kymaapi.com."
+            return "You've used your free words for this week (5,000 words). Resets Monday — Pro (unlimited) coming soon."
         case .rateLimited:
             return "Servers are busy — try again in a moment"
         case .noConnection:

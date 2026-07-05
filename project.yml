@@ -10,6 +10,9 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.9.1
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    from: 3.0.0
 
 targets:
   Haynoi:
@@ -25,12 +28,13 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
+      - package: PostHog
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi
         PRODUCT_NAME: Haynoi
-        MARKETING_VERSION: "0.1.9"
-        CURRENT_PROJECT_VERSION: "10"
+        MARKETING_VERSION: "0.3.6"
+        CURRENT_PROJECT_VERSION: "28"
         INFOPLIST_FILE: Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Resources/Haynoi.entitlements
         SWIFT_VERSION: "5.9"
@@ -45,3 +49,22 @@ targets:
       properties:
         com.apple.security.device.audio-input: true
         com.apple.security.automation.apple-events: true
+
+  HaynoiTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Haynoi
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoiTests
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        GENERATE_INFOPLIST_FILE: true
+        DEVELOPMENT_TEAM: 6WMWJ85DDY
+        CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
+    scheme:
+      testTargets:
+        - HaynoiTests

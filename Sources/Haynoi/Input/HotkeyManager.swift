@@ -49,6 +49,34 @@ final class HotkeyManager {
     var onKeyUp: (() -> Void)?
     var onCancelled: (() -> Void)?
 
+    // MARK: - v1.1 "fix that" gesture (Signal C)
+    //
+    // A discrete TAP — semantically distinct from the push-to-talk hold machine —
+    // that arms correction mode for the next dictation. It must never start/stop a
+    // recording, so it is detected entirely in `handleFixThat`, isolated from
+    // `isModifierDown` / `isActivated`.
+    //
+    // Conflict-free by construction: the recommended default is a ⌃⌥ CHORD tap.
+    // Push-to-talk requires the SOLO target modifier held past the grace period
+    // (`!hasOtherModifiers`, L376); the existing state machine CANCELS the moment a
+    // second modifier is added — so a chord can never arm dictation. The
+    // double-tap-Option alternative is for users whose push-to-talk is Control.
+    var onFixThat: (() -> Void)?
+
+    /// "ctrlOption" (⌃⌥ chord tap, default) | "doubleOption" (⌥⌥) | "off".
+    /// Settable from Settings; reuses the two existing observe-only NSEvent
+    /// monitors — no third monitor.
+    var fixThatChoice: String = UserDefaults.standard.string(forKey: "fixThatHotkeyChoice") ?? "ctrlOption"
+
+    // Fix-that chord (⌃⌥) tap tracking: a tap = both modifiers go down together
+    // then fully release, with no intervening keyDown, inside a short window.
+    private var fixChordArmed = false
+    private var fixChordArmedAt: Date?
+    private var sawKeyDownSinceChord = false
+    // Double-tap-Option tracking.
+    private var lastOptionTapAt: Date?
+    private let fixTapWindow: TimeInterval = 0.6
+
     /// Public API kept as CGEventFlags so SettingsView's hotkey picker keeps
     /// working unchanged. Internally we translate to NSEvent.ModifierFlags.
     /// Default is Option (⌥) — the founder-approved push-to-talk key. When the
@@ -307,7 +335,9 @@ final class HotkeyManager {
             // onKeyDown semantics ("other key pressed") no longer gate
             // activation: holding the modifier past the grace period always
             // activates, exactly as the CGEventTap path behaved.
-            break
+            // v1.1: a keyDown while the fix-that chord is held means it was used
+            // as a real shortcut (e.g. ⌃⌥→ Mission Control) — not a tap.
+            DispatchQueue.main.async { self.sawKeyDownSinceChord = true }
         default:
             break
         }
@@ -315,6 +345,11 @@ final class HotkeyManager {
 
     private func handleFlagsChanged(_ flags: NSEvent.ModifierFlags, keyCode: UInt16 = 0) {
         dispatchPrecondition(condition: .onQueue(.main))
+        // v1.1: additively detect the "fix that" tap. Isolated from the
+        // push-to-talk state machine below — it never touches isModifierDown /
+        // isActivated, so it can never start or stop a recording.
+        handleFixThat(flags, keyCode: keyCode)
+
         lastFlagKeyCode = keyCode
         let isDown = flags.contains(targetFlag)
 
@@ -379,6 +414,81 @@ final class HotkeyManager {
             activationWorkItem?.cancel()
             activationWorkItem = nil
             DispatchQueue.main.async { self.onCancelled?() }
+        }
+    }
+
+    // MARK: - Fix-that tap detection (v1.1)
+
+    /// Detects the configured "fix that" tap and fires `onFixThat`. Pure observer:
+    /// reads `flags`/`keyCode` and its own scratch state only, never the
+    /// push-to-talk machine. A "tap" = the combo pressed then fully released with
+    /// no intervening keyDown, inside `fixTapWindow`.
+    private func handleFixThat(_ flags: NSEvent.ModifierFlags, keyCode: UInt16) {
+        guard onFixThat != nil, fixThatChoice != "off" else { return }
+        // Never refuse a value equal to the push-to-talk modifier (§3.2). The chord
+        // default is inherently distinct; only guard double-tap-Option when
+        // push-to-talk is Option (the common case), in which case fall back to
+        // requiring the chord instead.
+        let pttIsOption = (targetModifier == .maskAlternate)
+
+        switch fixThatChoice {
+        case "doubleOption" where !pttIsOption:
+            detectDoubleOption(flags, keyCode: keyCode)
+        case "doubleOption":
+            // Push-to-talk owns Option — fall back to the chord so we never
+            // collide with dictation.
+            detectChord(flags)
+        default: // "ctrlOption"
+            detectChord(flags)
+        }
+    }
+
+    /// ⌃⌥ chord tap: both Control and Option down together, then fully released,
+    /// no keyDown in between, within the tap window.
+    private func detectChord(_ flags: NSEvent.ModifierFlags) {
+        let bothDown = flags.contains(.control) && flags.contains(.option)
+        // Reject if any disqualifying modifier is also held.
+        let extra = flags.intersection([.command, .shift, .function])
+        if bothDown && extra.isEmpty {
+            if !fixChordArmed {
+                fixChordArmed = true
+                fixChordArmedAt = Date()
+                sawKeyDownSinceChord = false
+            }
+            return
+        }
+        // Release path: chord was armed and now at least one of the two is up.
+        if fixChordArmed {
+            let releasedClean = !flags.contains(.control) || !flags.contains(.option)
+            let inWindow = (fixChordArmedAt.map { Date().timeIntervalSince($0) < fixTapWindow }) ?? false
+            let wasTap = releasedClean && inWindow && !sawKeyDownSinceChord && extra.isEmpty
+            // Fully released (no target/other modifiers left from the chord) → reset.
+            if !flags.contains(.control) && !flags.contains(.option) {
+                fixChordArmed = false
+                fixChordArmedAt = nil
+            }
+            if wasTap {
+                fixChordArmed = false
+                fixChordArmedAt = nil
+                NSLog("[Haynoi] Fix-that chord tap detected")
+                DispatchQueue.main.async { self.onFixThat?() }
+            }
+        }
+    }
+
+    /// ⌥⌥ double-tap of Option (only when push-to-talk is NOT Option).
+    private func detectDoubleOption(_ flags: NSEvent.ModifierFlags, keyCode: UInt16) {
+        // Count a tap on the RELEASE of a solo Option press.
+        let optionUp = !flags.contains(.option)
+        let onlyOptionFamily = flags.intersection([.command, .shift, .function, .control]).isEmpty
+        guard optionUp, onlyOptionFamily else { return }
+        let now = Date()
+        if let last = lastOptionTapAt, now.timeIntervalSince(last) < fixTapWindow {
+            lastOptionTapAt = nil
+            NSLog("[Haynoi] Fix-that double-Option tap detected")
+            DispatchQueue.main.async { self.onFixThat?() }
+        } else {
+            lastOptionTapAt = now
         }
     }
 }

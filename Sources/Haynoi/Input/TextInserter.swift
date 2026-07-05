@@ -7,6 +7,16 @@ import UserNotifications
 /// Strategy: restore focus → verify AX target → Cmd+V (most reliable) → AX fallback.
 enum TextInserter {
 
+    /// Result of an insertion. `span` is the UTF-16 (location, length) range the
+    /// inserted text occupied in the focused field, when knowable (AX paths); nil
+    /// for the clipboard fallback in non-AX apps (Electron). v1.1 uses it to
+    /// later select-and-replace the same span for an in-place "fix that".
+    struct InsertionResult {
+        let inserted: String
+        let span: NSRange?
+        let targetApp: NSRunningApplication?
+    }
+
     // Fix #9: targetApp is now a per-dictation parameter; this static is removed.
     // Kept only as a migration shim used by legacy callers that haven't updated yet.
     // PipelineController captures and passes it explicitly since Batch B.
@@ -19,7 +29,8 @@ enum TextInserter {
 
     /// Inserts text into `targetApp` (the app that was frontmost when recording started).
     /// Passing targetApp explicitly (Fix #9) prevents the shared-static race.
-    static func insert(_ text: String, targetApp: NSRunningApplication?) async {
+    @discardableResult
+    static func insert(_ text: String, targetApp: NSRunningApplication?) async -> InsertionResult {
         let axTrusted = AXIsProcessTrusted()
         NSLog("[Haynoi] Insert: AXTrusted=%d, targetApp=%@, text length=%d",
               axTrusted ? 1 : 0,
@@ -33,7 +44,7 @@ enum TextInserter {
         if !modifiersCleared {
             NSLog("[Haynoi] ⚠️ Modifiers still held after ceiling — clipboard fallback")
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
-            return
+            return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
 
         // Step 1: Restore focus to target app.
@@ -44,7 +55,7 @@ enum TextInserter {
         if !focusOK {
             NSLog("[Haynoi] ⚠️ Focus restore failed — clipboard fallback to avoid wrong-app paste")
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
-            return
+            return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
 
         // Extra settle time — let target app fully process activation.
@@ -61,7 +72,7 @@ enum TextInserter {
                       frontmost?.bundleIdentifier ?? "?",
                       target.bundleIdentifier ?? "?")
                 copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
-                return
+                return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
             }
         }
 
@@ -69,17 +80,27 @@ enum TextInserter {
         // AX insertion "succeeds" on Electron apps (Mandeck, VS Code, Slack, etc.)
         // but text is silently ignored. Cmd+V is the only reliable universal method.
         if axTrusted {
+            // Snapshot the caret position BEFORE paste so we can derive the span
+            // it occupied (caret-after − text length) for an in-place "fix that".
+            let preCaret = focusedSelectionRange(in: targetApp ?? NSWorkspace.shared.frontmostApplication)
             let pasted = await pasteViaClipboard(text, targetApp: targetApp)
             if pasted {
                 NSLog("[Haynoi] Insert via Cmd+V")
-                return
+                let span = pasteSpan(preCaret: preCaret, text: text, targetApp: targetApp)
+                return InsertionResult(inserted: text, span: span, targetApp: targetApp)
             }
         }
 
         // Step 3: AX insertion fallback (works for native macOS apps)
-        if axTrusted, tryAXInsertion(text, targetApp: targetApp) {
-            NSLog("[Haynoi] Insert via AX")
-            return
+        if axTrusted {
+            let axSpan = tryAXInsertionReturningSpan(text, targetApp: targetApp)
+            if let span = axSpan {
+                NSLog("[Haynoi] Insert via AX")
+                // span may be NSRange(location: NSNotFound, ...) when AX inserted
+                // but the location was unknown (selectedText path). Normalize.
+                let usable = span.location == NSNotFound ? nil : span
+                return InsertionResult(inserted: text, span: usable, targetApp: targetApp)
+            }
         }
 
         // Step 4: Fallback — put in clipboard and notify
@@ -89,6 +110,21 @@ enum TextInserter {
                 ? "Auto-paste failed. Press ⌘V to paste."
                 : "Grant Accessibility in System Settings."
         )
+        return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
+    }
+
+    /// Derive the inserted span after a successful clipboard paste: read the
+    /// post-paste caret (sits at end-of-paste); `span = (caret − len, len)`.
+    /// Returns nil when AX caret read is unavailable (Electron) — span unknown.
+    private static func pasteSpan(preCaret: CFRange?, text: String, targetApp: NSRunningApplication?) -> NSRange? {
+        guard let post = focusedSelectionRange(in: targetApp ?? NSWorkspace.shared.frontmostApplication) else {
+            return nil
+        }
+        let len = text.utf16.count
+        let caret = post.location
+        let loc = caret - len
+        guard loc >= 0 else { return nil }
+        return NSRange(location: loc, length: len)
     }
 
     // MARK: - Wait for Key Release (Fix #9)
@@ -164,24 +200,43 @@ enum TextInserter {
 
     // MARK: - AX Direct Insert (Fix #4)
 
+    @discardableResult
     private static func tryAXInsertion(_ text: String, targetApp: NSRunningApplication?) -> Bool {
-        guard let app = targetApp ?? NSWorkspace.shared.frontmostApplication else { return false }
+        tryAXInsertionReturningSpan(text, targetApp: targetApp) != nil
+    }
+
+    /// AX direct insert. Returns the UTF-16 span the inserted text now occupies,
+    /// or nil if all AX paths failed. When the selectedText path succeeds but the
+    /// pre-insert caret was unknown, the returned span has `location == NSNotFound`
+    /// (length set), signalling "inserted, location unknown" to the caller.
+    private static func tryAXInsertionReturningSpan(_ text: String, targetApp: NSRunningApplication?) -> NSRange? {
+        guard let app = targetApp ?? NSWorkspace.shared.frontmostApplication else { return nil }
         let element = AXUIElementCreateApplication(app.processIdentifier)
 
         var focusedRef: CFTypeRef?
         let err = AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef)
         guard err == .success else {
             NSLog("[Haynoi] AX: no focused element (error %d) in %@", err.rawValue, app.bundleIdentifier ?? "?")
-            return false
+            return nil
         }
 
         let focused = focusedRef as! AXUIElement
 
-        // Try 1: Set selected text
+        // Try 1: Set selected text. Capture the caret BEFORE so we know where the
+        // text landed (caret replaces selection with text → starts at caret loc).
+        var preRangeRef: CFTypeRef?
+        var preLoc = NSNotFound
+        if AXUIElementCopyAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, &preRangeRef) == .success {
+            var pre = CFRange()
+            if AXValueGetValue(preRangeRef as! AXValue, .cfRange, &pre) {
+                preLoc = pre.location
+            }
+        }
         let setResult = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, text as CFTypeRef)
         if setResult == .success {
             NSLog("[Haynoi] AX: selectedText succeeded")
-            return true
+            let loc = preLoc == NSNotFound ? NSNotFound : preLoc
+            return NSRange(location: loc, length: text.utf16.count)
         }
         NSLog("[Haynoi] AX: selectedText failed (%d), trying value approach", setResult.rawValue)
 
@@ -208,7 +263,7 @@ enum TextInserter {
                       safeLength >= 0, safeLength <= utf16Count - safeLocation else {
                     NSLog("[Haynoi] AX: range out of bounds (loc=%d, len=%d, utf16Count=%d)",
                           range.location, range.length, utf16Count)
-                    return false
+                    return nil
                 }
 
                 // Build new string in UTF-16 space.
@@ -230,12 +285,226 @@ enum TextInserter {
                     if let axRange = AXValueCreate(.cfRange, &newRange) {
                         AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, axRange)
                     }
-                    return true
+                    return NSRange(location: safeLocation, length: text.utf16.count)
                 }
             }
         }
 
         NSLog("[Haynoi] AX: all methods failed for %@", app.bundleIdentifier ?? "?")
+        return nil
+    }
+
+    /// Reads the focused element's selected text range (caret/selection) as a
+    /// CFRange in UTF-16 space. Returns nil when AX is unavailable.
+    private static func focusedSelectionRange(in app: NSRunningApplication?) -> CFRange? {
+        AXRead.focusedSelection(in: app)
+    }
+
+    // MARK: - Shared AX reader (v1.3 — single source of truth)
+
+    /// The one place that touches the Accessibility C-API for *reading* the
+    /// focused element. `TextInserter`'s legacy private helpers delegate here so
+    /// there is a single source of truth; `CorrectionWatcher` (Signal A) reads
+    /// through it too. Read-only — never mutates the focused element. Behavior of
+    /// insert / replaceSpan is unchanged: the old method bodies moved verbatim.
+    enum AXRead {
+        /// The focused UI element of `app`, or nil when AX is unavailable / denied.
+        private static func focusedElement(in app: NSRunningApplication?) -> AXUIElement? {
+            guard let app else { return nil }
+            let element = AXUIElementCreateApplication(app.processIdentifier)
+            var focusedRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+                let ref = focusedRef else { return nil }
+            return (ref as! AXUIElement)
+        }
+
+        /// Current AXValue string of the focused element, or nil.
+        static func focusedValue(in app: NSRunningApplication?) -> String? {
+            guard let focused = focusedElement(in: app) else { return nil }
+            var valueRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                focused, kAXValueAttribute as CFString, &valueRef) == .success,
+                let str = valueRef as? String else { return nil }
+            return str
+        }
+
+        /// Selected text range (caret/selection) as a UTF-16 CFRange, or nil.
+        static func focusedSelection(in app: NSRunningApplication?) -> CFRange? {
+            guard let focused = focusedElement(in: app) else { return nil }
+            var rangeRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                focused, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success else {
+                return nil
+            }
+            var range = CFRange()
+            guard AXValueGetValue(rangeRef as! AXValue, .cfRange, &range) else { return nil }
+            return range
+        }
+
+        /// (role, value) of the focused element in one read. Either field may be nil;
+        /// the tuple itself is nil only when there is no focused element at all.
+        static func focusedRoleAndValue(in app: NSRunningApplication?) -> (role: String?, value: String?)? {
+            guard let focused = focusedElement(in: app) else { return nil }
+            var roleRef: CFTypeRef?
+            let role = AXUIElementCopyAttributeValue(
+                focused, kAXRoleAttribute as CFString, &roleRef) == .success
+                ? (roleRef as? String) : nil
+            var valueRef: CFTypeRef?
+            let value = AXUIElementCopyAttributeValue(
+                focused, kAXValueAttribute as CFString, &valueRef) == .success
+                ? (valueRef as? String) : nil
+            return (role, value)
+        }
+
+        /// True when the focused element is a secure (password) text field. Checks
+        /// both role and subrole == AXSecureTextField. PRIVACY: callers MUST bail
+        /// before reading any value when this returns true.
+        static func isFocusedSecure(in app: NSRunningApplication?) -> Bool {
+            guard let focused = focusedElement(in: app) else { return false }
+            let secure = "AXSecureTextField"
+            var roleRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                focused, kAXRoleAttribute as CFString, &roleRef) == .success,
+                (roleRef as? String) == secure { return true }
+            var subRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                focused, kAXSubroleAttribute as CFString, &subRef) == .success,
+                (subRef as? String) == secure { return true }
+            return false
+        }
+    }
+
+    // MARK: - In-place replace (v1.1 "fix that")
+
+    /// Replaces the text occupying `span` in the target app with `newText`
+    /// (redesign §6). Primary path: AX selection-set the old span then set
+    /// selected text. Fallbacks A (value splice over span) / B (select + paste
+    /// over selection). Fallback C (span unknown): insert at the cursor — never a
+    /// synthetic backspace-delete (IME/combining-char unsafe). Returns true when
+    /// the OLD text was actually replaced in place; false means the correction was
+    /// inserted at the cursor and the old text still remains (caller surfaces a
+    /// quiet status). Never crashes, never double-inserts.
+    @discardableResult
+    static func replaceSpan(_ span: NSRange?, with newText: String, oldText: String, targetApp: NSRunningApplication?) async -> Bool {
+        let axTrusted = AXIsProcessTrusted()
+
+        // Wait for modifiers + restore focus, mirroring the insert path.
+        _ = await waitForModifierRelease()
+        let (focusOK, didSwitch) = await restoreFocus(targetApp: targetApp)
+        if focusOK {
+            let settleNs: UInt64 = didSwitch ? 150_000_000 : 50_000_000
+            try? await Task.sleep(nanoseconds: settleNs)
+        }
+
+        // Fallback C — span unknown (Electron / non-AX). Don't try to select the
+        // old text. Insert the correction at the cursor; the old text remains.
+        guard let span, span.location != NSNotFound, axTrusted, focusOK else {
+            NSLog("[Haynoi] replaceSpan: span unknown / AX unavailable — inserting at cursor")
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+
+        guard let app = targetApp ?? NSWorkspace.shared.frontmostApplication else {
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+        let element = AXUIElementCreateApplication(app.processIdentifier)
+        var focusedRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success else {
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+        let focused = focusedRef as! AXUIElement
+
+        // Safety gate (blocker + major fix): before touching the span, confirm the
+        // focused element STILL holds the user's old text at exactly that span.
+        // The span is a UTF-16 snapshot from insert time; up to ~60s may have
+        // passed during which the user could type, delete, scroll, or click into a
+        // DIFFERENT field in the same app (restoreFocus only re-activates the app,
+        // not the element). If the bytes at the span no longer equal oldText, a
+        // positional select/splice would clobber unrelated content — silent data
+        // loss. Verifying value[span] == oldText (NFC-normalized) implicitly
+        // catches the wrong-field case too, since the bytes won't match.
+        guard let currentValue = focusedElementValue(in: app) else {
+            // Can't read the value to verify — don't risk a blind positional write.
+            NSLog("[Haynoi] replaceSpan: cannot read focused value to verify span — inserting at cursor")
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+        let valueUTF16 = Array(currentValue.utf16)
+        guard span.length >= 0,
+              span.location >= 0,
+              span.location + span.length <= valueUTF16.count else {
+            // Span points past the end of the current value (field changed / shrank
+            // / wrong element). Bail to insert-at-cursor.
+            NSLog("[Haynoi] replaceSpan: span out of bounds (loc=%d len=%d count=%d) — inserting at cursor",
+                  span.location, span.length, valueUTF16.count)
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+        let spanText = String(decoding: valueUTF16[span.location..<(span.location + span.length)], as: UTF16.self)
+        guard spanText.precomposedStringWithCanonicalMapping
+                == oldText.precomposedStringWithCanonicalMapping else {
+            // The text under the span is no longer the user's old text — replacing
+            // would destroy whatever now occupies those offsets. Insert at cursor.
+            NSLog("[Haynoi] replaceSpan: span no longer matches oldText — inserting at cursor")
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+
+        // Set the selection to the old span.
+        var cfSpan = CFRangeMake(span.location, span.length)
+        guard let axSpan = AXValueCreate(.cfRange, &cfSpan) else {
+            _ = await insert(newText, targetApp: targetApp)
+            return false
+        }
+        let selSet = AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, axSpan)
+
+        // Primary — set selected text over the now-selected old span.
+        if selSet == .success {
+            let r = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
+            if r == .success {
+                NSLog("[Haynoi] replaceSpan: AX selectedText replace OK")
+                return true
+            }
+            NSLog("[Haynoi] replaceSpan: setSelectedText failed (%d), trying value splice", r.rawValue)
+        }
+
+        // Fallback A — value splice over the explicit span (selection set may or
+        // may not have worked; splice uses the span directly).
+        if let value = focusedElementValue(in: app) {
+            let utf16 = Array(value.utf16)
+            let count = utf16.count
+            let loc = max(0, min(span.location, count))
+            let len = max(0, min(span.length, count - loc))
+            var newArr = utf16
+            newArr.replaceSubrange(loc..<(loc + len), with: Array(newText.utf16))
+            let newValue = String(decoding: newArr, as: UTF16.self)
+            if AXUIElementSetAttributeValue(focused, kAXValueAttribute as CFString, newValue as CFTypeRef) == .success {
+                let newPos = loc + newText.utf16.count
+                var nr = CFRangeMake(newPos, 0)
+                if let r = AXValueCreate(.cfRange, &nr) {
+                    AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, r)
+                }
+                NSLog("[Haynoi] replaceSpan: AX value splice OK")
+                return true
+            }
+        }
+
+        // Fallback B — selection set worked but setSelectedText didn't: paste over
+        // the selection (Cmd+V replaces the selected old text).
+        if selSet == .success {
+            let pasted = await pasteViaClipboard(newText, targetApp: targetApp)
+            if pasted {
+                NSLog("[Haynoi] replaceSpan: paste-over-selection OK")
+                return true
+            }
+        }
+
+        // Could not replace in place — insert at cursor (old text remains).
+        NSLog("[Haynoi] replaceSpan: all in-place paths failed — inserting at cursor")
+        _ = await insert(newText, targetApp: targetApp)
         return false
     }
 
@@ -400,17 +669,7 @@ enum TextInserter {
     /// Reads the current AXValue string from the focused element of the given app.
     /// Returns nil if AX is unavailable or the element has no string value.
     private static func focusedElementValue(in app: NSRunningApplication?) -> String? {
-        guard let app else { return nil }
-        let element = AXUIElementCreateApplication(app.processIdentifier)
-        var focusedRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success else {
-            return nil
-        }
-        let focused = focusedRef as! AXUIElement
-        var valueRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(focused, kAXValueAttribute as CFString, &valueRef) == .success,
-              let str = valueRef as? String else { return nil }
-        return str
+        AXRead.focusedValue(in: app)
     }
 
     // MARK: - Keycode Resolution (Fix #8)

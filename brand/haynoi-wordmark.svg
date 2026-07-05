@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 64" width="420" height="64">
+  <defs>
+
+    <!-- Obsidian body gradient (same as icon) -->
+    <linearGradient id="wm-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#0B0D1A"/>
+      <stop offset="100%" stop-color="#161B32"/>
+    </linearGradient>
+    <radialGradient id="wm-rim" cx="0.18" cy="0.16" r="0.48">
+      <stop offset="0%"   stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wm-dau" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#38E1C6"/>
+      <stop offset="100%" stop-color="#119C9A"/>
+    </linearGradient>
+    <filter id="wm-glow" x="-150%" y="-150%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+    </filter>
+
+  </defs>
+
+  <!--
+    Wordmark layout:
+    - Icon: 48×48px, vertically centered in 64px height → y offset = (64-48)/2 = 8
+    - Icon left edge at x=0 → icon occupies x:[0..48], y:[8..56]
+    - Gap between icon and text: 14px
+    - Text starts at x = 48 + 14 = 62
+    - Text: "haynoi" Be Vietnam Pro Medium, ~28px, vertically centered at y=36 (baseline)
+
+    Icon squircle scaled to 48×48 (scale factor = 48/512 = 0.09375):
+    Original squircle control points multiplied by 0.09375, then shifted by (0, 8).
+
+    Original: M 256 51 C 390 51 461 122 461 256 C 461 390 390 461 256 461
+              C 122 461 51 390 51 256 C 51 122 122 51 256 51 Z
+
+    Scaled: each point * 0.09375 + (0, 8):
+    (256*0.09375, 51*0.09375+8)  = (24.0, 12.8)
+    (390*0.09375, 51*0.09375+8)  = (36.6, 12.8)
+    (461*0.09375, 122*0.09375+8) = (43.2, 19.4)
+    (461*0.09375, 256*0.09375+8) = (43.2, 32.0)
+    (461*0.09375, 390*0.09375+8) = (43.2, 44.6)
+    (390*0.09375, 461*0.09375+8) = (36.6, 51.2)
+    (256*0.09375, 461*0.09375+8) = (24.0, 51.2)
+    (122*0.09375, 461*0.09375+8) = (11.4, 51.2)
+    ( 51*0.09375, 390*0.09375+8) = ( 4.8, 44.6)
+    ( 51*0.09375, 256*0.09375+8) = ( 4.8, 32.0)
+    ( 51*0.09375, 122*0.09375+8) = ( 4.8, 19.4)
+    (122*0.09375,  51*0.09375+8) = (11.4, 12.8)
+
+    Dấu sắc scaled + shifted:
+    Original glow path: M 144.6 247.2 L 213.8 107.3 A2.5 2.5 0 0 0 209.4 104.9 L 132.2 240.6 A7 7 0 0 0 144.6 247.2
+    Scale 0.09375 + (0,8):
+    (144.6*0.09375, 247.2*0.09375+8) = (13.6, 31.2)
+    (213.8*0.09375, 107.3*0.09375+8) = (20.0, 18.1)
+    rx=ry = 2.5*0.09375 = 0.23 → round to 0.25
+    (209.4*0.09375, 104.9*0.09375+8) = (19.6, 17.8)
+    (132.2*0.09375, 240.6*0.09375+8) = (12.4, 30.6)
+    rx=ry = 7*0.09375 = 0.66 → round to 0.66
+  -->
+
+  <!-- Mini icon: squircle body -->
+  <path
+    d="M 24.0 12.8
+       C 36.6 12.8, 43.2 19.4, 43.2 32.0
+       C 43.2 44.6, 36.6 51.2, 24.0 51.2
+       C 11.4 51.2,  4.8 44.6,  4.8 32.0
+       C  4.8 19.4, 11.4 12.8, 24.0 12.8
+       Z"
+    fill="url(#wm-body)"
+  />
+  <path
+    d="M 24.0 12.8
+       C 36.6 12.8, 43.2 19.4, 43.2 32.0
+       C 43.2 44.6, 36.6 51.2, 24.0 51.2
+       C 11.4 51.2,  4.8 44.6,  4.8 32.0
+       C  4.8 19.4, 11.4 12.8, 24.0 12.8
+       Z"
+    fill="url(#wm-rim)"
+  />
+
+  <!-- Mini dấu sắc: glow -->
+  <path
+    d="M 13.6 31.2
+       L 20.0 18.1
+       A 0.25 0.25 0 0 0 19.6 17.8
+       L 12.4 30.6
+       A 0.66 0.66 0 0 0 13.6 31.2
+       Z"
+    fill="#38E1C6"
+    opacity="0.5"
+    filter="url(#wm-glow)"
+  />
+  <!-- Mini dấu sắc: crisp -->
+  <path
+    d="M 13.6 31.2
+       L 20.0 18.1
+       A 0.25 0.25 0 0 0 19.6 17.8
+       L 12.4 30.6
+       A 0.66 0.66 0 0 0 13.6 31.2
+       Z"
+    fill="url(#wm-dau)"
+  />
+
+  <!-- Wordmark text: "haynoi" Be Vietnam Pro Medium, tracking -0.02em -->
+  <text
+    x="62"
+    y="41"
+    font-family="'Be Vietnam Pro', 'Be Vietnam', Helvetica, Arial, sans-serif"
+    font-weight="500"
+    font-size="28"
+    letter-spacing="-0.56"
+    fill="#0B0D1A"
+  >haynoi</text>
+
+</svg>

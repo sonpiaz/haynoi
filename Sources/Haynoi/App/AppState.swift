@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 
 struct Transcription: Identifiable, Codable {
@@ -62,6 +63,20 @@ final class AppState: ObservableObject {
     // Fix #4: one-shot transient status (e.g. "Max dictation length reached")
     @Published var status: String?
 
+    // MARK: - v1.1 "fix that" correction capture (Signal C) — RAM-only.
+    //
+    // The basis for an explicit correction: what the LAST dictation heard and
+    // where it landed. NSRunningApplication / NSRange aren't Codable and these
+    // are transient session state (like lastDictationWordCount), so they live
+    // only here — never persisted to history.json / Transcription.
+    @Published var lastTranscript: String?              // T1 — raw STT text, for diffing
+    @Published var lastInsertedText: String?            // exact text TextInserter inserted
+    @Published var lastTargetApp: NSRunningApplication? // for in-place replace focus
+    @Published var lastInsertionSpan: NSRange?          // UTF-16 (location,length); nil if unknown
+    @Published var lastDictationAt: Date?
+    @Published var isCorrectionArmed = false            // set by onFixThat, consumed by next dictation
+    @Published var lastFiredRuleIDs: [UUID] = []        // .replacement rules that fired on T1 (self-heal)
+
     // Auto-clear timer for transient status
     private var statusClearTimer: AnyCancellable?
     private var errorClearTimer: AnyCancellable?
@@ -123,6 +138,18 @@ final class AppState: ObservableObject {
         if transcriptions.count > Self.maxHistoryEntries {
             transcriptions = Array(transcriptions.prefix(Self.maxHistoryEntries))
         }
+        saveSubject.send()
+    }
+
+    /// Updates the text of the most recent history entry in place (v1.1 §4.5) —
+    /// after an explicit correction replaces the last dictation, so we don't add a
+    /// second history row. No-op when history is empty.
+    func updateLastTranscription(_ text: String) {
+        guard let first = transcriptions.first else { return }
+        let updated = Transcription(text: text,
+                                    appBundleId: first.appBundleId,
+                                    appName: first.appName)
+        transcriptions[0] = updated
         saveSubject.send()
     }
 

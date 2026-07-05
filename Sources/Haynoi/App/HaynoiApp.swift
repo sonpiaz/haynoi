@@ -199,18 +199,8 @@ private struct MenuBarContent: View {
 
     private var popoverHeader: some View {
         HStack(alignment: .center, spacing: 13) {
-            // Aurora orb — the saturated hero motif (mirrors app icon)
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(LinearGradient(
-                        colors: [Color(hex: "#0F1220"), Color(hex: "#1A1E34")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .frame(width: 44, height: 44)
-                    .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
-                CalmOrbBars(status: status, level: state.audioLevel)
-            }
+            // The real app icon — brand/haynoi-icon.svg rendered into AppIcon
+            AppIconBadge(size: 44)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Haynoi")
@@ -412,10 +402,10 @@ private struct MenuBarContent: View {
 
     private var creditsStrip: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Balance value + label
+            // Quota value + label
             HStack(alignment: .firstTextBaseline, spacing: 7) {
-                if let balance = balanceManager.balance {
-                    Text(String(format: "$%.2f", balance))
+                if balanceManager.tier != nil {
+                    Text(popoverQuotaValue)
                         .font(.calmPopoverBalance)
                         .foregroundStyle(Color.calmLabel(for: scheme))
                         .monospacedDigit()
@@ -424,7 +414,7 @@ private struct MenuBarContent: View {
                         .font(.calmPopoverBalance)
                         .foregroundStyle(Color.calmLabel4(for: scheme))
                 }
-                Text("pay as you go  ·  powered by Kyma")
+                Text(popoverQuotaLabel)
                     .font(.system(size: 11))
                     .foregroundStyle(Color.calmLabel4(for: scheme))
                 Spacer()
@@ -473,14 +463,38 @@ private struct MenuBarContent: View {
     }
 
     private var popoverBalanceFraction: CGFloat {
-        guard let b = balanceManager.balance, b > 0 else { return 0 }
-        return min(CGFloat(b) / 20.0, 1.0)
+        // Unlimited tiers (cap 0) show a full bar; free tier shows used/cap.
+        guard let cap = balanceManager.wordsCap, cap > 0,
+              let used = balanceManager.wordsUsed else { return 1.0 }
+        return min(max(CGFloat(used) / CGFloat(cap), 0), 1.0)
+    }
+
+    /// Big number in the popover strip — words remaining (free) or "∞".
+    private var popoverQuotaValue: String {
+        guard let cap = balanceManager.wordsCap, cap > 0 else { return "∞" }
+        if let remaining = balanceManager.wordsRemaining { return "\(remaining)" }
+        return "—"
+    }
+
+    private var popoverQuotaLabel: String {
+        switch balanceManager.tier {
+        case "pro": return "Pro  ·  unlimited"
+        case "max": return "Max  ·  unlimited"
+        default:    return "words left this week"
+        }
     }
 
     private var popoverMinutesEstimate: String {
-        guard let b = balanceManager.balance else { return "Sign in to see balance" }
-        let mins = Int(b / 0.02)
-        return "~\(mins) min remaining"
+        switch balanceManager.tier {
+        case "pro", "max": return "Unlimited"
+        case "free":
+            if let remaining = balanceManager.wordsRemaining {
+                return "\(remaining) words left"
+            }
+            return "5,000 words / week"
+        default:
+            return "Sign in to see your plan"
+        }
     }
 
     // MARK: - Actions Section
@@ -669,108 +683,6 @@ private extension Text {
 
 // MARK: - Calm Orb Bars (popover header micro-waveform)
 
-/// The aurora micro-waveform that sits inside the dark popover orb tile.
-/// Mirrors the board's three-bar orb. Saturated aurora gradient is sanctioned
-/// here — the orb is one of the four approved aurora surfaces.
-///
-/// Voice-reactive: in `.recording` the bar heights are driven by the live mic
-/// level (same RMS signal FloatingBar uses) with fast-attack / slow-release
-/// smoothing — silence sits low and still, speech rises. `.transcribing` shows
-/// a calm opacity shimmer (mic is off — no height bobbing, clearly NOT voice).
-/// Idle / other states render static bars.
-private struct CalmOrbBars: View {
-    let status: CalmStatus
-    let level: Float
-
-    // Smoothed mic level (fast attack ~50ms, slow release ~200ms at 60fps).
-    @State private var displayLevel: CGFloat = 0.04
-    // Calm shimmer used only while transcribing (opacity, not height).
-    @State private var shimmer: Double = 0
-    @State private var ticker: Timer?
-
-    private let baseHeights: [CGFloat] = [10, 16, 8]
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { i in
-                Capsule()
-                    .fill(LinearGradient(
-                        colors: [.calmAuroraCyan, .calmAuroraViolet, .calmAuroraPink],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ))
-                    .frame(width: 3, height: barHeight(i))
-                    .opacity(barOpacity)
-            }
-        }
-        .frame(height: 18)
-        .onAppear { syncForStatus() }
-        .onChange(of: status) { _, _ in syncForStatus() }
-        .onChange(of: level) { _, newLevel in
-            // Drive the smoother off the live level only while recording.
-            guard status == .recording else { return }
-            let target = max(CGFloat(newLevel), 0.04)
-            let speed: CGFloat = target > displayLevel ? 0.33 : 0.085
-            displayLevel += (target - displayLevel) * speed
-        }
-        .onDisappear { ticker?.invalidate(); ticker = nil }
-    }
-
-    /// `.recording` → voice-driven heights; everything else → static base.
-    private func barHeight(_ i: Int) -> CGFloat {
-        guard status == .recording else { return baseHeights[i] * 0.6 }
-        let minH: CGFloat = 4
-        let maxH: CGFloat = 18
-        let amp = min(max(displayLevel, 0), 1)
-        // Per-bar shape so the three bars don't read as one block; amplitude is
-        // entirely from the mic — at silence amp≈0.04 → bars near the floor.
-        let shape: [CGFloat] = [0.7, 1.0, 0.55]
-        return minH + (maxH - minH) * amp * shape[i]
-    }
-
-    /// Transcribing → gentle opacity shimmer; otherwise fully opaque.
-    private var barOpacity: Double {
-        status == .transcribing ? 0.45 + shimmer * 0.45 : 1.0
-    }
-
-    /// React to state changes (fixes the old onAppear-only bug): recording
-    /// runs a 60fps decay ticker so the smoother keeps gliding down between
-    /// level updates; transcribing runs a calm opacity shimmer; idle is still.
-    private func syncForStatus() {
-        ticker?.invalidate(); ticker = nil
-
-        switch status {
-        case .recording:
-            // Decay ticker — eases displayLevel back toward the floor so the
-            // release tail is smooth even if the mic level updates sparsely.
-            shimmer = 0
-            let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in
-                Task { @MainActor in
-                    let floor: CGFloat = 0.04
-                    if displayLevel > floor {
-                        displayLevel += (floor - displayLevel) * 0.085
-                    }
-                }
-            }
-            RunLoop.main.add(timer, forMode: .common)
-            ticker = timer
-
-        case .transcribing:
-            // Calm pulse — opacity only, no height bobbing. Mic is off here.
-            displayLevel = 0.04
-            shimmer = 0
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                shimmer = 1
-            }
-
-        default:
-            displayLevel = 0.04
-            shimmer = 0
-        }
-    }
-}
-
-
 // MARK: - Sparkle Checker
 
 private final class UpdaterChecker: ObservableObject {
@@ -793,6 +705,7 @@ final class OnboardingWindow: NSWindow {
         if !completed {
             UserDefaults.standard.set(true, forKey: "onboardingCompleted")
             NSLog("[Haynoi] Onboarding closed early — marked done; Restart Setup remains available")
+            Task { @MainActor in Analytics.capture("onboarding_completed") }
         }
         super.close()
         // Ensure the main window opens so the app isn't left with no visible UI
@@ -819,14 +732,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "soundTheme": "chime",      // founder pick: gentle bell pair (contest 2026-06-12)
             "appTheme": "light",       // founder default: white-gray light look
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
+            "fixThatHotkeyChoice": "ctrlOption", // v1.1: ⌃⌥ chord tap (never collides with PTT)
+            "signalAEnabled": true,    // v1.3: learn when you edit a word in-app (AX-cooperative apps only)
+            "shareUsageData": true,    // analytics opt-out (default ON) — metadata only, never content
         ])
         NSLog("[Haynoi] App launched")
+
+        // Personal dictionary: one-shot migration from the legacy [String]
+        // UserDefaults store, then a cold-start seed from the signed-in user's
+        // Google display name. Both are idempotent (UserDefaults-flag guarded)
+        // and safe no-ops on re-run / when there's no name.
+        PersonalDictionary.shared.migrateLegacyIfNeeded()
+        PersonalDictionary.shared.seedFromDisplayNameIfNeeded(displayName: HaynoiAuth.currentUserName)
         // Warm the layout keycode cache on the main thread now, so the paste
         // path (which runs in a background Task) never calls TIS off-main.
         TextInserter.prewarmKeyCode()
-        // Probe the API routes now AND on every network change (Wi-Fi switch,
-        // VPN, wake elsewhere) — the app runs for weeks, launch-only goes stale.
-        STTProvider.startRouteMonitoring()
         // Menu-bar-only by default (founder feedback 2026-06-12): no Dock icon —
         // the app lives in the menu bar like other dictation utilities. The
         // Dock icon appears only while the main/onboarding window is open
@@ -841,8 +761,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         case "fn": HotkeyManager.shared.targetModifier = .maskSecondaryFn
         default: HotkeyManager.shared.targetModifier = .maskAlternate
         }
+        // v1.1 — apply the "fix that" gesture choice alongside push-to-talk.
+        HotkeyManager.shared.fixThatChoice =
+            UserDefaults.standard.string(forKey: "fixThatHotkeyChoice") ?? "ctrlOption"
 
         PipelineController.shared.setup()
+
+        // Product analytics — metadata only, gated by the "shareUsageData"
+        // opt-out (default ON). start() self-identifies on relaunch if signed in.
+        Analytics.start()
+        Analytics.capture("app_launched")
 
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -861,6 +789,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
             showOnboarding()
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // v1.3 — tear down Signal A (clears the in-RAM anchor + debounce timer +
+        // shared app-deactivate observer) so nothing leaks on quit.
+        CorrectionWatcher.shared.disarm()
     }
 
     // MARK: - UNUserNotificationCenterDelegate
@@ -978,6 +912,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         let view = OnboardingView(initialStep: resumeStep) {
             DispatchQueue.main.async { [weak self] in
+                // Normal completion: OnboardingView already set onboardingCompleted
+                // = true before calling back, so OnboardingWindow.close() won't fire
+                // the event — emit it here. (Early-close fires from close() instead.)
+                Analytics.capture("onboarding_completed")
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
                 self?.showMainWindowPublic()

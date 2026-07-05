@@ -24,6 +24,11 @@ class FloatingBarController {
     private var window: NSWindow?
     private var hostingView: NSView?
 
+    // v1.1 — separate clickable window for the learn toast (the orb window is
+    // ignoresMouseEvents = true, so it can't host buttons).
+    private var toastWindow: NSWindow?
+    private var toastDismissTimer: Timer?
+
     private init() {}
 
     // MARK: - Lifecycle
@@ -90,6 +95,98 @@ class FloatingBarController {
         }
         // Reset orb state so next show() starts fresh
         AppState.shared.orbState = .idle
+    }
+
+    // MARK: - v1.1 Correction hint + Learn toast
+
+    /// Brief visual cue that "fix that" armed correction mode. Lean: reuse the orb
+    /// success-chip surface to flash a small "✏️ Sửa" chip. The substantive UI is
+    /// the learn toast at the end of the correction.
+    @MainActor func showCorrectionHint() {
+        AppState.shared.lastDictationWordCount = 0  // force the generic chip path off
+        show()
+        transition(to: .success) // reuses the chip styling; auto-hides after dwell
+    }
+
+    /// Non-modal, auto-dismissing learn toast with two inline actions (§5). Lives
+    /// in its own clickable window below the orb's top-center slot. 6s auto-dismiss
+    /// is treated as "ignore" (no learn). Replaces any toast already on screen.
+    @MainActor func showLearnToast(wrong: String, right: String,
+                                   onRemember: @escaping () -> Void,
+                                   onIgnore: @escaping () -> Void) {
+        dismissLearnToast(fireIgnore: false) // clear any prior toast (no double-ignore)
+
+        let view = LearnToastView(
+            wrong: wrong,
+            right: right,
+            onRemember: { [weak self] in
+                self?.toastDismissTimer?.invalidate(); self?.toastDismissTimer = nil
+                onRemember()
+                self?.tearDownToastWindow()
+            },
+            onIgnore: { [weak self] in
+                self?.toastDismissTimer?.invalidate(); self?.toastDismissTimer = nil
+                onIgnore()
+                self?.tearDownToastWindow()
+            }
+        )
+        let hosting = NSHostingView(rootView: view)
+        let size = NSSize(width: 320, height: 64)
+        hosting.frame = NSRect(origin: .zero, size: size)
+
+        let win = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        win.contentView = hosting
+        win.isOpaque = false
+        win.backgroundColor = .clear
+        win.level = .floating
+        win.hasShadow = false
+        win.ignoresMouseEvents = false // clickable — hosts the two buttons
+        win.collectionBehavior = [.canJoinAllSpaces, .stationary]
+
+        // A row under the orb slot so they don't overlap.
+        if let screen = NSScreen.main {
+            let visible = screen.visibleFrame
+            let x = visible.midX - size.width / 2
+            let y = visible.maxY - 80 /* orb height */ - 10 - size.height - 8
+            win.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+        win.animationBehavior = .none
+        win.orderFront(nil)
+        toastWindow = win
+
+        // 6s auto-dismiss = ignored.
+        let timer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                onIgnore()
+                self?.tearDownToastWindow()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        toastDismissTimer = timer
+    }
+
+    /// Dismisses any visible learn toast. When `fireIgnore` is true the ignore
+    /// path is NOT invoked here (callers that replace a toast pass false).
+    @MainActor func dismissLearnToast(fireIgnore: Bool) {
+        toastDismissTimer?.invalidate()
+        toastDismissTimer = nil
+        tearDownToastWindow()
+    }
+
+    @MainActor private func tearDownToastWindow() {
+        guard let win = toastWindow else { return }
+        win.orderOut(nil)
+        let hosting = win.contentView
+        toastWindow = nil
+        DispatchQueue.main.async {
+            win.contentView = nil
+            _ = hosting
+        }
     }
 
     // MARK: - Private
@@ -170,14 +267,13 @@ struct FloatingBarView: View {
     private let trailBarGap: CGFloat = 1.2
     private let trailMaxBarHeight: CGFloat = 30
 
-    /// Shared "cosmic" capsule — deep-space near-black gradient, hairline
-    /// border, aurora halo that swells only with the voice. Founder feedback
-    /// 2026-06-12: dark, mysterious, premium.
+    /// Shared "cosmic" capsule — fixed dark obsidian (always dark, floats over other apps).
+    /// Border: hairline white at 10% opacity. Halo: single-hue Signal Cyan — swells with voice.
     private func cosmicCapsule(width: CGFloat, height: CGFloat) -> some View {
         Capsule()
             .fill(
                 LinearGradient(
-                    colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                    colors: [Color.orbBodyTop, Color.orbBodyBottom],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -185,7 +281,8 @@ struct FloatingBarView: View {
             .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
             .frame(width: width, height: height)
             .shadow(color: .black.opacity(0.38), radius: 10, y: 3)
-            .shadow(color: Color.calmAuroraViolet.opacity(0.16 + displayLevel * 0.30), radius: 14)
+            // Single-hue Signal Cyan halo — swells with mic envelope, no aurora violet
+            .shadow(color: Color.accent.opacity(min(0.06 + displayLevel * 1.4, 0.38)), radius: CGFloat(6) + displayLevel * 12)
     }
 
     private var recordingOrb: some View {
@@ -206,13 +303,14 @@ struct FloatingBarView: View {
                     let path = Path(roundedRect: rect, cornerRadius: trailBarWidth / 2)
                     let age = CGFloat(i) / CGFloat(max(trailHistory.count - 1, 1)) // 0 old → 1 new
                     if v < 0.05 {
-                        // Quiet dash — soft white on the dark cosmic pill.
-                        context.fill(path, with: .color(Color.white.opacity(0.22 + 0.18 * age)))
+                        // Quiet dash — 40% white on the dark obsidian pill, honest silence
+                        context.fill(path, with: .color(Color.white.opacity(0.40 * age + 0.12)))
                     } else {
+                        // Active bar — single-hue Signal Cyan, opacity fades with age
                         var bar = context
-                        bar.opacity = 0.35 + 0.65 * age
+                        bar.opacity = 0.18 + 0.82 * age
                         bar.fill(path, with: .linearGradient(
-                            Gradient(colors: [.calmAuroraCyan, .calmAuroraPink]),
+                            Gradient(colors: [Color.accent, Color.accentDeep]),
                             startPoint: CGPoint(x: rect.midX, y: rect.maxY),
                             endPoint: CGPoint(x: rect.midX, y: rect.minY)
                         ))
@@ -220,7 +318,7 @@ struct FloatingBarView: View {
                 }
             }
             .frame(width: 156, height: 40)
-            .shadow(color: Color.calmAuroraViolet.opacity(0.35), radius: 4)
+            .shadow(color: Color.accent.opacity(0.28), radius: 4)
         }
         .frame(width: 180, height: 76)
     }
@@ -244,19 +342,14 @@ struct FloatingBarView: View {
         Group {
             if state.lastDictationWordCount > 0 {
                 HStack(spacing: 6) {
+                    // Checkmark: Signal Cyan solid — single-hue, no aurora gradient
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.calmAuroraCyan, .calmAuroraPink],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .foregroundStyle(Color.accent)
+                    // Word count: JetBrains Mono tabular, dark-surface body ink
                     Text(wordsLabel(state.lastDictationWordCount))
-                        .font(.system(size: 12, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
+                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.inkDarkBody)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -264,14 +357,16 @@ struct FloatingBarView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                                colors: [Color.orbBodyTop, Color.orbBodyBottom],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+                        // Signal Cyan border on success chip (per mockup rgba(56,225,198,0.24))
+                        .overlay(Capsule().stroke(Color.accent.opacity(0.24), lineWidth: 1))
                         .shadow(color: .black.opacity(0.38), radius: 10, y: 3)
-                        .shadow(color: Color.calmAuroraViolet.opacity(0.25), radius: 12)
+                        // Single-hue cyan glow — no violet
+                        .shadow(color: Color.accent.opacity(0.18), radius: 12)
                 )
                 .scaleEffect(successScale)
                 .animation(.spring(response: 0.32, dampingFraction: 0.62), value: successScale)
@@ -280,23 +375,17 @@ struct FloatingBarView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
+                                colors: [Color.orbBodyTop, Color.orbBodyBottom],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
+                        .overlay(Circle().stroke(Color.accent.opacity(0.24), lineWidth: 1))
                         .frame(width: 26, height: 26)
-                        .shadow(color: Color.calmAuroraViolet.opacity(0.3), radius: 8)
+                        .shadow(color: Color.accent.opacity(0.22), radius: 8)
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.calmAuroraCyan, .calmAuroraPink],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .foregroundStyle(Color.accent)
                         .scaleEffect(successScale)
                         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: successScale)
                 }
@@ -314,25 +403,21 @@ struct FloatingBarView: View {
         n == 1 ? "1 word" : "\(n) words"
     }
 
-    // MARK: - Error Orb (calm warn amber)
+    // MARK: - Error Orb (obsidian elevated body, dark hairline border, amber glyph)
 
     private var errorOrb: some View {
         ZStack {
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "#0B0D1A"), Color(hex: "#161B32")],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(Circle().stroke(Color.calmWarn.opacity(0.45), lineWidth: 1))
-                .frame(width: 26, height: 26)
-                .shadow(color: Color.calmWarn.opacity(0.4), radius: 8)
+                // Elevated dark obsidian (#131416) — not full-depth gradient
+                .fill(Color.obsidianDarkElevated)
+                .overlay(Circle().stroke(Color.hairlineDarkSolid, lineWidth: 1))
+                .frame(width: 36, height: 36)
+                .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
 
             Image(systemName: "exclamationmark")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.calmWarn)
+                .font(.system(size: 14, weight: .bold))
+                // Semantic amber #D9A441 per spec (obsidianDarkWarn)
+                .foregroundStyle(Color.obsidianDarkWarn)
         }
     }
 
@@ -430,6 +515,72 @@ struct FloatingBarView: View {
     private func stopAnimationLoop() {
         displayLink?.invalidate()
         displayLink = nil
+    }
+}
+
+// MARK: - Learn Toast (v1.1 — "Nhớ: <wrong> → <right>?")
+
+/// Non-modal learn prompt shown after an explicit "fix that" correction. Two
+/// inline actions: Nhớ (remember → upsert learned replacement) / Bỏ qua (ignore).
+struct LearnToastView: View {
+    let wrong: String
+    let right: String
+    let onRemember: () -> Void
+    let onIgnore: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Nhớ?")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.inkDarkBody.opacity(0.7))
+                HStack(spacing: 4) {
+                    Text(wrong)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.inkDarkBody.opacity(0.8))
+                        .lineLimit(1)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.accent)
+                    Text(right)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accent)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            Button(action: onRemember) {
+                Text("Nhớ")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.accent.opacity(0.16)))
+            }
+            .buttonStyle(.plain)
+            Button(action: onIgnore) {
+                Text("Bỏ qua")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkDarkBody.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.orbBodyTop, Color.orbBodyBottom],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+                .shadow(color: .black.opacity(0.38), radius: 12, y: 4)
+        )
+        .frame(width: 320, height: 64)
     }
 }
 

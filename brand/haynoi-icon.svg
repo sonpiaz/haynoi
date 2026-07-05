@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Haynoi app icon — canonical source.
+    Obsidian squircle + "ń" mark (Signal Cyan) with dấu sắc.
+    Mark geometry lives in haynoi-glyph.svg; here it is scaled 1.22×
+    about the squircle center so the glyph fills the icon.
+    Regenerate PNGs with brand/make-icons.sh.
+  -->
+  <defs>
+    <!-- Apple squircle |x/r|^5+|y/r|^5=1, r=236, center=256 -->
+    <clipPath id="sq">
+      <path d="M 256,20 C 410,20 492,102 492,256 C 492,410 410,492 256,492 C 102,492 20,410 20,256 C 20,102 102,20 256,20 Z"/>
+    </clipPath>
+
+    <radialGradient id="bg" cx="28%" cy="24%" r="70%">
+      <stop offset="0%"   stop-color="#131829"/>
+      <stop offset="100%" stop-color="#080A14"/>
+    </radialGradient>
+
+    <radialGradient id="hl" cx="20%" cy="14%" r="46%">
+      <stop offset="0%"   stop-color="rgba(255,255,255,0.07)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+
+    <linearGradient id="cyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#38E8D0"/>
+      <stop offset="100%" stop-color="#0D9E9C"/>
+    </linearGradient>
+
+    <filter id="glow" x="-38%" y="-38%" width="176%" height="176%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="bloom"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="tight"/>
+      <feMerge>
+        <feMergeNode in="bloom"/>
+        <feMergeNode in="tight"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#sq)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <ellipse cx="148" cy="138" rx="210" ry="174" fill="url(#hl)"/>
+  </g>
+
+  <!-- ń mark: content bbox x158-369 y69-378, center (263,223); scaled 1.22× -->
+  <g clip-path="url(#sq)">
+    <g transform="translate(256 256) scale(1.22) translate(-263 -223)">
+      <path
+        fill="url(#cyan)"
+        filter="url(#glow)"
+        d="
+          M 158,370
+          Q 158,378 166,378
+          Q 212,378 212,370
+          L 212,188
+          C 234,200 278,200 300,194
+          L 300,370
+          Q 300,378 308,378
+          Q 354,378 354,370
+          L 354,210
+          C 303,122 205,122 158,158
+          Z
+        "
+      />
+      <rect
+        x="337.5" y="69"
+        width="13" height="58"
+        rx="2"
+        fill="#38E1C6"
+        opacity="0.97"
+        transform="rotate(60, 344, 98)"
+      />
+    </g>
+  </g>
+</svg>
