@@ -5,154 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Haynoi — Your download is starting</title>
   <meta name="description" content="Three simple steps and Haynoi is in your Dock." />
-  <meta name="theme-color" content="#F7F4EE" />
+  <meta name="theme-color" content="#07070C" />
   <link rel="icon" href="../icon.png" type="image/png" />
-  <link rel="stylesheet" href="../style.css" />
-  <style>
-    .thanks-hero { padding: 9rem 0 3rem; text-align: center; }
-    .thanks-hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); }
-    .retry-line { margin-top: 0.9rem; color: var(--ink-3, #6B6456); }
-    .retry-line a { text-decoration: underline; }
-    .steps-wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
-      max-width: 980px; margin: 3rem auto 0; padding: 0 1.5rem; }
-    @media (max-width: 760px) { .steps-wrap { grid-template-columns: 1fr; } }
-    .step-card { border: 1px solid rgba(28,25,23,.12); border-radius: 14px;
-      background: #FFFEFB; padding: 1.6rem 1.4rem 1.5rem; text-align: center; }
-    .step-num { font-family: Lora, Georgia, serif; font-style: italic;
-      color: var(--ember, #C8622A); font-size: 1.05rem; }
-    .step-art { height: 120px; display: flex; align-items: center;
-      justify-content: center; margin: 0.9rem 0 1rem; }
-    .step-card p { font-size: 0.95rem; line-height: 1.55; }
-    .perm-note { max-width: 640px; margin: 3rem auto 0; padding: 0 1.5rem;
-      text-align: center; color: var(--ink-3, #6B6456); font-size: 0.95rem;
-      line-height: 1.6; }
-    .perm-note em { font-family: Lora, Georgia, serif; }
-    .thanks-bottom { padding: 3rem 0 5rem; }
-    .dl-row { background: #EFEDE5; border: 1px solid rgba(28,25,23,.1);
-      border-radius: 10px; padding: 0.55rem 0.9rem; display: inline-flex;
-      gap: 0.5rem; align-items: center; font-size: 0.9rem; }
-    .finder-mock { border: 1px solid rgba(28,25,23,.18); border-radius: 8px;
-      background: #FBFAF6; width: 170px; text-align: left; font-size: 0.72rem;
-      box-shadow: 0 8px 22px rgba(28,25,23,.08); }
-    .finder-bar { display:flex; gap:4px; padding: 6px 8px;
-      border-bottom: 1px solid rgba(28,25,23,.1); }
-    .finder-bar i { width: 7px; height: 7px; border-radius: 50%;
-      background: #D8D5C9; display:block; }
-    .finder-row { padding: 5px 9px; display:flex; gap: 6px; align-items:center; }
-    .finder-row.hl { background: #F0E4D8; }
-    .finder-row img { width: 14px; height: 14px; border-radius: 3px; }
-    .drag-art { display:flex; align-items:center; gap: 0.6rem; }
-    .drag-art img { width: 46px; height: 46px; border-radius: 10px;
-      box-shadow: 0 6px 16px rgba(28,25,23,.15); }
-    .drag-arrow { font-size: 1.3rem; color: var(--ember, #C8622A); }
-    .apps-folder { width: 52px; height: 52px; border-radius: 12px;
-      background: linear-gradient(160deg,#9DB8E8,#5B7FC7); display:flex;
-      align-items:center; justify-content:center; color:#fff; font-size:1.4rem; }
-  </style>
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <!-- PostHog analytics -->
   <script src="/analytics.js"></script>
+  <!-- Affitor partner tracking -->
+  <script src="https://api.affitor.com/js/affitor-tracker.js" data-affitor-program-id="1081" data-affitor-cookie-domain=".haynoi.com" async></script>
+  <style>
+  :root{--bg:#07070C;--ink:#EEEEF6;--ink-dim:#9A9AAE;--ink-faint:#5A5A6E;--cyan:#38E8D0;--violet:#7C6BFF;--line:rgba(255,255,255,.09);--glass:rgba(255,255,255,.03);--disp:'Unbounded',sans-serif;--body:'Hanken Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.6;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .atmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.4;mix-blend-mode:screen}
+  .b1{width:50vw;height:50vw;left:-14vw;top:-16vw;background:radial-gradient(circle,var(--violet),transparent 68%)}
+  .b2{width:42vw;height:42vw;right:-12vw;top:2vh;background:radial-gradient(circle,var(--cyan),transparent 66%)}
+  .wrap{position:relative;z-index:2;max-width:1040px;margin:0 auto;padding:0 32px}
+  nav{border-bottom:1px solid var(--line);padding:16px 0;position:relative;z-index:2;background:rgba(7,7,12,.6);backdrop-filter:blur(14px)}
+  .nav-in{max-width:1040px;margin:0 auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:11px;font-family:var(--disp);font-weight:600;font-size:18px}
+  .logo svg{width:28px;height:28px}
+  .nav-cta{background:linear-gradient(100deg,var(--cyan),var(--violet));color:#050508;font-family:var(--mono);font-size:12.5px;padding:10px 18px;border-radius:100px;transition:.3s}
+  .nav-cta:hover{box-shadow:0 8px 26px rgba(56,232,208,.3)}
+  .hero{text-align:center;padding:110px 0 40px}
+  .label{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:18px}
+  h1{font-family:var(--disp);font-weight:800;font-size:clamp(2rem,6vw,3.4rem);line-height:1.02;letter-spacing:-.03em}
+  h1 .g{background:linear-gradient(100deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .retry{margin-top:16px;color:var(--ink-dim);font-size:.98rem}
+  .retry a{color:var(--cyan);text-decoration:underline;text-underline-offset:3px}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:50px 0 0}
+  @media(max-width:760px){.steps{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:18px;background:var(--glass);padding:28px 24px;text-align:center}
+  .card .n{font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:16px}
+  .art{height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .card p{color:var(--ink-dim);font-size:.95rem}.card strong{color:var(--ink)}
+  .finder{border:1px solid var(--line);border-radius:10px;background:#0E0E1A;width:180px;text-align:left;font-family:var(--mono);font-size:11px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+  .finder .bar{display:flex;gap:5px;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .finder .bar i{width:7px;height:7px;border-radius:50%;background:#33334a}
+  .finder .row{padding:6px 11px;display:flex;gap:7px;align-items:center;color:var(--ink-dim)}
+  .finder .row.hl{background:rgba(56,232,208,.08);color:var(--ink)}
+  .finder .row img{width:14px;height:14px;border-radius:3px}
+  .drag{display:flex;align-items:center;gap:12px}
+  .drag img{width:48px;height:48px;border-radius:11px;box-shadow:0 8px 20px rgba(56,232,208,.2)}
+  .arrow{color:var(--cyan);font-size:1.4rem}
+  .apps{width:52px;height:52px;border-radius:12px;background:linear-gradient(160deg,#5B7FC7,#3a4d7a);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.3rem;font-family:var(--disp)}
+  .perm{max-width:600px;margin:44px auto 0;text-align:center;color:var(--ink-dim);font-size:.96rem;line-height:1.7}
+  .perm em{color:var(--ink);font-style:italic}
+  .meta{text-align:center;margin:44px 0 90px}
+  .meta span{font-family:var(--mono);font-size:12px;color:var(--ink-faint);border:1px solid var(--line);border-radius:100px;padding:8px 16px;background:var(--glass)}
+  footer{border-top:1px solid var(--line);padding:36px 0;position:relative;z-index:2;color:var(--ink-faint);font-family:var(--mono);font-size:12px}
+  .foot-in{max-width:1040px;margin:0 auto;padding:0 32px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:center}
+  .foot-left{display:flex;align-items:center;gap:9px}.foot-left img{width:20px;height:20px;border-radius:5px}.foot-left .b{font-family:var(--disp);font-weight:600;color:var(--ink);font-size:13px}
+  .foot-links{display:flex;gap:22px;list-style:none;flex-wrap:wrap}.foot-links a:hover{color:var(--ink)}
+  </style>
 </head>
 <body>
-<nav>
-  <div class="nav-inner">
-    <a class="nav-logo" href="../">
-      <img src="../icon.png" alt="Haynoi icon" />
-      Haynoi
-    </a>
-    <ul class="nav-links">
-      <li><a href="../#how">How it works</a></li>
-      <li><a href="../changelog/">Changelog</a></li>
-      <li>
-        <a class="nav-cta" href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi.dmg">
-          Download again
-        </a>
-      </li>
-    </ul>
-  </div>
-</nav>
+<div class="atmos"><div class="blob b1"></div><div class="blob b2"></div></div>
+<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38E8D0"/><stop offset="1" stop-color="#7C6BFF"/></linearGradient></defs></svg>
 
-<main>
-  <section class="thanks-hero">
-    <div class="container">
-      <p class="section-label">Download started</p>
-      <h1 class="serif">Three small steps,<br />then <em>just speak</em>.</h1>
-      <p class="retry-line">Your download should begin automatically.
-        Didn't start? <a href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi.dmg">Download Haynoi again</a>.</p>
+<nav><div class="nav-in">
+  <a href="../" class="logo"><svg viewBox="0 0 512 512"><path fill="url(#gc)" d="M158,370 Q158,378 166,378 Q212,378 212,370 L212,188 C234,200 278,200 300,194 L300,370 Q300,378 308,378 Q354,378 354,370 L354,210 C303,122 205,122 158,158 Z"/><rect x="337.5" y="69" width="13" height="58" rx="2" fill="#38E8D0" transform="rotate(60,344,98)"/></svg>Haynoi</a>
+  <a class="nav-cta" href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi.dmg">Download again</a>
+</div></nav>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="label">Download started</div>
+    <h1>Three small steps,<br>then <span class="g">just speak.</span></h1>
+    <p class="retry">Your download should begin automatically. Didn't start? <a href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi.dmg">Download Haynoi again</a>.</p>
+  </section>
+
+  <section class="steps">
+    <div class="card">
+      <div class="n">Step one</div>
+      <div class="art"><div class="finder"><div class="bar"><i></i><i></i><i></i></div><div class="row">⬇ Downloads</div><div class="row hl"><img src="../icon.png" alt=""> Haynoi.dmg</div><div class="row" style="opacity:.5">report-final.pdf</div></div></div>
+      <p>Open <strong>Haynoi.dmg</strong> from your Downloads folder.</p>
+    </div>
+    <div class="card">
+      <div class="n">Step two</div>
+      <div class="art"><div class="drag"><img src="../icon.png" alt="Haynoi app icon"><span class="arrow">⟶</span><div class="apps">A</div></div></div>
+      <p>Drag <strong>Haynoi</strong> into your <strong>Applications</strong> folder.</p>
+    </div>
+    <div class="card">
+      <div class="n">Step three</div>
+      <div class="art"><div class="drag"><img src="../icon.png" alt="" style="width:58px;height:58px"></div></div>
+      <p>Open Haynoi from Applications and hold <strong>⌥</strong> to speak.</p>
     </div>
   </section>
 
-  <section>
-    <div class="steps-wrap">
-      <div class="step-card">
-        <div class="step-num">Step one</div>
-        <div class="step-art">
-          <div class="finder-mock">
-            <div class="finder-bar"><i></i><i></i><i></i></div>
-            <div class="finder-row">⬇︎&nbsp; Downloads</div>
-            <div class="finder-row hl"><img src="../icon.png" alt="" /> Haynoi.dmg</div>
-            <div class="finder-row" style="color:#9C9487">report-final.pdf</div>
-          </div>
-        </div>
-        <p>Open <strong>Haynoi.dmg</strong> from your Downloads folder.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">Step two</div>
-        <div class="step-art">
-          <div class="drag-art">
-            <img src="../icon.png" alt="Haynoi app icon" />
-            <span class="drag-arrow">⟶</span>
-            <div class="apps-folder">A</div>
-          </div>
-        </div>
-        <p>Drag <strong>Haynoi</strong> into your <strong>Applications</strong> folder.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">Step three</div>
-        <div class="step-art">
-          <div class="drag-art"><img src="../icon.png" alt="" style="width:56px;height:56px" /></div>
-        </div>
-        <p>Open Haynoi from Applications and hold <strong>⌥</strong> to speak.</p>
-      </div>
-    </div>
+  <p class="perm">On first run, Haynoi walks you through permissions <em>one card at a time</em> — you'll drag the icon once more, straight into System Settings, and never have to hunt for an app by name.</p>
 
-    <p class="perm-note">On first run, Haynoi walks you through permissions
-      <em>one card at a time</em> — you'll drag the icon once more, straight
-      into System Settings, and never have to hunt for an app by name.</p>
-
-    <div class="thanks-bottom" style="text-align:center">
-      <span class="dl-row">macOS 14 or later · Apple silicon &amp; Intel · signed and notarized</span>
-    </div>
-  </section>
+  <div class="meta"><span>macOS 14 or later · Apple silicon &amp; Intel · signed and notarized</span></div>
 </main>
 
-<footer>
-  <div class="footer-inner">
-    <div>
-      <div class="footer-left">
-        <img src="../icon.png" alt="" aria-hidden="true" />
-        <span class="footer-brand">Haynoi</span>
-        <span class="mit-badge">MIT</span>
-      </div>
-      <p class="footer-copy" style="margin-top:0.4rem">© 2026 Affitor LLC. All rights reserved.</p>
-    </div>
-    <ul class="footer-links">
-      <li><a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">GitHub</a></li>
-      <li><a href="../changelog/">Changelog</a></li>
-      <li><a href="https://kymaapi.com" target="_blank" rel="noopener">Powered by Kyma</a></li>
-    </ul>
-  </div>
-</footer>
+<footer><div class="foot-in">
+  <div class="foot-left"><img src="../icon.png" alt="" aria-hidden="true"><span class="b">Haynoi</span></div>
+  <ul class="foot-links"><li><a href="../">Home</a></li><li><a href="../changelog/">Changelog</a></li><li><a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">GitHub</a></li><li><a href="https://kymaapi.com" target="_blank" rel="noopener">Powered by Kyma</a></li></ul>
+</div></footer>
 
 <script>
-  /* Start the download shortly after arrival; the visible link covers no-JS. */
-  setTimeout(function () {
-    var a = document.createElement("a");
-    a.href = "https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi.dmg";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }, 900);
+  setTimeout(function(){var a=document.createElement("a");a.href="https://github.com/sonpiaz/haynoi/releases/latest/download/Haynoi.dmg";document.body.appendChild(a);a.click();a.remove();},900);
 </script>
 </body>
 </html>

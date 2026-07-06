@@ -5,15 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Haynoi — Hold a Key. Speak. Done.</title>
   <meta name="description" content="Haynoi is a macOS push-to-talk dictation app. Hold ⌥, speak, and polished text appears in any app — email, code editors, chat. Vietnamese-first accuracy, sub-2-second transcription." />
-  <meta name="theme-color" content="#F7F4EE" />
+  <meta name="theme-color" content="#07070C" />
 
-  <!-- Open Graph -->
   <meta property="og:title" content="Haynoi — Hold a Key. Speak. Done." />
   <meta property="og:description" content="macOS push-to-talk dictation with Vietnamese-first accuracy. Works in every app." />
   <meta property="og:image" content="icon.png" />
   <meta property="og:type" content="website" />
-
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Haynoi — Hold a Key. Speak. Done." />
   <meta name="twitter:description" content="macOS push-to-talk dictation with Vietnamese-first accuracy. Works in every app." />
@@ -21,503 +18,377 @@
 
   <link rel="icon" href="icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="icon.png" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!-- PostHog analytics -->
   <script src="/analytics.js"></script>
+  <!-- Affitor partner tracking -->
+  <script src="https://api.affitor.com/js/affitor-tracker.js" data-affitor-program-id="1081" data-affitor-cookie-domain=".haynoi.com" async></script>
+
+  <style>
+  :root{
+    --bg:#07070C;--bg2:#0C0C15;--ink:#EEEEF6;--ink-dim:#9A9AAE;--ink-faint:#5A5A6E;
+    --cyan:#38E8D0;--teal:#119C9A;--violet:#7C6BFF;--magenta:#FF5CA8;
+    --line:rgba(255,255,255,.09);--glass:rgba(255,255,255,.03);
+    --disp:'Unbounded',sans-serif;--body:'Hanken Grotesk',sans-serif;--mono:'JetBrains Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.6;overflow-x:hidden;cursor:none}
+  ::selection{background:var(--cyan);color:#000}
+  a{color:inherit;text-decoration:none}
+  h1,h2,h3{text-wrap:balance}
+
+  .atmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;mix-blend-mode:screen;animation:drift 22s ease-in-out infinite}
+  .b1{width:52vw;height:52vw;left:-12vw;top:-14vw;background:radial-gradient(circle,var(--violet),transparent 68%)}
+  .b2{width:46vw;height:46vw;right:-14vw;top:6vh;background:radial-gradient(circle,var(--cyan),transparent 66%);animation-delay:-7s}
+  .b3{width:40vw;height:40vw;left:24vw;bottom:-18vw;background:radial-gradient(circle,var(--magenta),transparent 68%);animation-delay:-13s;opacity:.35}
+  @keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(6vw,4vh) scale(1.08)}66%{transform:translate(-4vw,-3vh) scale(.95)}}
+  .grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.05;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .grid-lines{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(circle at 50% 20%,#000 0%,transparent 70%)}
+
+  .cur{position:fixed;top:0;left:0;width:8px;height:8px;border-radius:50%;background:var(--cyan);z-index:9999;pointer-events:none;transform:translate(-50%,-50%);transition:width .2s,height .2s,background .2s,opacity .2s;mix-blend-mode:difference}
+  .cur-ring{position:fixed;top:0;left:0;width:38px;height:38px;border:1px solid rgba(56,232,208,.5);border-radius:50%;z-index:9998;pointer-events:none;transform:translate(-50%,-50%);transition:width .25s,height .25s,border-color .25s}
+  .cur.big{width:0;height:0}.cur-ring.big{width:66px;height:66px;border-color:var(--cyan)}
+  @media(hover:none),(pointer:coarse){body{cursor:auto}.cur,.cur-ring{display:none}}
+
+  .wrap{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:0 32px}
+
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;transition:.4s;padding:22px 0}
+  nav.scrolled{background:rgba(7,7,12,.72);backdrop-filter:blur(18px);border-bottom:1px solid var(--line);padding:14px 0}
+  .nav-in{max-width:1200px;margin:0 auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:11px;font-family:var(--disp);font-weight:600;font-size:19px;letter-spacing:-.02em}
+  .logo svg{width:30px;height:30px}
+  .nav-links{display:flex;gap:34px;font-size:13.5px;color:var(--ink-dim);list-style:none;align-items:center}
+  .nav-links a{position:relative;transition:.25s}
+  .nav-links a:not(.nav-cta)::after{content:"";position:absolute;left:0;bottom:-6px;width:0;height:1px;background:var(--cyan);transition:.3s}
+  .nav-links a:not(.nav-cta):hover{color:var(--ink)}.nav-links a:not(.nav-cta):hover::after{width:100%}
+  @media(max-width:760px){.nav-links li:not(.nav-cta-li){display:none}}
+
+  .btn{position:relative;display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:13px;font-weight:500;padding:13px 24px;border-radius:100px;transition:.3s;will-change:transform}
+  .btn svg{flex-shrink:0}
+  .btn-primary{background:linear-gradient(100deg,var(--cyan),var(--violet));color:#050508}
+  .btn-primary:hover{box-shadow:0 12px 40px rgba(56,232,208,.35),0 0 60px rgba(124,107,255,.25)}
+  .btn-ghost{border:1px solid var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--cyan);background:var(--glass)}
+  .nav-cta{background:linear-gradient(100deg,var(--cyan),var(--violet));color:#050508;font-family:var(--mono);font-size:13px;padding:10px 20px;border-radius:100px;transition:.3s;will-change:transform}
+  .nav-cta:hover{box-shadow:0 8px 26px rgba(56,232,208,.3)}
+
+  header{min-height:100vh;display:flex;align-items:center;position:relative;padding:120px 0 60px}
+  .orb-wrap{position:absolute;right:2vw;top:50%;transform:translateY(-48%);width:min(40vw,480px);height:min(40vw,480px);pointer-events:none;z-index:1}
+  @media(max-width:900px){.orb-wrap{opacity:.35;right:-16vw;width:70vw;height:70vw}}
+  .orb{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 38% 32%,rgba(56,232,208,.25),transparent 60%),radial-gradient(circle at 66% 70%,rgba(124,107,255,.28),transparent 62%);filter:blur(2px);animation:breathe 7s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  .orb-ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,255,255,.06)}
+  .orb-ring:nth-child(2){inset:14%}.orb-ring:nth-child(3){inset:28%}
+  .orb-glyph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  .orb-glyph svg{width:42%;height:42%;filter:drop-shadow(0 0 30px rgba(56,232,208,.6))}
+  .hero-body{position:relative;z-index:2;max-width:660px}
+  .eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--cyan);border:1px solid rgba(56,232,208,.25);background:rgba(56,232,208,.06);padding:7px 14px;border-radius:100px;margin-bottom:30px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  h1.hero{font-family:var(--disp);font-weight:800;font-size:clamp(2.9rem,8.5vw,6.2rem);line-height:.98;letter-spacing:-.035em;margin-bottom:26px}
+  h1.hero .g{background:linear-gradient(100deg,var(--cyan) 10%,var(--violet) 60%,var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero-sub{font-size:clamp(1.05rem,2vw,1.24rem);color:var(--ink-dim);max-width:560px;margin-bottom:36px}
+  .hero-sub b{color:var(--ink);font-weight:600}
+  kbd.keycap{font-family:var(--mono);font-size:.85em;background:var(--glass);border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--ink)}
+  .cta-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .fine{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
+  .kyma-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--ink-faint);border:1px solid var(--line);border-radius:100px;padding:6px 12px;transition:.25s}
+  .kyma-pill:hover{color:var(--ink-dim);border-color:var(--ink-faint)}
+
+  .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+  .d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}.d5{transition-delay:.4s}
+
+  .marquee{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:26px 0;overflow:hidden;background:var(--glass);position:relative}
+  .marquee::before,.marquee::after{content:"";position:absolute;top:0;bottom:0;width:120px;z-index:2}
+  .marquee::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+  .marquee::after{right:0;background:linear-gradient(270deg,var(--bg),transparent)}
+  .mq-track{display:flex;gap:56px;width:max-content;animation:scroll 26s linear infinite}
+  .marquee:hover .mq-track{animation-play-state:paused}
+  @keyframes scroll{to{transform:translateX(-50%)}}
+  .mq-item{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:15px;color:var(--ink-dim);white-space:nowrap}
+  .mq-item b{color:var(--ink);font-weight:500}
+  .mq-item .s{width:5px;height:5px;border-radius:50%;background:var(--cyan);opacity:.6}
+
+  section{padding:120px 0;position:relative}
+  .sec-label{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:20px}
+  h2{font-family:var(--disp);font-weight:600;font-size:clamp(2rem,5vw,3.4rem);line-height:1.04;letter-spacing:-.03em;margin-bottom:22px}
+  .lead{color:var(--ink-dim);font-size:1.1rem;max-width:560px}
+
+  .story{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center;margin-top:80px}
+  @media(max-width:860px){.story{grid-template-columns:1fr;gap:36px}}
+  .steps{display:flex;flex-direction:column;gap:18px}
+  .step{border:1px solid var(--line);border-radius:18px;padding:26px 28px;background:var(--glass);transition:.4s;position:relative;overflow:hidden}
+  .step.active{border-color:rgba(56,232,208,.4);background:rgba(56,232,208,.04)}
+  .step.active::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:linear-gradient(var(--cyan),var(--violet))}
+  .step-n{font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:10px}
+  .step h3{font-family:var(--disp);font-weight:400;font-size:1.35rem;margin-bottom:8px;letter-spacing:-.01em}
+  .step p{color:var(--ink-dim);font-size:.98rem}
+  .story-visual{position:sticky;top:120px;aspect-ratio:4/3;border:1px solid var(--line);border-radius:22px;background:linear-gradient(160deg,#0E0E1A,#08080F);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 40px 80px rgba(0,0,0,.5);text-align:center}
+  @media(max-width:860px){.story-visual{position:relative;top:0}}
+  .kbd{font-family:var(--mono);font-size:2.4rem;color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:26px 32px;background:rgba(255,255,255,.03);box-shadow:0 10px 30px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)}
+  .bars{display:flex;gap:8px;align-items:flex-end;height:90px}
+  .bars i{width:8px;background:linear-gradient(var(--cyan),var(--violet));border-radius:4px;animation:eq 1.1s ease-in-out infinite}
+  .bars i:nth-child(2){animation-delay:.15s}.bars i:nth-child(3){animation-delay:.3s}.bars i:nth-child(4){animation-delay:.45s}.bars i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:20%}50%{height:100%}}
+  .type-line{font-family:var(--mono);color:var(--cyan);font-size:1.05rem;padding:0 28px}
+  .type-line::after{content:"▋";animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  .fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:70px}
+  @media(max-width:860px){.fgrid{grid-template-columns:1fr}}
+  .fcard{border:1px solid var(--line);border-radius:20px;padding:30px;background:var(--glass);position:relative;overflow:hidden;transition:.4s}
+  .fcard::after{content:"";position:absolute;inset:0;border-radius:20px;padding:1px;background:linear-gradient(140deg,rgba(56,232,208,.4),transparent 40%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:.4s}
+  .fcard:hover{transform:translateY(-5px);background:rgba(255,255,255,.05)}
+  .fcard:hover::after{opacity:1}
+  .fcard .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(56,232,208,.1);margin-bottom:18px}
+  .fcard .ic svg{width:22px;height:22px;fill:none;stroke:var(--cyan);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .fcard h3{font-family:var(--disp);font-weight:400;font-size:1.12rem;margin-bottom:9px}
+  .fcard p{color:var(--ink-dim);font-size:.94rem}
+
+  /* name story */
+  .meanings{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:60px 0 50px;border:1px solid var(--line);border-radius:20px;overflow:hidden;background:var(--glass)}
+  @media(max-width:700px){.meanings{grid-template-columns:1fr}}
+  .mcell{padding:32px 28px;text-align:center;border-right:1px solid var(--line)}
+  .mcell:last-child{border-right:none}
+  @media(max-width:700px){.mcell{border-right:none;border-bottom:1px solid var(--line)}.mcell:last-child{border-bottom:none}}
+  .m-vn{font-family:var(--disp);font-weight:400;font-size:1.5rem;color:var(--cyan);margin-bottom:8px}
+  .m-en{font-family:var(--mono);font-size:12px;color:var(--ink-dim);letter-spacing:.03em}
+  .story-body{max-width:680px;color:var(--ink-dim);font-size:1.05rem;display:flex;flex-direction:column;gap:18px}
+  .story-body em{color:var(--ink);font-style:italic}
+  .founder{display:flex;align-items:center;gap:14px;margin-top:40px;border:1px solid var(--line);border-radius:16px;padding:20px 24px;background:var(--glass);max-width:680px}
+  .founder .av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--violet));color:#05050a;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:600;flex-shrink:0}
+  .founder p{font-size:.95rem;color:var(--ink-dim)}.founder strong{color:var(--ink)}
+
+  /* oss band */
+  .oss{display:grid;grid-template-columns:1fr auto;gap:50px;align-items:center;border:1px solid var(--line);border-radius:26px;padding:48px;background:linear-gradient(150deg,rgba(124,107,255,.06),transparent);margin-top:20px}
+  @media(max-width:760px){.oss{grid-template-columns:1fr;gap:32px}}
+  .oss h2{font-size:clamp(1.8rem,4vw,2.6rem)}
+  .oss p{color:var(--ink-dim);max-width:460px;margin-bottom:26px}
+  .oss-badge{text-align:center;border:1px solid var(--line);border-radius:18px;padding:30px 40px;background:var(--glass)}
+  .oss-badge .l{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink-faint);text-transform:uppercase}
+  .oss-badge .mit{font-family:var(--disp);font-weight:800;font-size:2.6rem;background:linear-gradient(100deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;margin:6px 0}
+  .oss-badge .sub{font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+
+  /* pricing strip */
+  .pstrip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--line);border-radius:20px;overflow:hidden;background:var(--glass);margin-top:20px}
+  @media(max-width:760px){.pstrip{grid-template-columns:1fr 1fr}}
+  @media(max-width:440px){.pstrip{grid-template-columns:1fr}}
+  .pitem{padding:30px 26px;text-align:center;border-right:1px solid var(--line)}
+  .pitem:last-child{border-right:none}
+  @media(max-width:760px){.pitem:nth-child(2n){border-right:none}.pitem{border-bottom:1px solid var(--line)}}
+  .p-label{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
+  .p-val{font-family:var(--disp);font-weight:600;font-size:1.5rem;letter-spacing:-.02em;margin-bottom:6px}
+  .p-sub{font-size:.85rem;color:var(--ink-dim)}
+
+  /* bottom cta */
+  .closing{text-align:center;padding:150px 0 120px}
+  .closing .cta-app-icon{width:74px;height:74px;border-radius:18px;margin:0 auto 32px;display:block;box-shadow:0 24px 60px rgba(56,232,208,.15)}
+  .closing h2{font-size:clamp(2.4rem,7vw,4.6rem)}
+  .closing .g{background:linear-gradient(100deg,var(--cyan),var(--violet),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .closing .sub{color:var(--ink-dim);font-size:1.15rem;max-width:480px;margin:20px auto 36px}
+  .kyma-note{font-family:var(--mono);font-size:12px;color:var(--ink-faint);margin-top:34px;display:inline-flex;align-items:center;gap:8px}
+  .kyma-note a{color:var(--ink-dim);text-decoration:underline;text-underline-offset:3px}
+
+  footer{border-top:1px solid var(--line);padding:44px 0;color:var(--ink-faint);font-family:var(--mono);font-size:12px}
+  .foot-in{display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px;align-items:center}
+  .foot-left{display:flex;align-items:center;gap:10px}
+  .foot-left img{width:22px;height:22px;border-radius:6px}
+  .foot-left .b{font-family:var(--disp);font-weight:600;color:var(--ink);font-size:14px}
+  .mit-tag{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:10px}
+  .foot-links{display:flex;gap:26px;list-style:none;flex-wrap:wrap}
+  .foot-links a{transition:.25s}.foot-links a:hover{color:var(--ink)}
+  .foot-copy{margin-top:6px;color:var(--ink-faint)}
+
+  @media(prefers-reduced-motion:reduce){*{animation:none!important}.reveal{opacity:1;transform:none}}
+  </style>
 </head>
-<body>
+<body id="top">
+<div class="atmos"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+<div class="grid-lines"></div>
+<div class="grain"></div>
+<div class="cur"></div><div class="cur-ring"></div>
 
-<!-- ── NAV ── -->
-<nav>
-  <div class="nav-inner">
-    <a class="nav-logo" href="#top">
-      <img src="icon.png" alt="Haynoi icon" />
-      Haynoi
-    </a>
-    <ul class="nav-links">
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#features">Features</a></li>
-      <li><a href="#story">The name</a></li>
-      <li>
-        <a class="nav-cta" href="/thanks/">
-          Download
-        </a>
-      </li>
-    </ul>
+<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38E8D0"/><stop offset="1" stop-color="#7C6BFF"/></linearGradient></defs></svg>
+
+<nav id="nav"><div class="nav-in">
+  <a href="#top" class="logo">
+    <svg viewBox="0 0 512 512"><path fill="url(#gc)" d="M158,370 Q158,378 166,378 Q212,378 212,370 L212,188 C234,200 278,200 300,194 L300,370 Q300,378 308,378 Q354,378 354,370 L354,210 C303,122 205,122 158,158 Z"/><rect x="337.5" y="69" width="13" height="58" rx="2" fill="#38E8D0" transform="rotate(60,344,98)"/></svg>
+    Haynoi
+  </a>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#story">The name</a></li>
+    <li class="nav-cta-li"><a class="nav-cta mag" data-cur href="/thanks/">Download</a></li>
+  </ul>
+</div></nav>
+
+<header><div class="wrap">
+  <div class="orb-wrap"><div class="orb"></div><div class="orb-ring"></div><div class="orb-ring"></div><div class="orb-ring"></div>
+    <div class="orb-glyph"><svg viewBox="0 0 512 512"><path fill="url(#gc)" d="M158,370 Q158,378 166,378 Q212,378 212,370 L212,188 C234,200 278,200 300,194 L300,370 Q300,378 308,378 Q354,378 354,370 L354,210 C303,122 205,122 158,158 Z"/><rect x="337.5" y="69" width="13" height="58" rx="2" fill="#38E8D0" transform="rotate(60,344,98)"/></svg></div>
   </div>
-</nav>
-
-<!-- ── HERO ── -->
-<main>
-<section class="hero" id="top">
-  <div class="container">
-
-    <!-- Animated orb — aurora spectrum recolor -->
-    <div class="orb-stage fade-up fade-up-1">
-      <div class="orb-wrap">
-        <div class="orb-ring"></div>
-        <div class="orb-ring-2"></div>
-
-        <div class="wave-bars" aria-hidden="true">
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-        </div>
-
-        <div class="orb-core" role="img" aria-label="Haynoi recording orb"></div>
-
-        <div class="orb-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zm0 1.5A1.5 1.5 0 0 0 10.5 5v7a1.5 1.5 0 0 0 3 0V5A1.5 1.5 0 0 0 12 3.5zM6.5 10.5a.75.75 0 0 1 .75.75 4.75 4.75 0 0 0 9.5 0 .75.75 0 0 1 1.5 0 6.25 6.25 0 0 1-5.5 6.206V19.5h2.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5H11v-2.044A6.25 6.25 0 0 1 5.75 11.25a.75.75 0 0 1 .75-.75z"/>
-          </svg>
-        </div>
-
-        <div class="key-badge" aria-label="Hold option key">⌥ hold</div>
-      </div>
-    </div>
-
-    <!-- Trust chip row replacing old eyebrow (graft #2) -->
-    <div class="hero-chips fade-up fade-up-2" aria-label="Platform, pricing, and license summary">
-      <span class="hero-chip">macOS</span>
-      <span class="hero-chip-sep" aria-hidden="true">·</span>
-      <span class="hero-chip">Free to start</span>
-      <span class="hero-chip-sep" aria-hidden="true">·</span>
-      <span class="hero-chip">Open Source</span>
-    </div>
-
-    <h1 class="hero-title fade-up fade-up-3">
-      Hold a key.<br />
-      Speak.<br />
-      <em>Done.</em>
-    </h1>
-
-    <!-- Inline keycap in subcopy (graft #3) -->
-    <p class="hero-sub fade-up fade-up-4">
-      Hold <kbd class="keycap">⌥</kbd>, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. Sub-2-second transcription with Vietnamese-first accuracy and an elegant floating orb that disappears when you're finished.
-    </p>
-
-    <div class="cta-group fade-up fade-up-5">
-      <a class="btn-primary" href="/thanks/">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
-        </svg>
+  <div class="hero-body">
+    <div class="eyebrow reveal in"><span class="dot"></span>macOS · Voice → polished text</div>
+    <h1 class="hero reveal in d1">Hold a key.<br>Speak.<br><span class="g">Done.</span></h1>
+    <p class="hero-sub reveal in d2">Hold <kbd class="keycap">⌥</kbd>, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. <b>Sub-2-second</b> transcription with Vietnamese-first accuracy and an orb that disappears when you're finished.</p>
+    <div class="cta-row reveal in d3">
+      <a href="/thanks/" class="btn btn-primary mag" data-cur>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="#050508"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
         Download for macOS
       </a>
-      <!-- Powered by Kyma pill (graft #9) -->
-      <span class="cta-fine">Free to start · macOS 14+ · Apple silicon &amp; Intel</span>
-      <a class="kyma-pill" href="https://kymaapi.com" target="_blank" rel="noopener" aria-label="Powered by Kyma">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
+      <span class="fine">Free · 5,000 words / week · Apple silicon &amp; Intel</span>
+    </div>
+    <div style="margin-top:20px">
+      <a class="kyma-pill" href="https://kymaapi.com" target="_blank" rel="noopener">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         Powered by Kyma
       </a>
     </div>
-
   </div>
-</section>
+</div></header>
 
-<hr class="rule" />
+<div class="marquee"><div class="mq-track" id="mq"></div></div>
 
-<!-- ── HOW IT WORKS ── -->
-<section class="how" id="how">
-  <div class="container">
-    <div class="how-header">
-      <!-- Concrete speed stat added to intro (graft #4) -->
-      <h2 class="serif">Three moments. That is the whole loop.</h2>
-      <p>Speaking is about three times faster than typing — Haynoi closes that gap for every app on your Mac, from silence to finished sentence without interrupting your flow.</p>
+<section id="how"><div class="wrap">
+  <div class="sec-label reveal">The whole loop</div>
+  <h2 class="reveal d1">Three moments.<br>That's the entire app.</h2>
+  <p class="lead reveal d2">Speaking is about three times faster than typing — Haynoi closes that gap for every app on your Mac, from silence to finished sentence without interrupting your flow.</p>
+  <div class="story">
+    <div class="steps" id="steps">
+      <div class="step" data-step="0"><div class="step-n">01 · Hold</div><h3>Hold the key</h3><p>Press and hold ⌥ (or any key you choose) anywhere on your Mac. The orb floats up quietly — it's listening.</p></div>
+      <div class="step" data-step="1"><div class="step-n">02 · Speak</div><h3>Speak naturally</h3><p>Talk as you think — full sentences, mixed Vietnamese and English, technical terms. Every word captured, no drift in accuracy.</p></div>
+      <div class="step" data-step="2"><div class="step-n">03 · Done</div><h3>Text appears</h3><p>Release the key. Within two seconds, polished text lands exactly where your cursor was — the email, Slack thread, or code comment you had open.</p></div>
     </div>
-
-    <div class="how-steps">
-
-      <!-- Step 1 -->
-      <div class="step">
-        <div class="step-num">01</div>
-        <div class="step-visual">
-          <div class="key-vis" aria-label="Option key">⌥</div>
-        </div>
-        <div class="step-title">Hold the key</div>
-        <p class="step-desc">
-          Press and hold <strong>⌥</strong> (or any key you choose) anywhere on your Mac. The aurora orb floats up quietly — it is listening.
-        </p>
-      </div>
-
-      <!-- Arrow -->
-      <div class="arrow-connector" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </div>
-
-      <!-- Step 2 -->
-      <div class="step">
-        <div class="step-num">02</div>
-        <div class="step-visual">
-          <div class="waveform-vis" aria-label="Audio waveform">
-            <div class="wv-bar"></div>
-            <div class="wv-bar"></div>
-            <div class="wv-bar"></div>
-            <div class="wv-bar"></div>
-            <div class="wv-bar"></div>
-            <div class="wv-bar"></div>
-            <div class="wv-bar"></div>
-          </div>
-        </div>
-        <div class="step-title">Speak naturally</div>
-        <p class="step-desc">
-          Talk as you think — full sentences, mixed Vietnamese and English, technical terms. Haynoi captures every word without a drift in accuracy.
-        </p>
-      </div>
-
-      <!-- Arrow -->
-      <div class="arrow-connector" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </div>
-
-      <!-- Step 3 -->
-      <div class="step">
-        <div class="step-num">03</div>
-        <div class="step-visual" style="width:100%">
-          <div class="text-vis" aria-label="Transcribed text appearing in app">
-            <div class="text-vis-inner">Gửi báo cáo cho anh Minh vào thứ Sáu nhé&thinsp;</div>
-            <span class="cursor" aria-hidden="true"></span>
-          </div>
-        </div>
-        <div class="step-title">Text appears</div>
-        <p class="step-desc">
-          Release the key. Within two seconds, polished text lands exactly where your cursor was — in the email, Slack thread, or code comment you had open.
-        </p>
-        <div class="timer-badge">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-          Under 2 seconds
-        </div>
-      </div>
-
-    </div>
+    <div class="story-visual" id="visual"><div class="kbd">⌥</div></div>
   </div>
-</section>
+</div></section>
 
-<hr class="rule" />
-
-<!-- ── FEATURES ── -->
-<section class="features" id="features">
-  <div class="container">
-    <div class="features-header">
-      <div class="section-label">What it does</div>
-      <h2>Built for people whose<br class="hide-mobile" /> words move fast.</h2>
-      <p>Haynoi is small by design. Every feature earns its place.</p>
-    </div>
-
-    <div class="features-grid">
-
-      <div class="feature-card">
-        <div class="feat-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
-            <path d="M19 11a7 7 0 0 1-14 0"/>
-            <line x1="12" y1="18" x2="12" y2="22"/>
-            <line x1="8" y1="22" x2="16" y2="22"/>
-          </svg>
-        </div>
-        <h3>Vietnamese-first accuracy</h3>
-        <p>
-          Haynoi is tuned for how Vietnamese speakers actually talk — tones, regional accents, and
-          the natural code-switching between Vietnamese and English that defines how most of us
-          communicate at work.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feat-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <rect x="2" y="3" width="20" height="14" rx="2"/>
-            <line x1="8" y1="21" x2="16" y2="21"/>
-            <line x1="12" y1="17" x2="12" y2="21"/>
-          </svg>
-        </div>
-        <h3>Works in every Mac app</h3>
-        <p>
-          Email, Slack, Notion, VS Code, Terminal, even the address bar — Haynoi injects text at the
-          cursor level, so it works anywhere a keyboard would. No special integration required.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feat-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </div>
-        <h3>Fast and Quality tiers</h3>
-        <p>
-          Choose Fast for speed-first dictation where you edit after, or Quality when the first draft
-          needs to be publication-ready. Switch per session. Both run on the same push-to-talk shortcut.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feat-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-          </svg>
-        </div>
-        <h3>Smart output modes</h3>
-        <p>
-          Clean mode strips filler words and hesitations. Email mode shapes a proper greeting and sign-off.
-          Auto mode reads context and picks for you. Speak naturally; Haynoi decides how it should read.
-        </p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feat-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
-        </div>
-        <h3>Custom dictionary and snippets</h3>
-        <p>
-          Teach Haynoi your project names, company terms, and abbreviations once. From then on they
-          transcribe correctly — no more "Affitor" becoming "a filter" or "Kyma" becoming "karma."
-        </p>
-      </div>
-
-      <!-- Silent auto-updates card (graft #6 — replaces no card; grid had 6 cards with OSS; OSS moved to band) -->
-      <div class="feature-card">
-        <div class="feat-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M21 2v6h-6"/>
-            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-            <path d="M3 22v-6h6"/>
-            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
-          </svg>
-        </div>
-        <h3>Silent auto-updates</h3>
-        <p>
-          Haynoi updates itself in the background via Sparkle. You open the app you love, never a
-          maintenance window you did not ask for. New transcription models land without lifting a finger.
-        </p>
-      </div>
-
-    </div>
+<section id="features"><div class="wrap">
+  <div class="sec-label reveal">What it does</div>
+  <h2 class="reveal d1">Built for people whose<br>words move fast.</h2>
+  <p class="lead reveal d2">Haynoi is small by design. Every feature earns its place.</p>
+  <div class="fgrid">
+    <div class="fcard reveal d1"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></div><h3>Vietnamese-first accuracy</h3><p>Tuned for how Vietnamese speakers actually talk — tones, regional accents, and the natural code-switching between Vietnamese and English that defines how most of us communicate at work.</p></div>
+    <div class="fcard reveal d2"><div class="ic"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><h3>Works in every Mac app</h3><p>Email, Slack, Notion, VS Code, Terminal, even the address bar — Haynoi injects text at the cursor level, so it works anywhere a keyboard would. No special integration required.</p></div>
+    <div class="fcard reveal d3"><div class="ic"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><h3>Fast and Quality tiers</h3><p>Choose Fast for speed-first dictation where you edit after, or Quality when the first draft needs to be publication-ready. Switch per session — both on the same push-to-talk shortcut.</p></div>
+    <div class="fcard reveal d1"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div><h3>Smart output modes</h3><p>Clean mode strips filler words. Email mode shapes a proper greeting and sign-off. Auto reads context and picks for you. Speak naturally; Haynoi decides how it should read.</p></div>
+    <div class="fcard reveal d2"><div class="ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><h3>Custom dictionary and snippets</h3><p>Teach Haynoi your project names, company terms, and abbreviations once. From then on they transcribe correctly — no more "Affitor" becoming "a filter" or "Kyma" becoming "karma."</p></div>
+    <div class="fcard reveal d3"><div class="ic"><svg viewBox="0 0 24 24"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></div><h3>Silent auto-updates</h3><p>Haynoi updates itself in the background via Sparkle. You open the app you love, never a maintenance window you didn't ask for. New transcription models land without lifting a finger.</p></div>
   </div>
-</section>
+</div></section>
 
-<hr class="rule" />
-
-<!-- ── NAME STORY ── -->
-<section class="name-story" id="story">
-  <div class="container">
-    <div class="name-story-inner">
-
-      <div class="story-label">The name carries a meaning</div>
-
-      <!-- Semantic dl replacing div role=table markup (fix #12) -->
-      <dl class="triple-meanings" aria-label="Triple meaning of Haynoi">
-        <div class="meaning-cell">
-          <dt class="meaning-vn">hãy nói</dt>
-          <dd class="meaning-en">Speak up — the command</dd>
-        </div>
-        <div class="meaning-divider" aria-hidden="true"></div>
-        <div class="meaning-cell">
-          <dt class="meaning-vn">hay nói</dt>
-          <dd class="meaning-en">Loves to talk — the person</dd>
-        </div>
-        <div class="meaning-divider" aria-hidden="true"></div>
-        <div class="meaning-cell">
-          <dt class="meaning-vn">Hà Nội</dt>
-          <dd class="meaning-en">The city — an Easter egg</dd>
-        </div>
-      </dl>
-
-      <div class="story-body">
-        <p>
-          A name that works three ways at once felt right for a tool built around voice.
-          <em>Hãy nói</em> is the imperative — the first thing you say to a microphone,
-          and the quiet instruction the app gives you every time you hold the key.
-        </p>
-        <p>
-          <em>Hay nói</em> is the personality. The kind of person who has always thought faster
-          than they could type, whose best ideas arrive in speech and evaporate before fingers
-          catch up. Haynoi exists for that person.
-        </p>
-        <p>
-          And then there is Hà Nội — the city that the founder still hears in his vowels,
-          left as a quiet wink for anyone who notices. Three layers, one word, zero explanation needed.
-        </p>
-      </div>
-
-      <div class="founder-note" aria-label="Founder note">
-        <div class="founder-avatar" aria-hidden="true">S</div>
-        <div class="founder-text">
-          Built by <strong>Son Piaz</strong> — a Vietnamese founder who has spent enough late nights
-          typing what he should have just said out loud.
-        </div>
-      </div>
-
-    </div>
+<section id="story"><div class="wrap">
+  <div class="sec-label reveal">The name carries a meaning</div>
+  <div class="meanings reveal d1">
+    <div class="mcell"><div class="m-vn">hãy nói</div><div class="m-en">Speak up — the command</div></div>
+    <div class="mcell"><div class="m-vn">hay nói</div><div class="m-en">Loves to talk — the person</div></div>
+    <div class="mcell"><div class="m-vn">Hà Nội</div><div class="m-en">The city — an Easter egg</div></div>
   </div>
-</section>
-
-<hr class="rule" />
-
-<!-- ── OSS BAND (graft #7) ── -->
-<section class="oss-band" aria-label="Open source">
-  <div class="container">
-    <div class="oss-band-inner">
-      <div class="oss-text">
-        <div class="section-label">Open source</div>
-        <h2>Built in the open,<br />owned by no one.</h2>
-        <p>
-          Haynoi is MIT licensed. Read every line of the recording pipeline, contribute a language
-          model improvement, or fork it for your own use. The repo welcomes pull requests.
-        </p>
-        <a class="btn-outline" href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
-          </svg>
-          View on GitHub
-        </a>
-      </div>
-      <div class="oss-badge" aria-label="MIT License">
-        <span class="oss-badge-label">License</span>
-        <span class="oss-badge-mit">MIT</span>
-        <span class="oss-badge-sub">Free forever</span>
-      </div>
-    </div>
+  <div class="story-body reveal d2">
+    <p>A name that works three ways at once felt right for a tool built around voice. <em>Hãy nói</em> is the imperative — the first thing you say to a microphone, and the quiet instruction the app gives you every time you hold the key.</p>
+    <p><em>Hay nói</em> is the personality. The kind of person who has always thought faster than they could type, whose best ideas arrive in speech and evaporate before fingers catch up. Haynoi exists for that person.</p>
+    <p>And then there is Hà Nội — the city that the founder still hears in his vowels, left as a quiet wink for anyone who notices. Three layers, one word, zero explanation needed.</p>
   </div>
-</section>
+  <div class="founder reveal d3"><div class="av">S</div><p>Built by <strong>Son Piaz</strong> — a Vietnamese founder who has spent enough late nights typing what he should have just said out loud.</p></div>
+</div></section>
 
-<hr class="rule" />
-
-<!-- ── PRICING TRANSPARENCY STRIP (graft #1) ── -->
-<section class="pricing-strip" aria-label="Pricing overview">
-  <div class="container">
-    <div class="pricing-strip-inner">
-
-      <div class="pricing-item">
-        <div class="pricing-label">Free tier</div>
-        <div class="pricing-value">5,000 words</div>
-        <div class="pricing-sub">Every week, resets Monday</div>
-      </div>
-
-      <div class="pricing-divider" aria-hidden="true"></div>
-
-      <div class="pricing-item">
-        <div class="pricing-label">Pro — unlimited</div>
-        <div class="pricing-value">$14.99/mo</div>
-        <div class="pricing-sub">Or $125.88/yr — save 30%</div>
-      </div>
-
-      <div class="pricing-divider" aria-hidden="true"></div>
-
-      <div class="pricing-item">
-        <div class="pricing-label">Sign in</div>
-        <div class="pricing-value">Google</div>
-        <div class="pricing-sub">One click, no passwords</div>
-      </div>
-
-      <div class="pricing-divider" aria-hidden="true"></div>
-
-      <div class="pricing-item">
-        <div class="pricing-label">macOS</div>
-        <div class="pricing-value">14+</div>
-        <div class="pricing-sub">Apple silicon &amp; Intel</div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<hr class="rule" />
-
-<!-- ── BOTTOM CTA ── -->
-<section class="bottom-cta">
-  <div class="container">
-
-    <!-- Real app icon moment (graft #8) -->
-    <img src="icon.png"
-         alt="Haynoi app icon — the ń mark you'll see in your Dock"
-         class="cta-app-icon" />
-
-    <!-- Closing headline (graft #4) -->
-    <h2>Your voice is faster<br />than your keyboard.</h2>
-    <p class="sub">
-      Free 5,000 words every week. Sign in with Google and start dictating in seconds.
-    </p>
-
-    <div class="cta-group">
-      <a class="btn-primary" href="/thanks/">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
-        </svg>
-        Download for macOS
-      </a>
-      <span class="cta-fine">Free to start · macOS 14+ · Apple silicon &amp; Intel</span>
-    </div>
-
-    <p class="kyma-note">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
-      Transcription powered by <a href="https://kymaapi.com" target="_blank" rel="noopener">Kyma</a>.
-      Your voice stays yours — audio is never stored or used for training.
-    </p>
-  </div>
-</section>
-</main>
-
-<!-- ── FOOTER ── -->
-<footer>
-  <div class="footer-inner">
+<section><div class="wrap">
+  <div class="oss reveal">
     <div>
-      <div class="footer-left">
-        <img src="icon.png" alt="" aria-hidden="true" />
-        <span class="footer-brand">Haynoi</span>
-        <span class="mit-badge">MIT</span>
-      </div>
-      <p class="footer-copy" style="margin-top:0.4rem">© 2026 Affitor LLC. All rights reserved.</p>
+      <div class="sec-label">Open source</div>
+      <h2>Built in the open,<br>owned by no one.</h2>
+      <p>Haynoi is MIT licensed. Read every line of the recording pipeline, contribute a language model improvement, or fork it for your own use. The repo welcomes pull requests.</p>
+      <a class="btn btn-ghost mag" data-cur href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        View on GitHub
+      </a>
     </div>
-    <ul class="footer-links">
-      <li>
-        <a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener" aria-label="GitHub repository">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
-          </svg>
-          GitHub
-        </a>
-      </li>
-      <li>
-        <a href="https://github.com/sonpiaz/haynoi/blob/main/LICENSE" target="_blank" rel="noopener">
-          MIT License
-        </a>
-      </li>
-      <li>
-        <a href="https://kymaapi.com" target="_blank" rel="noopener">
-          Powered by Kyma
-        </a>
-      </li>
-    </ul>
+    <div class="oss-badge"><div class="l">License</div><div class="mit">MIT</div><div class="sub">Free forever</div></div>
   </div>
-</footer>
+</div></section>
 
+<section style="padding-top:0"><div class="wrap">
+  <div class="pstrip reveal">
+    <div class="pitem"><div class="p-label">Free tier</div><div class="p-val">5,000 words</div><div class="p-sub">Every week, resets Monday</div></div>
+    <div class="pitem"><div class="p-label">Pro — unlimited</div><div class="p-val">$14.99/mo</div><div class="p-sub">Or $125.88/yr — save 30%</div></div>
+    <div class="pitem"><div class="p-label">Sign in</div><div class="p-val">Google</div><div class="p-sub">One click, no passwords</div></div>
+    <div class="pitem"><div class="p-label">macOS</div><div class="p-val">14+</div><div class="p-sub">Apple silicon &amp; Intel</div></div>
+  </div>
+</div></section>
+
+<section class="closing"><div class="wrap">
+  <img src="icon.png" alt="Haynoi app icon — the ń mark you'll see in your Dock" class="cta-app-icon reveal" />
+  <div class="sec-label reveal d1" style="text-align:center">Your voice is faster than your keyboard</div>
+  <h2 class="reveal d2"><span class="g">Stop typing.</span><br>Start speaking.</h2>
+  <p class="sub reveal d3">Free 5,000 words every week. Sign in with Google and start dictating in seconds.</p>
+  <div class="cta-row reveal d3" style="justify-content:center">
+    <a href="/thanks/" class="btn btn-primary mag" data-cur>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="#050508"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+      Download for macOS
+    </a>
+  </div>
+  <p class="kyma-note reveal d3">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Transcription powered by <a href="https://kymaapi.com" target="_blank" rel="noopener">Kyma</a>. Your voice stays yours — audio is never stored or used for training.
+  </p>
+</div></section>
+
+<footer><div class="wrap foot-in">
+  <div>
+    <div class="foot-left"><img src="icon.png" alt="" aria-hidden="true"><span class="b">Haynoi</span><span class="mit-tag">MIT</span></div>
+    <div class="foot-copy">© 2026 Affitor LLC. All rights reserved.</div>
+  </div>
+  <ul class="foot-links">
+    <li><a href="/changelog/">Changelog</a></li>
+    <li><a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">GitHub</a></li>
+    <li><a href="https://github.com/sonpiaz/haynoi/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></li>
+    <li><a href="https://kymaapi.com" target="_blank" rel="noopener">Powered by Kyma</a></li>
+  </ul>
+</div></footer>
+
+<script>
+  const apps=['Slack','VS Code','Notion','Mail','Terminal','Figma','Linear','ChatGPT','Messages','Obsidian'];
+  const mq=document.getElementById('mq');
+  const set=()=>apps.map(a=>`<span class="mq-item"><span class="s"></span><b>${a}</b></span>`).join('');
+  mq.innerHTML=set()+set();
+
+  const nav=document.getElementById('nav');
+  addEventListener('scroll',()=>nav.classList.toggle('scrolled',scrollY>40));
+
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.12});
+  document.querySelectorAll('.reveal:not(.in)').forEach(el=>io.observe(el));
+
+  const cur=document.querySelector('.cur'),ring=document.querySelector('.cur-ring');
+  if(matchMedia('(hover:hover) and (pointer:fine)').matches){
+    let mx=innerWidth/2,my=innerHeight/2,rx=mx,ry=my;
+    addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;cur.style.left=mx+'px';cur.style.top=my+'px'});
+    (function loop(){rx+=(mx-rx)*.18;ry+=(my-ry)*.18;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(loop)})();
+    document.querySelectorAll('a,.btn,.nav-cta,[data-cur]').forEach(el=>{
+      el.addEventListener('mouseenter',()=>{cur.classList.add('big');ring.classList.add('big')});
+      el.addEventListener('mouseleave',()=>{cur.classList.remove('big');ring.classList.remove('big')});
+    });
+    document.querySelectorAll('.mag').forEach(b=>{
+      b.addEventListener('mousemove',e=>{const r=b.getBoundingClientRect();const x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;b.style.transform=`translate(${x*.25}px,${y*.35}px)`});
+      b.addEventListener('mouseleave',()=>b.style.transform='');
+    });
+  }
+
+  const steps=[...document.querySelectorAll('.step')],visual=document.getElementById('visual');
+  const frames=[
+    '<div class="kbd">⌥</div>',
+    '<div class="bars"><i style="height:40%"></i><i style="height:80%"></i><i style="height:55%"></i><i style="height:95%"></i><i style="height:60%"></i></div>',
+    '<div class="type-line">Gửi báo cáo cho anh Minh vào thứ Sáu nhé</div>'
+  ];
+  const sio=new IntersectionObserver((es)=>es.forEach(e=>{
+    if(e.isIntersecting){const i=+e.target.dataset.step;steps.forEach(s=>s.classList.remove('active'));e.target.classList.add('active');visual.innerHTML=frames[i];}
+  }),{threshold:.6,rootMargin:'-15% 0px -15% 0px'});
+  steps.forEach(s=>sio.observe(s));
+</script>
 </body>
 </html>
