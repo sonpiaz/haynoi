@@ -1,0 +1,9 @@
+# haynoi.com
+User-agent: *
+Allow: /
+
+# Signed-in and post-purchase pages — no search value, and /account/ is personal.
+Disallow: /account/
+Disallow: /thanks/
+
+Sitemap: https://haynoi.com/sitemap.xml
