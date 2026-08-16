@@ -1,12 +1,29 @@
 # haynoi.com
+#
+# Two branches wrote this file without knowing about each other: one closing
+# the signed-in pages, one opening the door to AI crawlers. The naive union is
+# wrong. A crawler obeys the MOST SPECIFIC group matching its name and ignores
+# every other group, so naming GPTBot in its own block would exempt it from the
+# Disallow lines under `*`. The exclusions are repeated per group instead.
+
 User-agent: *
 Allow: /
+Disallow: /account/
+Disallow: /thanks/
 
 User-agent: GPTBot
 Allow: /
+Disallow: /account/
+Disallow: /thanks/
+
 User-agent: ClaudeBot
 Allow: /
+Disallow: /account/
+Disallow: /thanks/
+
 User-agent: PerplexityBot
 Allow: /
+Disallow: /account/
+Disallow: /thanks/
 
 Sitemap: https://haynoi.com/sitemap.xml

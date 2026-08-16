@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Trailing slashes are load-bearing, not style. Measured 2026-08-15:
+     https://haynoi.com/pricing   -> 308 -> /pricing/
+     https://haynoi.com/changelog -> 308 -> /changelog/
+     A sitemap should carry the URL that answers 200, not the one that
+     redirects to it. No <lastmod>: a date typed by hand into a static file
+     goes stale, and a stale lastmod teaches a crawler to distrust the file. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://haynoi.com/</loc><priority>1.0</priority></url>
-  <url><loc>https://haynoi.com/pricing</loc><priority>0.8</priority></url>
-  <url><loc>https://haynoi.com/changelog</loc><priority>0.5</priority></url>
+  <url>
+    <loc>https://haynoi.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://haynoi.com/pricing/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://haynoi.com/changelog/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
 </urlset>
