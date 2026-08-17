@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Other audio gets out of the way while you dictate.** Music and video pause
+  and resume on their own. A live call, stream or screen recording is dipped in
+  volume instead — never paused, because there is nothing to resume. Haynoi
+  decides from what your Mac is actually playing, so an open-but-idle Zoom no
+  longer keeps your music playing over you, and nothing happens at all when
+  nothing is playing. The level for live audio is adjustable in Settings.
+- If a player ignores the pause (a web player, a game, or Automation access
+  that was declined), Haynoi turns it down instead — so your voice is never
+  competing with your speakers.
+
+### Fixed
+- "Pause audio while dictating" never ran on a fresh install: the switch showed
+  as on while the app read it as off. It works now, and is on by default.
+- The output volume can no longer be left low if Haynoi quits or crashes
+  mid-dictation — the next launch puts it back.
+
 ## [0.3.7] - 2026-07-05
 
 ### Added

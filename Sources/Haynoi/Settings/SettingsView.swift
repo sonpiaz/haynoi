@@ -181,6 +181,8 @@ private struct GeneralTab: View {
     @AppStorage("soundTheme") private var soundTheme = "chime"
     @AppStorage("successDinkEnabled") private var successDinkEnabled = true
     @AppStorage("muteMusic") private var muteMusic = true
+    /// Fraction of the original volume left audible while dictating over a call.
+    @AppStorage("duckFraction") private var duckFraction = 0.2
     @AppStorage("signalAEnabled") private var signalAEnabled = true
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("shareUsageData") private var shareUsageData = true
@@ -340,13 +342,34 @@ private struct GeneralTab: View {
                 }
 
                 SettingsRow {
-                    Toggle(isOn: $muteMusic) {
-                        Text("Pause audio while dictating")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.obsidianLabel(for: scheme))
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $muteMusic) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Quiet other audio while dictating")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Color.obsidianLabel(for: scheme))
+                                Text("Music and video pause, then resume. Calls and live audio only dip in volume — never paused.")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                            }
+                        }
+                        .toggleStyle(.switch)
+                        .tint(Color.obsidianAccent(for: scheme))
+
+                        if muteMusic {
+                            HStack(spacing: C.s2) {
+                                Text("Live audio level")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                                Slider(value: $duckFraction, in: 0...0.6, step: 0.05)
+                                    .tint(Color.obsidianAccent(for: scheme))
+                                Text("\(Int((duckFraction * 100).rounded()))%")
+                                    .font(.system(size: 11).monospacedDigit())
+                                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                                    .frame(width: 32, alignment: .trailing)
+                            }
+                        }
                     }
-                    .toggleStyle(.switch)
-                    .tint(Color.obsidianAccent(for: scheme))
                 }
 
                 // v1.3 — Signal A kill-switch (default on, AX-cooperative apps only).
