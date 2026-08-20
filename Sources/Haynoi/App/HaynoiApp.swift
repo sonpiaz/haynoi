@@ -734,6 +734,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+
+        // Single-instance guard. Two copies of Haynoi (e.g. the installed
+        // release + a debug build from Xcode) share one bundle id, so BOTH
+        // register the global push-to-talk monitor — every ⌥ hold fires two
+        // recordings and the transcript gets typed twice ("double cat").
+        // Enforce exactly one live instance before anything registers a hotkey.
+        if enforceSingleInstance() { return }
+
         UserDefaults.standard.register(defaults: [
             "soundEnabled": true,
             "successDinkEnabled": false, // founder feedback: 2 tones max — chip shows silently
@@ -797,6 +805,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
             showOnboarding()
         }
+    }
+
+    /// Ensures only one Haynoi is live so the global hotkey isn't registered
+    /// twice. Returns true when THIS process bowed out (caller must abort launch).
+    ///
+    /// DEBUG: the fresh build wins — terminate any incumbent so a build-and-run
+    /// from Xcode transparently replaces the copy you were just using.
+    /// RELEASE: never run two copies — surface the existing one and quit self
+    /// (covers double-clicks and Sparkle relaunch races).
+    private func enforceSingleInstance() -> Bool {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return false }
+        let others = NSRunningApplication
+            .runningApplications(withBundleIdentifier: bundleID)
+            .filter { $0 != .current }
+        guard !others.isEmpty else { return false }
+
+        #if DEBUG
+        NSLog("[Haynoi] Another instance running — terminating it (debug build wins)")
+        for app in others { app.terminate() }
+        return false
+        #else
+        NSLog("[Haynoi] Already running — activating the existing instance and quitting")
+        others.first?.activate(options: [.activateAllWindows])
+        NSApp.terminate(nil)
+        return true
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {
