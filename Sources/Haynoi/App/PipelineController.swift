@@ -83,6 +83,10 @@ final class PipelineController {
             Task { @MainActor in self?.handleRecorderAbort(reason) }
         }
 
+        // If a previous session died mid-dictation with the output volume
+        // ducked, put it back before the user notices a quiet Mac.
+        MediaController.repairAfterCrash()
+
         // Sync initial state from store
         state.hasFailedDictation = FailedDictationStore.hasAny
         // Accessibility gates both text insertion and the NSEvent hotkey
