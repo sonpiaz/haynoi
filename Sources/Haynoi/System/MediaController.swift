@@ -7,8 +7,13 @@ import AppKit
 ///
 /// Two kinds of audio, two different answers:
 ///
-///  * **Media** — Spotify, Apple Music, a YouTube tab, a podcast. It has a
-///    position you can return to, so it gets **paused** and resumed on release.
+///  * **Media we can name** — Spotify and Apple Music, driven by AppleScript.
+///    `pause` and `play` are explicit, so these get **paused** and resumed at
+///    the exact position on release.
+///  * **Media we cannot name** — a YouTube tab, a podcast app, VLC. There is
+///    no way to address these except the play/pause media key, and that key is
+///    a *toggle*: get the guess wrong and it starts something instead of
+///    stopping it. So they get **ducked** too.
 ///  * **Live audio** — a Zoom/Meet/Teams call, a stream, a FaceTime. There is
 ///    nothing to resume; pausing is destructive. It gets **ducked** to a
 ///    fraction of its volume and restored on release.
@@ -25,8 +30,12 @@ import AppKit
 /// Slack huddles and FaceTime without naming any of them, and it stops
 /// pausing music just because a call app happens to be running.
 ///
-/// Everything is decided from evidence: if nothing is actually playing, Haynoi
-/// does nothing at all — no blind media keys, no volume writes.
+/// Everything is decided from evidence, and the one action that could not be
+/// taken back — the play/pause media key — is gone. CoreAudio reports whether a
+/// process has an output stream open, not whether it is making a sound, and a
+/// browser sitting on a loaded track reports the former all day. Every remaining
+/// action is safe under that uncertainty: AppleScript `pause` is explicit, and
+/// ducking is inaudible when there was nothing to hear.
 enum MediaController {
 
     /// AppleScript-controllable players. Preferred over the media key because
@@ -66,7 +75,6 @@ enum MediaController {
 
     /// Guarded by `queue`.
     private static var pausedApps: [String] = []
-    private static var didSendMediaKey = false
     /// Bumped on every start/stop so a delayed verification from a previous
     /// dictation can never duck audio after we have already restored it.
     private static var session: UInt64 = 0
@@ -112,13 +120,10 @@ enum MediaController {
                 run("tell application \"\(appName)\" to pause")
                 pausedApps.append(appName)
             }
-            if scene.useMediaKey {
-                sendPlayPauseKey()
-                didSendMediaKey = true
-            } else if scene.duckRemainingMedia {
-                // Something is playing that we cannot address safely: a media
-                // key here could start a paused Spotify instead of stopping the
-                // browser. Ducking is unambiguous.
+            if scene.duckRemainingMedia {
+                // Something we cannot address safely by name. Ducking is
+                // unambiguous; a media key here could start a paused player
+                // instead of stopping the browser.
                 queue.asyncAfter(deadline: .now() + duckDelay) {
                     guard token == session else { return }
                     AudioDucker.duck()
@@ -149,11 +154,6 @@ enum MediaController {
             let apps = pausedApps
             pausedApps = []
             for app in apps { run("tell application \"\(app)\" to play") }
-
-            if didSendMediaKey {
-                didSendMediaKey = false
-                sendPlayPauseKey() // symmetric toggle back to playing
-            }
         }
     }
 
@@ -168,11 +168,10 @@ enum MediaController {
         /// Identities to re-check after the pause attempt.
         let pauseTargets: Set<String>
         let hasLiveAudio: Bool
-        let useMediaKey: Bool
         let duckRemainingMedia: Bool
 
         var hasPlayback: Bool {
-            hasLiveAudio || !appsToPause.isEmpty || useMediaKey || duckRemainingMedia
+            hasLiveAudio || !appsToPause.isEmpty || duckRemainingMedia
         }
 
         static func capture() -> Scene {
@@ -187,8 +186,7 @@ enum MediaController {
             return plan(
                 processes: processes,
                 myPID: getpid(),
-                myBundleID: Bundle.main.bundleIdentifier,
-                scriptableAppRunning: MediaController.scriptablePlayers.keys.contains(where: isAppRunning)
+                myBundleID: Bundle.main.bundleIdentifier
             )
         }
 
@@ -197,8 +195,7 @@ enum MediaController {
         static func plan(
             processes: [SystemAudio.AudioProcess],
             myPID: pid_t,
-            myBundleID: String?,
-            scriptableAppRunning: Bool
+            myBundleID: String?
         ) -> Scene {
             let relevant = processes.filter { process in
                 process.pid != myPID
@@ -222,18 +219,24 @@ enum MediaController {
                 }
             }
 
-            // The media key targets whatever the system considers "now playing",
-            // which may not be the app we mean. With Spotify or Music merely
-            // *running*, a key press can start the wrong thing — so in that case
-            // the leftovers get ducked instead.
-            let hasOthers = !others.isEmpty
-
+            // Anything we cannot name gets ducked, never toggled.
+            //
+            // `isPlaying` is kAudioProcessPropertyIsRunningOutput — "has an
+            // output stream open", which is not the same as "is making a
+            // sound". Measured on a silent Mac: com.apple.WebKit.GPU reports
+            // it continuously, because a browser holding an idle audio context
+            // is enough. The play/pause media key is a *toggle*, so firing it
+            // on that evidence started the last track instead of stopping
+            // anything — and the same key on release then cut it off, after
+            // the volume had already been restored, with an audible thump.
+            //
+            // Ducking cannot make that mistake: it is non-destructive, and if
+            // nothing was audible it is inaudible.
             return Scene(
                 appsToPause: Array(scriptable.values),
                 pauseTargets: Set(scriptable.keys).union(others),
                 hasLiveAudio: !live.isEmpty,
-                useMediaKey: hasOthers && !scriptableAppRunning,
-                duckRemainingMedia: hasOthers && scriptableAppRunning
+                duckRemainingMedia: !others.isEmpty
             )
         }
 
@@ -243,20 +246,23 @@ enum MediaController {
 
             if isAppRunning("com.spotify.client") {
                 return Scene(appsToPause: ["Spotify"], pauseTargets: [], hasLiveAudio: false,
-                             useMediaKey: false, duckRemainingMedia: false)
+                             duckRemainingMedia: false)
             }
             if isAppRunning("com.apple.Music") {
                 return Scene(appsToPause: ["Music"], pauseTargets: [], hasLiveAudio: false,
-                             useMediaKey: false, duckRemainingMedia: false)
+                             duckRemainingMedia: false)
             }
             // A conferencing app being *open* is the only live signal available
             // here, so it stays conservative: duck rather than pause.
             if LiveContext.isActive() {
                 return Scene(appsToPause: [], pauseTargets: [], hasLiveAudio: outputActive,
-                             useMediaKey: false, duckRemainingMedia: false)
+                             duckRemainingMedia: false)
             }
+            // Without per-process truth this path knows only that *something*
+            // is driving the output. That was enough to fire a blind media
+            // key; it is not enough to be sure anything is audible, so duck.
             return Scene(appsToPause: [], pauseTargets: [], hasLiveAudio: false,
-                         useMediaKey: outputActive, duckRemainingMedia: false)
+                         duckRemainingMedia: outputActive)
         }
 
         /// Are any of these identities still producing output?
@@ -289,27 +295,4 @@ enum MediaController {
         }
     }
 
-    /// Post the system-defined Play/Pause media key (NX_KEYTYPE_PLAY = 16).
-    /// Pauses/resumes whatever currently holds the system "now playing" target
-    /// (browser video, Podcasts, VLC, …) without touching output volume.
-    private static func sendPlayPauseKey() {
-        func post(_ keyDown: Bool) {
-            let rawFlags = keyDown ? 0xA00 : 0xB00
-            let data1 = (16 << 16) | ((keyDown ? 0xA : 0xB) << 8)
-            let event = NSEvent.otherEvent(
-                with: .systemDefined,
-                location: .zero,
-                modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(rawFlags)),
-                timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: 0,
-                context: nil,
-                subtype: 8,
-                data1: data1,
-                data2: -1
-            )
-            event?.cgEvent?.post(tap: .cghidEventTap)
-        }
-        post(true)
-        post(false)
-    }
 }

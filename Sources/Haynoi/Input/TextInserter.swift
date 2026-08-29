@@ -556,6 +556,23 @@ enum TextInserter {
             return false
         }
 
+        // Posting a synthetic event makes macOS filter the user's OWN input for
+        // localEventsSuppressionInterval — measured at 0.250s, with the default
+        // filter permitting *nothing*. Two posts 20ms apart chain into ~270ms
+        // in which the mouse wheel is dead, which reads as "scrolling is
+        // frozen" right after every dictation. Let the user's mouse through.
+        //
+        // Keyboard stays filtered on purpose: the paste posts key-down and
+        // key-up 20ms apart, both carrying .maskCommand, so a real keystroke
+        // landing between them could be read as a ⌘-shortcut.
+        for state in [CGEventSuppressionState.eventSuppressionStateSuppressionInterval,
+                      CGEventSuppressionState.eventSuppressionStateRemoteMouseDrag] {
+            src.setLocalEventsFilterDuringSuppressionState(
+                [.permitLocalMouseEvents, .permitSystemDefinedEvents],
+                state: state
+            )
+        }
+
         guard let down = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: true),
               let up   = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: false) else {
             NSLog("[Haynoi] CGEvent creation failed")
