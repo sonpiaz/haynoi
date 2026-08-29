@@ -285,6 +285,43 @@ enum STTProvider {
         return message
     }
 
+    /// Builds the rewrite pass's system prompt: the user's glossary as context,
+    /// then known (wrong → right) pairs from their correction history as grounded
+    /// few-shot examples, then the mode's own prompt. The pairs carry the cases
+    /// soft biasing cannot fix — verified against the production models
+    /// 2026-08-29: the STT prompt glossary corrected "Mandec"→"Mandeck" but
+    /// could not beat the common word "Hanoi" for "Haynoi"; the pair could.
+    /// The "only where it occurs / never insert elsewhere" framing is
+    /// load-bearing: an UNgrounded LLM fix-up pass over-corrects, so the pairs
+    /// are licensed as the only corrections. The `wrong` forms go ONLY here —
+    /// never into the STT prompt, where prior-text conditioning would bias the
+    /// decoder TOWARD the error. See redesign/10-DICTATION-LEARNING-V2.md.
+    static func rewriteSystemPrompt(
+        base: String,
+        glossary: [String],
+        pairs: [(wrong: String, right: String)]
+    ) -> String {
+        var sections: [String] = []
+        if !glossary.isEmpty {
+            sections.append(
+                "The user's preferred spellings for names and terms (use these exact forms when they occur): "
+                    + glossary.joined(separator: ", ") + "."
+            )
+        }
+        if !pairs.isEmpty {
+            let lines = pairs
+                .map { "\"\($0.wrong)\" → \"\($0.right)\"" }
+                .joined(separator: "\n")
+            sections.append(
+                "Known misrecognitions from this user's dictation history — when the left side appears, it was almost certainly meant as the right side:\n"
+                    + lines
+                    + "\nApply a correction only where the misrecognized form actually occurs; never insert these terms anywhere else."
+            )
+        }
+        sections.append(base)
+        return sections.joined(separator: "\n\n")
+    }
+
     private static func rewriteWithKyma(
         token: String, text: String, systemPrompt: String
     ) async throws -> String {
@@ -295,19 +332,11 @@ enum STTProvider {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        // Prepend the user's personal-dictionary terms as CONTEXT so the LLM
-        // corrects with context (won't turn "Caterpillar" into "Cat…") — a
-        // smarter, safer corrector than blind find-replace. Bare, frequency-
-        // ordered, capped (client-side request-body change only; the proxy is
-        // unchanged). See redesign/07-DICTATION-LEARNING.md §5 review C.
-        let glossary = PersonalDictionary.shared.glossaryTerms()
-        let system: String
-        if glossary.isEmpty {
-            system = systemPrompt
-        } else {
-            system = "The user's preferred spellings for names and terms (use these exact forms when they occur): "
-                + glossary.joined(separator: ", ") + ".\n\n" + systemPrompt
-        }
+        let system = rewriteSystemPrompt(
+            base: systemPrompt,
+            glossary: PersonalDictionary.shared.glossaryTerms(),
+            pairs: PersonalDictionary.shared.correctionPairs()
+        )
 
         let body: [String: Any] = [
             // Benchmarked 2026-06-10: gemini-2.5-flash 1.7s clean output;
