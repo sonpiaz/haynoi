@@ -354,6 +354,25 @@ final class PersonalDictionary {
         return result
     }
 
+    /// Known (wrong → right) pairs for the LLM rewrite pass — grounded few-shot
+    /// context (v2 Phase 1, redesign/10-DICTATION-LEARNING-V2.md). Trust bar is
+    /// the SAME activation gate as the deterministic replace (`firesAsReplacement`)
+    /// — no parallel gate, so an unconfirmed learned rule can't reach the LLM
+    /// either. Frequency-ordered, capped: the dictionary is the retriever.
+    func correctionPairs(max limit: Int = 10) -> [(wrong: String, right: String)] {
+        enabledEntries(kinds: [.replacement])
+            .filter { $0.firesAsReplacement }
+            .sorted { $0.frequency > $1.frequency }
+            .prefix(limit)
+            .compactMap { entry in
+                guard let w = entry.wrong?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !w.isEmpty else { return nil }
+                let r = entry.right.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !r.isEmpty else { return nil }
+                return (wrong: w, right: r)
+            }
+    }
+
     // MARK: - Deterministic replacement (Feedback path #2, §5.3)
 
     /// Applies enabled `.replacement` entries to `text`. Whole-word/phrase match

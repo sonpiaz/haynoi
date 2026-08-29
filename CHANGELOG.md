@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Your corrections now teach the AI cleanup pass.** When a mode runs the AI
+  rewrite, Haynoi shows it the exact fixes you've confirmed before ("Hanoi" →
+  "Haynoi"), so it repairs the misrecognitions that vocabulary hints alone
+  can't — like a personal name that sounds identical to a common word. Only
+  fixes you've confirmed are used, and they never leave your dictionary except
+  inside the dictation being cleaned up.
 - **Other audio gets out of the way while you dictate.** Music and video pause
   and resume on their own. A live call, stream or screen recording is dipped in
   volume instead — never paused, because there is nothing to resume. Haynoi
