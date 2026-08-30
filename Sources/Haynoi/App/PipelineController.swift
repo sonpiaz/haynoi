@@ -339,7 +339,8 @@ final class PipelineController {
                 // .replacement (low confidence, can't corrupt output). Suggest-never-
                 // silent: the toast only adds on tap, suppressed in live contexts.
                 await MainActor.run {
-                    if let s = CorrectionDetector.shared.observe(text),
+                    if LearningSettings.isEnabled,
+                       let s = CorrectionDetector.shared.observe(text),
                        !LiveContext.isActive() {
                         let right = s.right
                         FloatingBarController.shared.showLearnToast(
@@ -544,8 +545,10 @@ final class PipelineController {
                 _ = PersonalDictionary.shared.disableMatchingReplacement(wrong: w, right: reversed.right)
                 NSLog("[Haynoi] Self-heal: disabled reversed rule %@ → %@", w, reversed.right)
             } else {
-                // Propose learning — suppress the toast in live contexts (§5.1).
-                if !LiveContext.isActive() {
+                // Propose learning — suppress the toast in live contexts (§5.1)
+                // and when the learning master switch is off (the replace itself
+                // already happened above; only the capture is gated).
+                if LearningSettings.isEnabled, !LiveContext.isActive() {
                     let wrong = change.wrong
                     let right = change.right
                     FloatingBarController.shared.showLearnToast(

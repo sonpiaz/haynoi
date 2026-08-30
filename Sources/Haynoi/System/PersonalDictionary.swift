@@ -14,6 +14,26 @@ import Foundation
 // v1.1+. CustomDictionary remains as a compat shim (bottom of this file) so the
 // existing call sites keep compiling.
 
+// MARK: - Learning master switch
+
+/// Master kill-switch for correction CAPTURE — Signals A/B/C stop proposing new
+/// learned entries when off (v2 Phase 5, redesign/10-DICTATION-LEARNING-V2.md).
+/// USING the dictionary stays on: glossary biasing, the rewrite pass, and
+/// existing replacement rules are unaffected. "Fix that" still replaces text —
+/// only the learn-toast is silenced.
+enum LearningSettings {
+    static let key = "learningEnabled"
+
+    /// Defaults to true when the key was never written — deliberately NOT a bare
+    /// `bool(forKey:)`, which reads false before `register(defaults:)` runs (the
+    /// muteMusic fresh-install bug, CHANGELOG [Unreleased]).
+    static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: key) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: key)
+    }
+}
+
 // MARK: - Model
 
 /// A single dictionary row. `.term` biases recognition (soft); `.replacement`
@@ -323,6 +343,32 @@ final class PersonalDictionary {
         queue.sync {
             entries.removeAll { $0.id == id }
             persist()
+        }
+    }
+
+    /// Number of auto-learned entries — the "Haynoi has learned N words" counter.
+    var learnedCount: Int {
+        queue.sync { entries.filter { $0.source == .learned }.count }
+    }
+
+    /// Pure filter behind `deleteAllLearned` — split out so the invariant
+    /// (manual entries survive, learned entries go) is unit-testable without
+    /// touching the real on-disk dictionary.
+    static func removingLearned(_ entries: [DictionaryEntry]) -> [DictionaryEntry] {
+        entries.filter { $0.source != .learned }
+    }
+
+    /// The Gboard-bar "delete what you've learned" control (v2 Phase 5): removes
+    /// every `.learned` entry in one action; manual entries survive. Returns the
+    /// number removed.
+    @discardableResult
+    func deleteAllLearned() -> Int {
+        queue.sync {
+            let before = entries.count
+            entries = PersonalDictionary.removingLearned(entries)
+            let removed = before - entries.count
+            if removed > 0 { persist() }
+            return removed
         }
     }
 

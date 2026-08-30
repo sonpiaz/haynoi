@@ -76,7 +76,7 @@ final class CorrectionWatcher {
     private init() {}
 
     private var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: Self.enabledKey)
+        LearningSettings.isEnabled && UserDefaults.standard.bool(forKey: Self.enabledKey)
     }
 
     // MARK: - Whitelist
