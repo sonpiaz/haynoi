@@ -358,6 +358,26 @@ final class PersonalDictionary {
         !glossaryTerms().isEmpty || !correctionPairs(max: 1).isEmpty
     }
 
+    /// Dictionary `right` forms that sound like `word` (v2 Phase 4) — named
+    /// candidates for a low-confidence span, fed to the correction pass as a
+    /// targeted hint. Sound-alike only; never applied as a replacement.
+    func phoneticCandidates(for word: String, max limit: Int = 3) -> [String] {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        var seen = Set<String>()
+        var result: [String] = []
+        for entry in enabledEntries(kinds: [.term, .replacement])
+            .sorted(by: { $0.frequency > $1.frequency }) {
+            let right = entry.right.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !right.isEmpty, seen.insert(right.lowercased()).inserted else { continue }
+            if Phonetics.close(trimmed, right) {
+                result.append(right)
+                if result.count >= limit { break }
+            }
+        }
+        return result
+    }
+
     /// Pure filter behind `deleteAllLearned` — split out so the invariant
     /// (manual entries survive, learned entries go) is unit-testable without
     /// touching the real on-disk dictionary.

@@ -81,7 +81,7 @@ enum STTProvider {
         } else if !text.isEmpty,
                   shouldRunCorrectionPass(
                       needsRewrite: mode.needsRewrite,
-                      logprobs: transcribed.logprobs,
+                      logprobs: transcribed.logprobs?.map(\.logprob),
                       hasGrounding: PersonalDictionary.shared.hasGroundingContext
                   ) {
             // Signal E (v2 Phase 3): the model itself flagged doubt on a token,
@@ -90,8 +90,19 @@ enum STTProvider {
             // pairs there; this extends the same correction to rewrite-less
             // modes without adding LLM latency to every dictation. Failure of
             // the optional pass never fails the dictation.
+            //
+            // v2 Phase 4: name the doubtful words and, when one sounds like a
+            // dictionary term, hand the LLM that candidate explicitly —
+            // "afider" → possibly "Affitor" — instead of hoping it connects
+            // the glossary to the right span on its own.
+            let doubtful = Self.doubtfulWords(from: transcribed.logprobs ?? [])
+            let hints = doubtful.compactMap { word -> (heard: String, candidates: [String])? in
+                let candidates = PersonalDictionary.shared.phoneticCandidates(for: word)
+                return candidates.isEmpty ? nil : (heard: word, candidates: candidates)
+            }
             text = (try? await rewriteWithKyma(
-                token: token, text: text, systemPrompt: Self.correctionPassPrompt
+                token: token, text: text, systemPrompt: Self.correctionPassPrompt,
+                hints: hints
             )) ?? text
             // Metadata only: that the pass ran — never the text.
             await MainActor.run {
@@ -127,6 +138,38 @@ enum STTProvider {
     /// True when at least one token fell below the confidence floor.
     static func hasLowConfidenceToken(_ logprobs: [Double]) -> Bool {
         logprobs.contains { $0 < lowConfidenceLogprob }
+    }
+
+    /// One transcription token with its confidence, as returned upstream.
+    struct TokenLogprob {
+        let token: String
+        let logprob: Double
+    }
+
+    /// Reconstructs whitespace-delimited words from the token stream and
+    /// returns the ones containing at least one token below the confidence
+    /// floor. Tokens concatenate to the transcript; a token beginning with
+    /// whitespace starts a new word (" Af" + "iter" is one word, " and"
+    /// starts the next). Edge punctuation is trimmed so "Hanoi." → "Hanoi".
+    static func doubtfulWords(from tokens: [TokenLogprob]) -> [String] {
+        var words: [(text: String, minLogprob: Double)] = []
+        var current = ""
+        var currentMin = 0.0
+        func flush() {
+            let cleaned = current
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .punctuationCharacters)
+            if !cleaned.isEmpty { words.append((cleaned, currentMin)) }
+            current = ""
+            currentMin = 0
+        }
+        for t in tokens {
+            if t.token.first?.isWhitespace == true, !current.isEmpty { flush() }
+            current += t.token
+            currentMin = min(currentMin, t.logprob)
+        }
+        flush()
+        return words.filter { $0.minLogprob < lowConfidenceLogprob }.map(\.text)
     }
 
     /// The correction pass runs only when ALL hold: the mode has no rewrite
@@ -251,7 +294,7 @@ enum STTProvider {
     private static func callTranscribe(
         token: String, audio: EncodedAudio, model: String, prompt: String,
         languageHint: String
-    ) async throws -> (text: String, logprobs: [Double]?) {
+    ) async throws -> (text: String, logprobs: [TokenLogprob]?) {
         let boundary = UUID().uuidString
         // Signal E: the quality tier supports per-token logprobs with the json
         // format. Harmless before the gateway ships the passthrough — the
@@ -321,9 +364,14 @@ enum STTProvider {
                 }
                 // Per-token confidence (Signal E) — present only when the
                 // gateway passes it through; absent = nil, gate stays closed.
-                var logprobs: [Double]?
+                // Tokens are kept alongside values so Phase 4 can name the
+                // doubtful WORDS, not just detect that doubt exists.
+                var logprobs: [TokenLogprob]?
                 if let entries = json["logprobs"] as? [[String: Any]] {
-                    let values = entries.compactMap { $0["logprob"] as? Double }
+                    let values = entries.compactMap { entry -> TokenLogprob? in
+                        guard let lp = entry["logprob"] as? Double else { return nil }
+                        return TokenLogprob(token: (entry["token"] as? String) ?? "", logprob: lp)
+                    }
                     if !values.isEmpty { logprobs = values }
                 }
                 return (text.trimmingCharacters(in: .whitespacesAndNewlines), logprobs)
@@ -379,7 +427,8 @@ enum STTProvider {
     static func rewriteSystemPrompt(
         base: String,
         glossary: [String],
-        pairs: [(wrong: String, right: String)]
+        pairs: [(wrong: String, right: String)],
+        hints: [(heard: String, candidates: [String])] = []
     ) -> String {
         var sections: [String] = []
         if !glossary.isEmpty {
@@ -398,12 +447,24 @@ enum STTProvider {
                     + "\nApply a correction only where the misrecognized form actually occurs; never insert these terms anywhere else."
             )
         }
+        if !hints.isEmpty {
+            // v2 Phase 4: doubtful spans matched phonetically against the
+            // user's dictionary — a targeted hint, still the LLM's call.
+            let lines = hints
+                .map { "\"\($0.heard)\" → possibly \($0.candidates.joined(separator: " or "))" }
+                .joined(separator: "\n")
+            sections.append(
+                "The transcriber was UNSURE of these words, and each sounds like a term this user actually uses — prefer the listed form when it fits the context:\n"
+                    + lines
+            )
+        }
         sections.append(base)
         return sections.joined(separator: "\n\n")
     }
 
     private static func rewriteWithKyma(
-        token: String, text: String, systemPrompt: String
+        token: String, text: String, systemPrompt: String,
+        hints: [(heard: String, candidates: [String])] = []
     ) async throws -> String {
         let url = URL(string: rewriteURL)!
         var request = URLRequest(url: url)
@@ -415,7 +476,8 @@ enum STTProvider {
         let system = rewriteSystemPrompt(
             base: systemPrompt,
             glossary: PersonalDictionary.shared.glossaryTerms(),
-            pairs: PersonalDictionary.shared.correctionPairs()
+            pairs: PersonalDictionary.shared.correctionPairs(),
+            hints: hints
         )
 
         let body: [String: Any] = [
