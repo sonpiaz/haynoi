@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can't — like a personal name that sounds identical to a common word. Only
   fixes you've confirmed are used, and they never leave your dictionary except
   inside the dictation being cleaned up.
+- **Doubtful words are matched by sound against your dictionary.** When the
+  transcriber hesitates on a word that sounds like a name you use — "Afider"
+  for "Affitor", "Sun" for "Sơn" — Haynoi now hands the cleanup pass that
+  exact candidate instead of hoping it guesses right. Sound matching also
+  helps Haynoi recognize a re-dictated correction whose spelling differs a
+  lot from what was heard.
 - **Haynoi notices when it wasn't sure.** When the transcriber flags doubt
   about a word — exactly where names and jargon go wrong — that dictation
   gets one extra pass through your personal fixes before the text is typed.

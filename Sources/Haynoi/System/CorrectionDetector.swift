@@ -120,16 +120,18 @@ final class CorrectionDetector {
         // ("Hai Noi" → "Haynoi"), but cap both sides at 2 orthographic tokens.
         guard wrongTokens.count <= 2, rightTokens.count <= 2 else { return false }
 
-        // (a.4) Small per-token edit distance — near-homophone, not a different word.
-        // Compare the joined (spaces removed) forms so "Hai Noi" vs "Haynoi" reads as
-        // a 0-ish edit, not a whitespace blowup.
+        // (a.4) Near-homophone test on the joined (spaces removed) forms, so
+        // "Hai Noi" vs "Haynoi" reads as a 0-ish edit, not a whitespace blowup.
+        // Two ways to qualify (v2 Phase 4): small ORTHOGRAPHIC distance, OR the
+        // same PHONETIC key — which rescues sound-alike spellings whose letters
+        // diverge ("Kathryn"/"Catherine"-class names). Every other gate (single
+        // region, diacritic direction, stopword) still applies either way.
         let wrongJoined = wrong.replacingOccurrences(of: " ", with: "")
         let rightJoined = right.replacingOccurrences(of: " ", with: "")
-        guard levenshtein(wrongJoined.lowercased(), rightJoined.lowercased()) <= maxTokenEditDistanceConst else { return false }
-
-        // (a.4b) Similarity floor on the CHANGED region itself (joined forms) — the
-        // real near-homophone gate, independent of surrounding sentence length.
-        guard normalizedSimilarity(wrongJoined, rightJoined) >= 0.5 else { return false }
+        let orthoClose =
+            levenshtein(wrongJoined.lowercased(), rightJoined.lowercased()) <= maxTokenEditDistanceConst
+            && normalizedSimilarity(wrongJoined, rightJoined) >= 0.5
+        guard orthoClose || Phonetics.close(wrongJoined, rightJoined) else { return false }
 
         // (b) Diacritic-direction asymmetry: qualify ONLY when `right` ADDS
         // diacritics / structure that `wrong` lacked — never the reverse.
