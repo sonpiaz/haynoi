@@ -8,13 +8,28 @@ import XCTest
 final class CorrectionPassTests: XCTestCase {
 
     func testLowConfidenceDetector() {
+        let floor = STTProvider.lowConfidenceLogprob
         XCTAssertFalse(STTProvider.hasLowConfidenceToken([]), "no data = no doubt signal")
-        XCTAssertFalse(STTProvider.hasLowConfidenceToken([-0.01, -0.2, -0.9]),
+        XCTAssertFalse(STTProvider.hasLowConfidenceToken([-0.001, floor + 0.05]),
                        "all tokens above the floor")
-        XCTAssertTrue(STTProvider.hasLowConfidenceToken([-0.01, -2.4, -0.2]),
+        XCTAssertTrue(STTProvider.hasLowConfidenceToken([-0.001, floor - 0.05]),
                       "one doubtful token opens the gate")
-        XCTAssertFalse(STTProvider.hasLowConfidenceToken([STTProvider.lowConfidenceLogprob]),
+        XCTAssertFalse(STTProvider.hasLowConfidenceToken([floor]),
                        "the floor itself is not below the floor")
+    }
+
+    /// Regression pin against the LIVE gateway measurement (2026-08-29) that
+    /// set the threshold: misrecognized name tokens measured -0.25…-1.11 and
+    /// must open the gate; correct tokens measured ≈-0.0001…-0.006 and must
+    /// not. "Hanoi" (confidently wrong at -0.006) is intentionally invisible
+    /// to this signal — the deterministic replace owns that class.
+    func testThresholdCatchesMeasuredErrorTokens() {
+        for measured in [-0.9093, -0.4039, -0.3689, -1.1107] {
+            XCTAssertTrue(STTProvider.hasLowConfidenceToken([measured]),
+                          "measured error token \(measured) must open the gate")
+        }
+        XCTAssertFalse(STTProvider.hasLowConfidenceToken([-0.0002, -0.0061, -0.0006]),
+                       "confident tokens (incl. the Hanoi-class error) stay closed")
     }
 
     func testGateClosedWithoutLogprobs() {
@@ -37,7 +52,9 @@ final class CorrectionPassTests: XCTestCase {
 
     func testGateClosedWhenConfident() {
         XCTAssertFalse(STTProvider.shouldRunCorrectionPass(
-            needsRewrite: false, logprobs: [-0.1, -0.3], hasGrounding: true))
+            needsRewrite: false,
+            logprobs: [-0.001, STTProvider.lowConfidenceLogprob + 0.05],
+            hasGrounding: true))
     }
 
     func testGateOpensOnlyWhenAllConditionsHold() {
