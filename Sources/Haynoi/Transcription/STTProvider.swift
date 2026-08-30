@@ -113,11 +113,16 @@ enum STTProvider {
 
     // MARK: - Signal E: logprob-gated correction (v2 Phase 3)
 
-    /// A token logprob below this reads as "the model wasn't sure". Provisional
-    /// value (~37% probability) pending live logprob data from the gateway —
-    /// the field ships server-side in kyma-api#1074; until it's deployed,
-    /// `logprobs` is nil and the gate never opens.
-    static let lowConfidenceLogprob: Double = -1.0
+    /// A token logprob below this reads as "the model wasn't sure". Tuned from
+    /// live gateway data (2026-08-29, clean clip): correct tokens sit at
+    /// ~-0.0001…-0.006 while misrecognized names measured -0.25…-1.11
+    /// ("Sun" -0.91, "Mand"/"ec" -0.25/-0.40, "Af"/"iter" -0.37/-1.11) — the
+    /// original -1.0 caught only one of four errors. -0.3 catches all but the
+    /// confidently-wrong class ("Hanoi" for "Haynoi" measured -0.006), which no
+    /// confidence signal can see and the deterministic replace handles instead.
+    /// Watch the `stt_correction_pass` PostHog rate for over-triggering on
+    /// noisy real-world audio before tightening further.
+    static let lowConfidenceLogprob: Double = -0.3
 
     /// True when at least one token fell below the confidence floor.
     static func hasLowConfidenceToken(_ logprobs: [Double]) -> Bool {
