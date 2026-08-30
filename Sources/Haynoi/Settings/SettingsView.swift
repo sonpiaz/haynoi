@@ -601,6 +601,13 @@ private struct DictionaryEditor: View {
     @State private var rightField = ""
     @State private var wrongField = ""
     @State private var isReplacement = false
+    // v2 Phase 5 — trust controls: master capture switch + forget-all-learned.
+    @AppStorage(LearningSettings.key) private var learningEnabled = true
+    @State private var confirmForgetLearned = false
+
+    private var learnedCount: Int {
+        entries.filter { $0.source == .learned }.count
+    }
 
     private var canAdd: Bool {
         let r = rightField.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -613,6 +620,50 @@ private struct DictionaryEditor: View {
 
     var body: some View {
         SettingsCard {
+            // v2 Phase 5 — the Gboard bar: a visible switch for auto-learning and
+            // a delete-everything-learned control. Manual entries are untouched;
+            // existing rules keep working either way — only CAPTURE is gated.
+            SettingsRow(showDivider: true) {
+                HStack(spacing: C.s2) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Learn from my corrections")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.obsidianLabel(for: scheme))
+                        Text(learnedCount > 0
+                             ? "Haynoi has learned \(learnedCount) word\(learnedCount == 1 ? "" : "s") from you."
+                             : "Haynoi suggests new words when you fix a dictation.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                    }
+
+                    Spacer()
+
+                    if learnedCount > 0 {
+                        Button("Forget all") { confirmForgetLearned = true }
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                            .buttonStyle(.plain)
+                    }
+
+                    Toggle("", isOn: $learningEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .scaleEffect(0.7)
+                        .frame(width: 36)
+                }
+            }
+            .alert("Forget everything Haynoi learned?", isPresented: $confirmForgetLearned) {
+                Button("Forget \(learnedCount) word\(learnedCount == 1 ? "" : "s")", role: .destructive) {
+                    let removed = PersonalDictionary.shared.deleteAllLearned()
+                    // Metadata only: the count — never the term strings.
+                    Analytics.capture("dictionary_learned_cleared", ["count": removed])
+                    reload()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Words you added yourself are kept.")
+            }
+
             // Add row
             SettingsRow(showDivider: !entries.isEmpty) {
                 VStack(alignment: .leading, spacing: C.s2) {

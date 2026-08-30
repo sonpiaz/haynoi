@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can't — like a personal name that sounds identical to a common word. Only
   fixes you've confirmed are used, and they never leave your dictionary except
   inside the dictation being cleaned up.
+- **You're in charge of what Haynoi learns.** The Dictionary tab now has a
+  master switch for learning from your corrections, shows how many words
+  Haynoi has learned from you, and a "Forget all" button that wipes every
+  auto-learned word in one tap — words you added yourself are kept. Turning
+  learning off never breaks what's already learned; it only stops new
+  suggestions.
 - **Other audio gets out of the way while you dictate.** Music and video pause
   and resume on their own. A live call, stream or screen recording is dipped in
   volume instead — never paused, because there is nothing to resume. Haynoi

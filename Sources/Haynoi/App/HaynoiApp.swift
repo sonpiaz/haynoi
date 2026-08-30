@@ -750,6 +750,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "hotkeyChoice": "option",  // founder default: left Option push-to-talk
             "fixThatHotkeyChoice": "ctrlOption", // v1.1: ⌃⌥ chord tap (never collides with PTT)
             "signalAEnabled": true,    // v1.3: learn when you edit a word in-app (AX-cooperative apps only)
+            "learningEnabled": true,   // v2 Phase 5: master switch for correction capture (A/B/C)
             "shareUsageData": true,    // analytics opt-out (default ON) — metadata only, never content
         ])
         NSLog("[Haynoi] App launched")

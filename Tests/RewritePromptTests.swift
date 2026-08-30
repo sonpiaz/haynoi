@@ -69,6 +69,41 @@ final class RewritePromptTests: XCTestCase {
                        "a bare term has no wrong form and is not a pair")
     }
 
+    // MARK: - v2 Phase 5: trust controls
+
+    /// Pure-filter invariant behind `deleteAllLearned`: learned entries go,
+    /// manual entries survive — tested WITHOUT touching the real dictionary.
+    func testRemovingLearnedKeepsManualEntries() {
+        let manual = DictionaryEntry(right: "Keep", kind: .term, source: .manual)
+        let learnedTerm = DictionaryEntry(right: "DropA", kind: .term, source: .learned)
+        let learnedRule = DictionaryEntry(right: "DropB", wrong: "dropb", kind: .replacement,
+                                          source: .learned, confirmations: 2)
+
+        let kept = PersonalDictionary.removingLearned([manual, learnedTerm, learnedRule])
+        XCTAssertEqual(kept.map(\.right), ["Keep"], "only the manual entry survives")
+    }
+
+    func testLearningSettingsDefaultsOnWhenKeyAbsent() {
+        let defaults = UserDefaults.standard
+        let original = defaults.object(forKey: LearningSettings.key)
+        defer {
+            // Restore whatever state the machine had (absent or an explicit bool).
+            if let original {
+                defaults.set(original, forKey: LearningSettings.key)
+            } else {
+                defaults.removeObject(forKey: LearningSettings.key)
+            }
+        }
+
+        defaults.removeObject(forKey: LearningSettings.key)
+        XCTAssertTrue(LearningSettings.isEnabled,
+                      "absent key must read as ON — the muteMusic fresh-install bug class")
+        defaults.set(false, forKey: LearningSettings.key)
+        XCTAssertFalse(LearningSettings.isEnabled)
+        defaults.set(true, forKey: LearningSettings.key)
+        XCTAssertTrue(LearningSettings.isEnabled)
+    }
+
     // MARK: - Invariant: wrong forms never reach the STT-side glossary
 
     /// The STT `prompt` is prior-text conditioning — a `wrong` form there would
