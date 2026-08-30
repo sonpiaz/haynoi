@@ -57,6 +57,9 @@ class FloatingBarController {
             defer: false
         )
         win.contentView = hosting
+        // ARC owns this window — never let a stray close() free it behind our
+        // reference (the 0.3.8 main-window over-release class of crash).
+        win.isReleasedWhenClosed = false
         win.isOpaque = false
         win.backgroundColor = .clear
         win.level = .floating
@@ -141,6 +144,9 @@ class FloatingBarController {
             defer: false
         )
         win.contentView = hosting
+        // ARC owns this window — never let a stray close() free it behind our
+        // reference (the 0.3.8 main-window over-release class of crash).
+        win.isReleasedWhenClosed = false
         win.isOpaque = false
         win.backgroundColor = .clear
         win.level = .floating

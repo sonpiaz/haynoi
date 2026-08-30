@@ -909,6 +909,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             backing: .buffered,
             defer: false
         )
+        // A programmatic NSWindow defaults to isReleasedWhenClosed = true:
+        // AppKit sends an extra release when the user closes it, behind ARC's
+        // back, and `mainWindow` becomes a dangling pointer. The next
+        // showMainWindowPublic() then crashes in objc_retain touching
+        // window.isVisible — the 0.3.8 release-day crash (2026-08-29, first
+        // reopen after closing the main window). ARC must be the only owner.
+        window.isReleasedWhenClosed = false
         window.title = "Haynoi"
         window.appearance = Self.themeAppearance()
         window.contentView = NSHostingView(rootView: contentView)
@@ -978,6 +985,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             backing: .buffered,
             defer: false
         )
+        // Same over-release hazard as the main window (see showMainWindowPublic):
+        // this one is user-closable AND close()d programmatically.
+        window.isReleasedWhenClosed = false
         // Hidden titlebar: window chrome present (draggable) but no visible title bar text
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
