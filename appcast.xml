@@ -6,6 +6,74 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.3.8</title>
+            <pubDate>Sun, 30 Aug 2026 03:54:45 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>30</sparkle:version>
+            <sparkle:shortVersionString>0.3.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.3.8</h2>
+
+<h3>Added</h3>
+<ul>
+<li><strong>Your corrections now teach the AI cleanup pass.</strong> When a mode runs the AI</li>
+</ul>
+<p>  rewrite, Haynoi shows it the exact fixes you've confirmed before ("Hanoi" →</p>
+<p>  "Haynoi"), so it repairs the misrecognitions that vocabulary hints alone</p>
+<p>  can't — like a personal name that sounds identical to a common word. Only</p>
+<p>  fixes you've confirmed are used, and they never leave your dictionary except</p>
+<p>  inside the dictation being cleaned up.</p>
+<ul>
+<li><strong>Doubtful words are matched by sound against your dictionary.</strong> When the</li>
+</ul>
+<p>  transcriber hesitates on a word that sounds like a name you use — "Afider"</p>
+<p>  for "Affitor", "Sun" for "Sơn" — Haynoi now hands the cleanup pass that</p>
+<p>  exact candidate instead of hoping it guesses right. Sound matching also</p>
+<p>  helps Haynoi recognize a re-dictated correction whose spelling differs a</p>
+<p>  lot from what was heard.</p>
+<ul>
+<li><strong>Haynoi notices when it wasn't sure.</strong> When the transcriber flags doubt</li>
+</ul>
+<p>  about a word — exactly where names and jargon go wrong — that dictation</p>
+<p>  gets one extra pass through your personal fixes before the text is typed.</p>
+<p>  Confident dictations skip it entirely, so nothing gets slower. Works in</p>
+<p>  every mode once our servers finish rolling out the confidence signal.</p>
+<ul>
+<li><strong>You're in charge of what Haynoi learns.</strong> The Dictionary tab now has a</li>
+</ul>
+<p>  master switch for learning from your corrections, shows how many words</p>
+<p>  Haynoi has learned from you, and a "Forget all" button that wipes every</p>
+<p>  auto-learned word in one tap — words you added yourself are kept. Turning</p>
+<p>  learning off never breaks what's already learned; it only stops new</p>
+<p>  suggestions.</p>
+<ul>
+<li><strong>Other audio gets out of the way while you dictate.</strong> Music and video pause</li>
+</ul>
+<p>  and resume on their own. A live call, stream or screen recording is dipped in</p>
+<p>  volume instead — never paused, because there is nothing to resume. Haynoi</p>
+<p>  decides from what your Mac is actually playing, so an open-but-idle Zoom no</p>
+<p>  longer keeps your music playing over you, and nothing happens at all when</p>
+<p>  nothing is playing. The level for live audio is adjustable in Settings.</p>
+<ul>
+<li>If a player ignores the pause (a web player, a game, or Automation access</li>
+</ul>
+<p>  that was declined), Haynoi turns it down instead — so your voice is never</p>
+<p>  competing with your speakers.</p>
+
+<h3>Fixed</h3>
+<ul>
+<li>"Pause audio while dictating" never ran on a fresh install: the switch showed</li>
+</ul>
+<p>  as on while the app read it as off. It works now, and is on by default.</p>
+<ul>
+<li>The output volume can no longer be left low if Haynoi quits or crashes</li>
+</ul>
+<p>  mid-dictation — the next launch puts it back.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.8/Haynoi-0.3.8-universal.zip" length="4739024" type="application/octet-stream" sparkle:edSignature="wlUueKSao7/buyMlE4JbZOMUnw37UZKWaIuWxq6EM5ldBCtTebp2BIDAyz9IbvwRGsyDzcHqSawbbuXTus5bDQ=="/>
+        </item>
+        <item>
             <title>0.3.7</title>
             <pubDate>Sun, 05 Jul 2026 07:29:39 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -73,25 +141,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.6/Haynoi-0.3.6-universal.zip" length="4527633" type="application/octet-stream" sparkle:edSignature="dswsX28167vqQNXFL69KVSzTDPgNNBACRQ+qHSgFmRnJoQKQ4JPplJt4P1eLOCCnixXN3KSEmJ+KMeAi4MjcDg=="/>
-        </item>
-        <item>
-            <title>0.3.5</title>
-            <pubDate>Sat, 13 Jun 2026 04:22:15 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>26</sparkle:version>
-            <sparkle:shortVersionString>0.3.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.3.5</h2>
-
-<h3>Changed</h3>
-<ul>
-<li>The microphone now releases about 10 seconds after you finish (was a</li>
-</ul>
-<p>  minute), so the macOS orange "mic in use" dot doesn't linger.</p>
-<p>  Back-to-back dictations are still instant.</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.5/Haynoi-0.3.5-universal.zip" length="2877760" type="application/octet-stream" sparkle:edSignature="JtmB5bnOw4mlgNNS/q3M44xOHeyos1guLbVX76pRUDO4XVtJH8whnTdukN9gp4NIYG3ctUKB3wjZIXERGMQbBA=="/>
         </item>
     </channel>
 </rss>
