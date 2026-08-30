@@ -5,6 +5,13 @@ All notable changes to Haynoi are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-08-29
+
+### Fixed
+- Reopening the main window after closing it could crash the app (a window
+  memory-management bug present since the first releases, surfaced by 0.3.8).
+  Every window now has a single, correct owner.
+
 ## [0.3.8] - 2026-08-29
 
 ### Added
