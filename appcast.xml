@@ -6,6 +6,25 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.3.9</title>
+            <pubDate>Sun, 30 Aug 2026 04:09:31 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>31</sparkle:version>
+            <sparkle:shortVersionString>0.3.9</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.3.9</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li>Reopening the main window after closing it could crash the app (a window</li>
+</ul>
+<p>  memory-management bug present since the first releases, surfaced by 0.3.8).</p>
+<p>  Every window now has a single, correct owner.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.9/Haynoi-0.3.9-universal.zip" length="4739006" type="application/octet-stream" sparkle:edSignature="tmbm4MxnJTJMJ6pFWQvym7BEQZXzZ9wba7EyX9d5Z4UI4He30d8p0Ht+EFVtmNgHTyKsArPuUbKrCueMvJlcBA=="/>
+        </item>
+        <item>
             <title>0.3.8</title>
             <pubDate>Sun, 30 Aug 2026 03:54:45 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -99,48 +118,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.7/Haynoi-0.3.7-universal.zip" length="4574658" type="application/octet-stream" sparkle:edSignature="jAwr131lm1wXA2avVMYgMwedtr7LAV70XpO94xJSNJxDEgU4Jgbetb+tamYmZ/SRM5oHXYN+hiH8fCiZbKHpBQ=="/>
-        </item>
-        <item>
-            <title>0.3.6</title>
-            <pubDate>Sun, 05 Jul 2026 06:31:08 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>28</sparkle:version>
-            <sparkle:shortVersionString>0.3.6</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.3.6</h2>
-
-<h3>Added</h3>
-<ul>
-<li><strong>New sign-in:</strong> continue with Google — one click, no passwords. Accounts</li>
-</ul>
-<p>  are now Haynoi's own (api.haynoi.com).</p>
-<ul>
-<li><strong>Personal dictionary learns from your corrections.</strong> Say "fix that", edit</li>
-</ul>
-<p>  a dictation in place, or re-dictate — Haynoi notices the fix and gets the</p>
-<p>  term right next time. Everything stays on your Mac.</p>
-<ul>
-<li>Anonymous usage analytics (counts and timings only — never your words),</li>
-</ul>
-<p>  with an opt-out toggle in Settings.</p>
-
-<h3>Changed</h3>
-<ul>
-<li><strong>Obsidian Instrument relaunch:</strong> light-first redesign (Quiet Paper) and the</li>
-</ul>
-<p>  new "ń" tone-mark logo — now bigger in the Dock and shown throughout the app.</p>
-<ul>
-<li>Free tier is <strong>5,000 words per week</strong> (resets every Monday).</li>
-<li>Dictation now runs through Haynoi's own backend.</li>
-</ul>
-
-<h3>Note</h3>
-<ul>
-<li>Existing users: you'll be asked to sign in again after updating (one time).</li>
-</ul>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.6/Haynoi-0.3.6-universal.zip" length="4527633" type="application/octet-stream" sparkle:edSignature="dswsX28167vqQNXFL69KVSzTDPgNNBACRQ+qHSgFmRnJoQKQ4JPplJt4P1eLOCCnixXN3KSEmJ+KMeAi4MjcDg=="/>
         </item>
     </channel>
 </rss>
