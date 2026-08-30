@@ -351,6 +351,13 @@ final class PersonalDictionary {
         queue.sync { entries.filter { $0.source == .learned }.count }
     }
 
+    /// Whether there is any personal context to ground an LLM correction pass
+    /// (Signal E gate) — an ungrounded fix-up pass over-corrects, so without
+    /// this the pass must not run.
+    var hasGroundingContext: Bool {
+        !glossaryTerms().isEmpty || !correctionPairs(max: 1).isEmpty
+    }
+
     /// Pure filter behind `deleteAllLearned` — split out so the invariant
     /// (manual entries survive, learned entries go) is unit-testable without
     /// touching the real on-disk dictionary.

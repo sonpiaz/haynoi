@@ -68,15 +68,35 @@ enum STTProvider {
             }
         }
 
-        var text = try await callTranscribe(
+        let transcribed = try await callTranscribe(
             token: token, audio: audio, model: model, prompt: prompt,
             languageHint: languageHint
         )
+        var text = transcribed.text
 
         if mode.needsRewrite, !text.isEmpty {
             text = try await rewriteWithKyma(
                 token: token, text: text, systemPrompt: mode.rewritePrompt
             )
+        } else if !text.isEmpty,
+                  shouldRunCorrectionPass(
+                      needsRewrite: mode.needsRewrite,
+                      logprobs: transcribed.logprobs,
+                      hasGrounding: PersonalDictionary.shared.hasGroundingContext
+                  ) {
+            // Signal E (v2 Phase 3): the model itself flagged doubt on a token,
+            // so this dictation — and only this one — pays for a grounded
+            // correction pass. Modes with a rewrite already get the glossary +
+            // pairs there; this extends the same correction to rewrite-less
+            // modes without adding LLM latency to every dictation. Failure of
+            // the optional pass never fails the dictation.
+            text = (try? await rewriteWithKyma(
+                token: token, text: text, systemPrompt: Self.correctionPassPrompt
+            )) ?? text
+            // Metadata only: that the pass ran — never the text.
+            await MainActor.run {
+                Analytics.capture("stt_correction_pass", ["trigger": "logprobs"])
+            }
         }
         // Deterministic personal-dictionary replace runs LAST — after the LLM
         // rewrite (so the rewrite can't re-mangle a term we just fixed), or in
@@ -90,6 +110,39 @@ enum STTProvider {
         }
         return Result(text: text, firedIDs: firedIDs)
     }
+
+    // MARK: - Signal E: logprob-gated correction (v2 Phase 3)
+
+    /// A token logprob below this reads as "the model wasn't sure". Provisional
+    /// value (~37% probability) pending live logprob data from the gateway —
+    /// the field ships server-side in kyma-api#1074; until it's deployed,
+    /// `logprobs` is nil and the gate never opens.
+    static let lowConfidenceLogprob: Double = -1.0
+
+    /// True when at least one token fell below the confidence floor.
+    static func hasLowConfidenceToken(_ logprobs: [Double]) -> Bool {
+        logprobs.contains { $0 < lowConfidenceLogprob }
+    }
+
+    /// The correction pass runs only when ALL hold: the mode has no rewrite
+    /// (rewrite modes already carry the glossary + pairs), the model flagged a
+    /// doubtful token, and there is personal context to ground the fix — an
+    /// UNgrounded LLM fix-up pass over-corrects, so no grounding means no call.
+    static func shouldRunCorrectionPass(
+        needsRewrite: Bool, logprobs: [Double]?, hasGrounding: Bool
+    ) -> Bool {
+        guard !needsRewrite, hasGrounding, let logprobs else { return false }
+        return hasLowConfidenceToken(logprobs)
+    }
+
+    /// Base prompt for the correction-only pass. `rewriteSystemPrompt` places
+    /// the glossary and correction pairs ABOVE this, so "the context above"
+    /// resolves to exactly that grounding.
+    static let correctionPassPrompt = """
+        The text is a raw speech-to-text transcript. Fix misrecognized words \
+        using the context above. Change nothing else — no rephrasing, no \
+        formatting, no additions or removals. Return only the corrected text.
+        """
 
     /// Resolves the model alias from the user's quality setting. The proxy
     /// passes these verbatim to Kyma.
@@ -193,8 +246,14 @@ enum STTProvider {
     private static func callTranscribe(
         token: String, audio: EncodedAudio, model: String, prompt: String,
         languageHint: String
-    ) async throws -> String {
+    ) async throws -> (text: String, logprobs: [Double]?) {
         let boundary = UUID().uuidString
+        // Signal E: the quality tier supports per-token logprobs with the json
+        // format. Harmless before the gateway ships the passthrough — the
+        // response then simply carries no logprobs and the gate stays closed.
+        // The fast tier's model has no logprobs support; it keeps the default
+        // response shape.
+        let wantsLogprobs = model == "transcribe-quality"
 
         var body = Data()
         body.append("--\(boundary)\r\n")
@@ -224,6 +283,15 @@ enum STTProvider {
             body.append("\(languageHint)\r\n")
         }
 
+        if wantsLogprobs {
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"response_format\"\r\n\r\n")
+            body.append("json\r\n")
+            body.append("--\(boundary)\r\n")
+            body.append("Content-Disposition: form-data; name=\"include[]\"\r\n\r\n")
+            body.append("logprobs\r\n")
+        }
+
         body.append("--\(boundary)--\r\n")
 
         var request = URLRequest(url: URL(string: transcribeURL)!)
@@ -246,7 +314,14 @@ enum STTProvider {
                       let text = json["text"] as? String else {
                     throw STTError.parseError
                 }
-                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Per-token confidence (Signal E) — present only when the
+                // gateway passes it through; absent = nil, gate stays closed.
+                var logprobs: [Double]?
+                if let entries = json["logprobs"] as? [[String: Any]] {
+                    let values = entries.compactMap { $0["logprob"] as? Double }
+                    if !values.isEmpty { logprobs = values }
+                }
+                return (text.trimmingCharacters(in: .whitespacesAndNewlines), logprobs)
             case 401:
                 // Session expired/revoked server-side — sign out locally and notify UI.
                 NSLog("[Haynoi] 401 from proxy — session expired, signing out")

@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can't — like a personal name that sounds identical to a common word. Only
   fixes you've confirmed are used, and they never leave your dictionary except
   inside the dictation being cleaned up.
+- **Haynoi notices when it wasn't sure.** When the transcriber flags doubt
+  about a word — exactly where names and jargon go wrong — that dictation
+  gets one extra pass through your personal fixes before the text is typed.
+  Confident dictations skip it entirely, so nothing gets slower. Works in
+  every mode once our servers finish rolling out the confidence signal.
 - **You're in charge of what Haynoi learns.** The Dictionary tab now has a
   master switch for learning from your corrections, shows how many words
   Haynoi has learned from you, and a "Forget all" button that wipes every
