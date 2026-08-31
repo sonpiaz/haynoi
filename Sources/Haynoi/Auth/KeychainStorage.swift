@@ -8,7 +8,12 @@ enum KeychainStorage {
         case unexpectedData
     }
 
-    private static let service = "com.sonpiaz.haynoi"
+    // Keyed by the RUNNING bundle id: the release app resolves to the literal
+    // "com.sonpiaz.haynoi" (existing users' items unchanged), while dev builds
+    // (com.sonpiaz.haynoi.dev) get their own namespace — a dev build reading
+    // release-owned items across signing identities is what caused the endless
+    // "enter your login keychain password" prompts (2026-08-30).
+    private static let service = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi"
 
     static func save(_ value: String, for key: String) throws {
         guard let data = value.data(using: .utf8) else {
