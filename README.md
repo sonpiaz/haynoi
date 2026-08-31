@@ -28,9 +28,9 @@
 
 Most dictation tools treat Vietnamese as an afterthought. **Haynoi is built for the way Vietnamese people actually speak** — tiếng Việt with English mixed in mid-sentence ("deadline", "deploy", "team marketing") — and keeps both languages intact instead of translating or mangling one of them.
 
-- **Speaks your language(s).** Vietnamese-optimized speech-to-text that handles Vi/En code-switching, with a custom dictionary for names and jargon the model should never get wrong.
+- **Speaks your language(s).** Vietnamese-optimized speech-to-text that handles Vi/En code-switching — and a personal dictionary that **learns from your corrections**, so names and jargon come out right the next time without you configuring anything.
 - **Works in every app.** Text is inserted directly where your cursor is — editor, browser, chat, terminal — via the Accessibility API, with clipboard fallback.
-- **Nothing to configure.** Sign in once with a [Kyma](https://kymaapi.com) account (free credit on signup). No API keys to paste, no model menus to study.
+- **Nothing to configure.** Sign in once with Google. No API keys to paste, no model menus to study. Free tier included.
 
 ## How it works
 
@@ -49,6 +49,14 @@ That's the whole product. A floating bar shows the waveform while you talk; a la
 | **Email / Formal** | Rewrites your rambling into a professional message |
 | **Auto** | Picks a mode from the app you're in — formal in Mail, clean in chat |
 
+## It learns you
+
+Haynoi's dictionary fills itself instead of asking you to maintain it:
+
+- **Fix it once, it sticks.** Say "fix that" (⌃⌥) and re-dictate, edit the inserted text in place, or just repeat yourself — Haynoi notices the correction and suggests remembering it. Confirmed fixes are applied automatically from then on.
+- **It knows when it wasn't sure.** When the transcriber hesitates on a word that *sounds like* a name you use — "Afider" for "Affitor", "Sun" for "Sơn" — that one dictation gets an extra cleanup pass with your personal terms. Confident dictations skip it, so nothing gets slower.
+- **You stay in charge.** A master learning switch, a counter of what's been learned, and a one-tap "Forget all" live in Settings → Dictionary. Learning runs on transcript text only — never audio — and your dictionary never leaves your Mac.
+
 ## Features
 
 - **Push-to-talk** — hold the left `⌥` Option key (or `⌘` / `⌃` / `fn`), release to transcribe
@@ -56,12 +64,11 @@ That's the whole product. A floating bar shows the waveform while you talk; a la
 - **Your words are never lost** — if the network fails mid-transcription, the recording is saved locally and retried with one click
 - **Survives real life** — AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully instead of eating your dictation
 - **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers)
+- **Other audio gets out of your way** — music and video pause and resume around your dictation; a live call or stream is dipped in volume instead, decided from what your Mac is actually playing
 - **Living status orb** — recording, transcribing, success, and error each have their own state, so you always know where your words are
-- **Custom dictionary** — teach it names and terms once, it spells them right forever
 - **Snippets** — say a trigger word, get expanded text
 - **Transcription history** — searchable, stored locally, grouped by date
 - **Premium sound feedback** — harmonic chords for start / stop / cancel / success
-- **Mute music** — auto-pauses media while you dictate
 - **Silent auto-updates** via Sparkle, launch at login, guided onboarding
 
 ## Install
@@ -80,28 +87,28 @@ make run
 First run, either way:
 
 1. The onboarding wizard walks you through Microphone and Accessibility permissions — that's all Haynoi needs
-2. Sign in with your [Kyma](https://kymaapi.com) account — free credit on signup, nothing to paste
+2. **Sign in with Google** — one click, no passwords, nothing to paste
 3. Hold the left `⌥` Option key, say something, release — the guided first dictation shows you the loop
 
-## Quality & cost
+## Pricing
 
-Haynoi defaults to the highest-accuracy tier and is transparent about what dictation costs:
+**Free: 5,000 words per week**, resetting every Monday. That covers everyday dictation for most people — no card required, just the Google sign-in.
 
-| Tier | Model | Per dictation* | Best for |
-|------|-------|---------------|----------|
-| **Quality** (default) | `gpt-4o-mini-transcribe` | ~$0.004 | Vietnamese + English, noisy rooms, technical vocabulary |
-| **Fast** | `whisper-v3-turbo` | ~$0.001 | Clear, simple speech on a budget |
+**Haynoi Pro** (unlimited words) is coming soon.
 
-<sub>*One push-to-talk utterance, billed per minute through Kyma. The free signup credit covers your first ~120 dictations.</sub>
+Two transcription tiers, switchable any time in Settings:
 
-Switch tiers any time in Settings — it's one segmented control.
+| Tier | Model | Best for |
+|------|-------|----------|
+| **Quality** (default) | `gpt-4o-mini-transcribe` | Vietnamese + English, noisy rooms, technical vocabulary |
+| **Fast** | `whisper-v3-turbo` | Clear, simple speech |
 
 ## Privacy
 
-- Audio goes **only** to [Kyma API](https://kymaapi.com) for transcription, then is discarded — nothing is stored server-side beyond standard request logs
-- Your Kyma credential lives in the **macOS Keychain**
-- Transcription history stays **on your Mac**
-- No analytics, no tracking, no telemetry in the app
+- **Audio** is sent to Haynoi's backend for transcription, then discarded — recordings are never stored server-side
+- **Your dictionary, learned corrections, and transcription history stay on your Mac** — learning uses transcript text only, never audio, and nothing about it syncs anywhere
+- Your sign-in session lives in the **macOS Keychain**
+- **Anonymous usage analytics** (feature counts and timings — never your words, never transcript content) help improve the app; there's an opt-out toggle in Settings
 
 ## Development
 
@@ -125,18 +132,19 @@ Sources/Haynoi/
 │   ├── AudioRecorder.swift       — 16kHz mono mic capture via AVAudioEngine
 │   └── SoundFeedback.swift       — Harmonic chord audio cues
 ├── Auth/
-│   ├── KymaAuth.swift            — OAuth 2.0 + PKCE sign-in to Kyma
-│   └── KeychainStorage.swift     — Credential storage
+│   ├── HaynoiAuth.swift          — Google sign-in via Haynoi's backend
+│   └── KeychainStorage.swift     — Session storage in the macOS Keychain
 ├── Input/
 │   ├── HotkeyManager.swift       — Global hotkey via NSEvent monitors (Accessibility)
 │   └── TextInserter.swift        — AX API + clipboard text insertion
 ├── Transcription/
-│   ├── STTProvider.swift         — Kyma transcription (quality / fast tiers)
+│   ├── STTProvider.swift         — Transcription + confidence-gated correction pass
 │   └── TranscriptionMode.swift   — Normal / Clean / Email / Auto modes
 ├── Settings/
 │   └── SettingsView.swift        — Account, quality, hotkey, dictionary
 ├── UI/                           — History list, main window, floating bar
-└── System/                       — Launch at login, media control, usage stats
+└── System/                       — Personal dictionary + correction learning,
+                                    media control, launch at login, usage stats
 ```
 
 </details>
