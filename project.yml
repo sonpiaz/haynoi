@@ -40,10 +40,28 @@ targets:
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+        # Release identity = exactly what ships (CI re-signs with the same
+        # Developer ID, so local release builds match the released app's TCC
+        # identity). Debug builds get their OWN bundle id + the development
+        # cert: two identities on ONE bundle id made TCC's Accessibility grant
+        # flip-flop every time a Debug build launched (the "grant dies" loop,
+        # 2026-08-30 — TCC stores the granting binary's cert in its designated
+        # requirement). Separate ids = separate TCC records that never fight,
+        # and a Debug launch no longer kills the running production app
+        # (the single-instance guard matches per bundle id).
+        # Developer ID cannot host XCTest anyway: AMFI refuses the test-runner
+        # attach ("test runner hung before establishing connection"), which is
+        # why Debug keeps Apple Development and no hardened runtime.
+        CODE_SIGN_IDENTITY: "Developer ID Application: Affitor LLC (448LBGWBYM)"
+        DEVELOPMENT_TEAM: 448LBGWBYM
         ENABLE_HARDENED_RUNTIME: true
-        CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
-        DEVELOPMENT_TEAM: 6WMWJ85DDY
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi.dev
+          CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
+          DEVELOPMENT_TEAM: 6WMWJ85DDY
+          ENABLE_HARDENED_RUNTIME: false
     entitlements:
       path: Resources/Haynoi.entitlements
       properties:
@@ -63,6 +81,7 @@ targets:
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         GENERATE_INFOPLIST_FILE: true
+        # Tests only run in Debug — development cert (Developer ID can't host XCTest).
         DEVELOPMENT_TEAM: 6WMWJ85DDY
         CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
     scheme:
