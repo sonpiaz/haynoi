@@ -84,6 +84,27 @@ class FloatingBarController {
         AppState.shared.orbState = newState
     }
 
+    #if DEBUG
+    /// Writes the live orb view to PNG (own-window snapshot — no Screen Recording TCC).
+    @MainActor func debugSnapshot(to url: URL) {
+        guard let view = hostingView else {
+            NSLog("[Haynoi] debugSnapshot: no hosting view")
+            return
+        }
+        view.layoutSubtreeIfNeeded()
+        let bounds = view.bounds
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: bounds) else { return }
+        view.cacheDisplay(in: bounds, to: rep)
+        guard let data = rep.representation(using: .png, properties: [:]) else { return }
+        try? data.write(to: url)
+        NSLog("[Haynoi] debugSnapshot wrote %@", url.path)
+    }
+
+    @MainActor var debugWindowFrame: NSRect? { window?.frame }
+
+    @MainActor var debugWindowNumber: Int { window?.windowNumber ?? 0 }
+    #endif
+
     /// Hides and destroys the orb window.
     @MainActor func hide() {
         guard let win = window else { return }
@@ -271,7 +292,7 @@ struct FloatingBarView: View {
     private let trailBarCount = 40
     private let trailBarWidth: CGFloat = 2.6
     private let trailBarGap: CGFloat = 1.2
-    private let trailMaxBarHeight: CGFloat = 30
+    private let trailMaxBarHeight: CGFloat = 22
 
     /// Shared "cosmic" capsule — fixed dark obsidian (always dark, floats over other apps).
     /// Border: hairline white at 10% opacity. Halo: single-hue Signal Cyan — swells with voice.
@@ -295,38 +316,54 @@ struct FloatingBarView: View {
         ZStack {
             cosmicCapsule(width: 176, height: 52)
 
-            Canvas { context, size in
-                let stride = trailBarWidth + trailBarGap
-                let total = CGFloat(trailHistory.count) * stride - trailBarGap
-                let x0 = (size.width - total) / 2
-                let midY = size.height / 2
-                for (i, v) in trailHistory.enumerated() {
-                    let h = max(1.8, min(v, 1) * trailMaxBarHeight)
-                    let rect = CGRect(x: x0 + CGFloat(i) * stride,
-                                      y: midY - h / 2,
-                                      width: trailBarWidth,
-                                      height: h)
-                    let path = Path(roundedRect: rect, cornerRadius: trailBarWidth / 2)
-                    let age = CGFloat(i) / CGFloat(max(trailHistory.count - 1, 1)) // 0 old → 1 new
-                    if v < 0.05 {
-                        // Quiet dash — 40% white on the dark obsidian pill, honest silence
-                        context.fill(path, with: .color(Color.white.opacity(0.40 * age + 0.12)))
-                    } else {
-                        // Active bar — single-hue Signal Cyan, opacity fades with age
-                        var bar = context
-                        bar.opacity = 0.18 + 0.82 * age
-                        bar.fill(path, with: .linearGradient(
-                            Gradient(colors: [Color.accent, Color.accentDeep]),
-                            startPoint: CGPoint(x: rect.midX, y: rect.maxY),
-                            endPoint: CGPoint(x: rect.midX, y: rect.minY)
-                        ))
+            VStack(spacing: 2) {
+                Canvas { context, size in
+                    let stride = trailBarWidth + trailBarGap
+                    let total = CGFloat(trailHistory.count) * stride - trailBarGap
+                    let x0 = (size.width - total) / 2
+                    let midY = size.height / 2
+                    for (i, v) in trailHistory.enumerated() {
+                        let h = max(1.8, min(v, 1) * trailMaxBarHeight)
+                        let rect = CGRect(x: x0 + CGFloat(i) * stride,
+                                          y: midY - h / 2,
+                                          width: trailBarWidth,
+                                          height: h)
+                        let path = Path(roundedRect: rect, cornerRadius: trailBarWidth / 2)
+                        let age = CGFloat(i) / CGFloat(max(trailHistory.count - 1, 1)) // 0 old → 1 new
+                        if v < 0.05 {
+                            // Quiet dash — 40% white on the dark obsidian pill, honest silence
+                            context.fill(path, with: .color(Color.white.opacity(0.40 * age + 0.12)))
+                        } else {
+                            // Active bar — single-hue Signal Cyan, opacity fades with age
+                            var bar = context
+                            bar.opacity = 0.18 + 0.82 * age
+                            bar.fill(path, with: .linearGradient(
+                                Gradient(colors: [Color.accent, Color.accentDeep]),
+                                startPoint: CGPoint(x: rect.midX, y: rect.maxY),
+                                endPoint: CGPoint(x: rect.midX, y: rect.minY)
+                            ))
+                        }
                     }
                 }
+                .frame(width: 156, height: 26)
+                .shadow(color: Color.accent.opacity(0.28), radius: 4)
+
+                // One interim line on the orb fill — ink on obsidian. Empty /
+                // unavailable SFSpeech shows an ellipsis slot, never fake words.
+                Text(interimLine)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.inkDarkBody)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 148, height: 16, alignment: .leading)
+                    .opacity(interimLine.isEmpty ? 0 : 1)
             }
-            .frame(width: 156, height: 40)
-            .shadow(color: Color.accent.opacity(0.28), radius: 4)
         }
         .frame(width: 180, height: 76)
+    }
+
+    private var interimLine: String {
+        state.interimPartial.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Transcribing — intentionally invisible
@@ -587,59 +624,5 @@ struct LearnToastView: View {
                 .shadow(color: .black.opacity(0.38), radius: 12, y: 4)
         )
         .frame(width: 320, height: 64)
-    }
-}
-
-// MARK: - Waveform Ring Shape (shared with status bar)
-
-struct WaveformRing: Shape {
-    var level: CGFloat
-    var phase: Double
-
-    var animatableData: AnimatablePair<CGFloat, Double> {
-        get { AnimatablePair(level, phase) }
-        set { level = newValue.first; phase = newValue.second }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let baseRadius: CGFloat = min(rect.width, rect.height) / 2 - 3
-        let barCount = 32
-        let barWidth: CGFloat = 2.0
-
-        for i in 0..<barCount {
-            let angle = (Double(i) / Double(barCount)) * 2.0 * .pi - .pi / 2
-
-            let freq1 = sin(phase * 1.0 + Double(i) * 0.6) * 0.5 + 0.5
-            let freq2 = cos(phase * 0.6 + Double(i) * 0.4) * 0.3 + 0.5
-            let freq3 = sin(phase * 1.4 + Double(i) * 0.9) * 0.2 + 0.5
-            let response = freq1 * 0.45 + freq2 * 0.35 + freq3 * 0.20
-
-            let maxExtension: CGFloat = 12
-            let extension_ = maxExtension * level * CGFloat(response)
-            let minBar: CGFloat = 2.0
-
-            let innerR = baseRadius - minBar
-            let outerR = baseRadius + max(extension_, 0.5)
-
-            let cosA = CGFloat(cos(angle))
-            let sinA = CGFloat(sin(angle))
-
-            let inner = CGPoint(x: center.x + innerR * cosA, y: center.y + innerR * sinA)
-            let outer = CGPoint(x: center.x + outerR * cosA, y: center.y + outerR * sinA)
-
-            let perpX = -sinA * barWidth / 2
-            let perpY = cosA * barWidth / 2
-
-            path.move(to: CGPoint(x: inner.x + perpX, y: inner.y + perpY))
-            path.addLine(to: CGPoint(x: outer.x + perpX, y: outer.y + perpY))
-            path.addLine(to: CGPoint(x: outer.x - perpX, y: outer.y - perpY))
-            path.addLine(to: CGPoint(x: inner.x - perpX, y: inner.y - perpY))
-            path.closeSubpath()
-        }
-
-        return path
     }
 }

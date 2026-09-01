@@ -93,6 +93,7 @@ final class PipelineController {
         // monitors, so it is the only permission worth logging now.
         NSLog("[Haynoi] Pipeline ready. AX=%d",
               AXIsProcessTrusted() ? 1 : 0)
+        InterimSpeechRecognizer.shared.prefetchAuthorization()
 
         // Warm the engine once on launch if mic permission is already granted so
         // the very first dictation is also instant. The 60s cooldown releases the
@@ -169,6 +170,10 @@ final class PipelineController {
         }
 
         recorder.beginCapture(preRollMs: PipelineController.preRollMs)
+        recorder.liveCaptureBufferHandler = { buffer in
+            InterimSpeechRecognizer.shared.append(buffer)
+        }
+        InterimSpeechRecognizer.shared.start()
 
         state.isRecording = true
         state.showOverlay = true
@@ -205,6 +210,7 @@ final class PipelineController {
         durationTimer?.invalidate()
         durationTimer = nil
 
+        stopInterimOverlay()
         let samples = recorder.endCapture()
 
         // Measure duration from the actual captured samples (pre-roll included)
@@ -445,6 +451,51 @@ final class PipelineController {
         }
     }
 
+    #if DEBUG
+    /// Listening HUD only — real SFSpeech path, no canned text. Snapshot then cancel.
+    /// If this Dev bundle has no mic TCC yet, still show the orb (honest empty
+    /// trail / empty partial). Never prompt; never seed English.
+    @MainActor func debugCaptureListeningHUD() {
+        func mark(_ line: String) {
+            let url = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/.grok-standard-hud-started.txt")
+            let prev = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            try? (prev + line + "\n").write(to: url, atomically: true, encoding: .utf8)
+        }
+        let dest = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/.grok-standard-hud.png")
+        let frameDest = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/.grok-standard-hud-frame.txt")
+        let mic = AVCaptureDevice.authorizationStatus(for: .audio)
+        mark("capture mic=\(mic.rawValue)")
+        if mic == .authorized {
+            preRecording()
+            confirmRecording()
+            mark("via pipeline rec=\(state.isRecording) overlay=\(state.showOverlay)")
+        } else {
+            InterimSpeechRecognizer.shared.start()
+            state.isRecording = true
+            state.showOverlay = true
+            FloatingBarController.shared.show()
+            mark("orb-only (no mic TCC on Dev bundle)")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            FloatingBarController.shared.debugSnapshot(to: dest)
+            if let f = FloatingBarController.shared.debugWindowFrame {
+                let line = String(format: "%d %d %d %d %d\n",
+                                  Int(f.origin.x), Int(f.origin.y),
+                                  Int(f.size.width), Int(f.size.height),
+                                  FloatingBarController.shared.debugWindowNumber)
+                try? line.write(to: frameDest, atomically: true, encoding: .utf8)
+                mark("frame \(line.trimmingCharacters(in: .whitespacesAndNewlines))")
+            } else {
+                mark("no window frame")
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            self.cancelRecording()
+            mark("cancelled")
+        }
+    }
+    #endif
+
     func cancelRecording() {
         // Pre-recording only warmed the engine (ring-buffer mode); nothing was
         // captured yet. The engine stays warm — cooldown reclaims it if unused.
@@ -455,6 +506,7 @@ final class PipelineController {
             recorder.endCapture()
         }
         guard state.isRecording else { return }
+        stopInterimOverlay()
         _ = recorder.endCapture()
         state.isRecording = false
         state.showOverlay = false
@@ -469,6 +521,11 @@ final class PipelineController {
         if UserDefaults.standard.bool(forKey: "soundEnabled") {
             SoundFeedback.shared.playCancelTone()
         }
+    }
+
+    private func stopInterimOverlay() {
+        recorder.liveCaptureBufferHandler = nil
+        InterimSpeechRecognizer.shared.stop()
     }
 
     // MARK: - v1.1 "Fix that" correction (Signal C)
@@ -615,6 +672,7 @@ final class PipelineController {
         durationTimer = nil
         recordingStartTime = nil
         isPreRecording = false
+        stopInterimOverlay()
 
         // Show error orb briefly, then hide
         FloatingBarController.shared.transition(to: .error)
