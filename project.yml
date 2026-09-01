@@ -33,8 +33,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi
         PRODUCT_NAME: Haynoi
-        MARKETING_VERSION: "0.3.9"
-        CURRENT_PROJECT_VERSION: "31"
+        MARKETING_VERSION: "0.3.10"
+        CURRENT_PROJECT_VERSION: "32"
         INFOPLIST_FILE: Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Resources/Haynoi.entitlements
         SWIFT_VERSION: "5.9"
