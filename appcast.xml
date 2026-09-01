@@ -6,6 +6,34 @@
         <description>Auto-update feed for Haynoi. Populated by Scripts/make_appcast.sh on each release.</description>
         <language>en</language>
         <item>
+            <title>0.3.10</title>
+            <pubDate>Tue, 01 Sep 2026 16:23:42 +0000</pubDate>
+            <link>https://haynoi.com</link>
+            <sparkle:version>32</sparkle:version>
+            <sparkle:shortVersionString>0.3.10</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>Haynoi 0.3.10</h2>
+
+<h3>Fixed</h3>
+<ul>
+<li><strong>When our servers have a problem, Haynoi now says so</strong> — instead of telling</li>
+</ul>
+<p>  you that you're out of words, or signing you out. A provider-side hiccup is</p>
+<p>  labeled as ours, your quota and sign-in are left alone, and the message asks</p>
+<p>  you to simply try again.</p>
+
+<h3>Added</h3>
+<ul>
+<li><strong>A scoreboard for every learned word.</strong> Each auto-learned fix now shows how</li>
+</ul>
+<p>  many times it was applied and how often you let it stand ("used 12× · 92%</p>
+<p>  kept"), and the Dictionary header sums it up. When Haynoi gets a word wrong</p>
+<p>  after learning it, that counts against the word — visibly.</p>
+<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.10/Haynoi-0.3.10-universal.zip" length="4743666" type="application/octet-stream" sparkle:edSignature="w37PxP0+weQYsOq5kBlwfjamAx6Bm31R2p7+HgvaC/CUbUSWDr8sD1T6Suf4cUSQcpXptdnaIAQc7hA59xLOCA=="/>
+        </item>
+        <item>
             <title>0.3.9</title>
             <pubDate>Sun, 30 Aug 2026 04:09:31 +0000</pubDate>
             <link>https://haynoi.com</link>
@@ -91,33 +119,6 @@
 <p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.8/Haynoi-0.3.8-universal.zip" length="4739024" type="application/octet-stream" sparkle:edSignature="wlUueKSao7/buyMlE4JbZOMUnw37UZKWaIuWxq6EM5ldBCtTebp2BIDAyz9IbvwRGsyDzcHqSawbbuXTus5bDQ=="/>
-        </item>
-        <item>
-            <title>0.3.7</title>
-            <pubDate>Sun, 05 Jul 2026 07:29:39 +0000</pubDate>
-            <link>https://haynoi.com</link>
-            <sparkle:version>29</sparkle:version>
-            <sparkle:shortVersionString>0.3.7</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>Haynoi 0.3.7</h2>
-
-<h3>Added</h3>
-<ul>
-<li><strong>Haynoi Pro is live.</strong> Unlimited dictation, all 4 modes, priority</li>
-</ul>
-<p>  transcription — $14.99/month or $125.88/year. Upgrade in</p>
-<p>  Settings → Plans & Billing; payment runs through Stripe in your browser</p>
-<p>  and the app unlocks within seconds. Manage or cancel anytime.</p>
-
-<h3>Fixed</h3>
-<ul>
-<li>Usage analytics events now actually reach our dashboard (a</li>
-</ul>
-<p>  misconfigured key silently dropped them — still counts and timings</p>
-<p>  only, never your words).</p>
-<p><a href="https://github.com/sonpiaz/haynoi/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/sonpiaz/haynoi/releases/download/v0.3.7/Haynoi-0.3.7-universal.zip" length="4574658" type="application/octet-stream" sparkle:edSignature="jAwr131lm1wXA2avVMYgMwedtr7LAV70XpO94xJSNJxDEgU4Jgbetb+tamYmZ/SRM5oHXYN+hiH8fCiZbKHpBQ=="/>
         </item>
     </channel>
 </rss>
