@@ -62,6 +62,25 @@ final class CorrectionPassTests: XCTestCase {
             needsRewrite: false, logprobs: [-0.1, -2.2], hasGrounding: true))
     }
 
+    // MARK: - 402 attribution: whose fault is a 402?
+
+    func testQuotaExhaustedBodyIsRecognized() {
+        let ours = #"{"error":{"code":"quota_exhausted","message":"Weekly words limit reached."}}"#
+        XCTAssertTrue(STTProvider.isQuotaExhausted(Data(ours.utf8)))
+    }
+
+    func testUpstreamShapedBodiesAreNotBlamedOnTheUser() {
+        for body in [
+            #"{"error":{"message":"Insufficient balance","type":"billing_error"}}"#,  // upstream 402, no code
+            #"{"error":{"code":"upstream_unavailable","message":"..."}}"#,
+            #"not json at all"#,
+            #"{}"#,
+        ] {
+            XCTAssertFalse(STTProvider.isQuotaExhausted(Data(body.utf8)),
+                           "must never read as the user's quota: \(body)")
+        }
+    }
+
     func testCorrectionPromptComposesUnderGrounding() {
         let system = STTProvider.rewriteSystemPrompt(
             base: STTProvider.correctionPassPrompt,

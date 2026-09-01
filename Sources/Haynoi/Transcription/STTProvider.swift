@@ -382,8 +382,19 @@ enum STTProvider {
                 NotificationHelper.postSessionExpired()
                 throw STTError.sessionExpired
             case 402:
-                NSLog("[Haynoi] 402 from proxy — monthly word quota exhausted")
-                throw STTError.outOfCredits
+                // Only OUR server's quota 402 carries code "quota_exhausted".
+                // Any other 402 on this path is an operator-side failure that
+                // slipped through untranslated — never blame the user's word
+                // limit for it (the 2026-08 misattribution incident). The
+                // server now translates upstream 401/402/403 to 502; this is
+                // the client-side belt to that suspender.
+                if Self.isQuotaExhausted(data) {
+                    NSLog("[Haynoi] 402 from proxy — word quota exhausted")
+                    throw STTError.outOfCredits
+                }
+                NSLog("[Haynoi] 402 without quota_exhausted — treating as upstream fault")
+                throw STTError.serverError(
+                    "Our transcription service is having a moment — this isn't your word limit. Please try again shortly.")
             case 429:
                 NSLog("[Haynoi] Rate limited by proxy")
                 throw STTError.rateLimited
@@ -398,6 +409,18 @@ enum STTProvider {
             NSLog("[Haynoi] Transport error: %@", urlErr.localizedDescription)
             throw STTError.noConnection
         }
+    }
+
+    /// True only for the server's OWN quota-exhausted envelope:
+    /// {"error":{"code":"quota_exhausted", ...}}. Anything else on a 402 is an
+    /// operator-side failure wearing the wrong status. Pure — unit-tested.
+    static func isQuotaExhausted(_ data: Data) -> Bool {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let errorObj = json["error"] as? [String: Any],
+              let code = errorObj["code"] as? String else {
+            return false
+        }
+        return code == "quota_exhausted"
     }
 
     /// Extracts the human-readable message from a proxy error envelope.

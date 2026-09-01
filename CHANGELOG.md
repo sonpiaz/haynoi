@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **When our servers have a problem, Haynoi now says so** — instead of telling
+  you that you're out of words, or signing you out. A provider-side hiccup is
+  labeled as ours, your quota and sign-in are left alone, and the message asks
+  you to simply try again.
+
 ### Added
 - **A scoreboard for every learned word.** Each auto-learned fix now shows how
   many times it was applied and how often you let it stand ("used 12× · 92%
