@@ -609,6 +609,32 @@ private struct DictionaryEditor: View {
         entries.filter { $0.source == .learned }.count
     }
 
+    /// Header line under the learning switch: how many words were learned and —
+    /// once rules have actually fired — how well they held up (§F scoreboard).
+    private var learnedSubtitle: String {
+        guard learnedCount > 0 else {
+            return "Haynoi suggests new words when you fix a dictation."
+        }
+        var s = "Haynoi has learned \(learnedCount) word\(learnedCount == 1 ? "" : "s") from you."
+        let sb = PersonalDictionary.shared.learnedScoreboard
+        if sb.fires > 0 {
+            let kept = Int((Double(max(0, sb.fires - sb.recorrections)) / Double(sb.fires) * 100).rounded())
+            s += " Applied \(sb.fires)× · \(kept)% kept."
+        }
+        return s
+    }
+
+    /// Per-rule tally appended to a replacement row: how often it fired, and —
+    /// only once there is counter-evidence — how often the user let it stand.
+    private func usageSuffix(_ entry: DictionaryEntry) -> String {
+        guard entry.fireCount > 0 else { return "" }
+        var s = " · used \(entry.fireCount)×"
+        if entry.recorrectedCount > 0, let rate = entry.keptRate {
+            s += " · \(Int((rate * 100).rounded()))% kept"
+        }
+        return s
+    }
+
     private var canAdd: Bool {
         let r = rightField.trimmingCharacters(in: .whitespacesAndNewlines)
         if r.isEmpty { return false }
@@ -629,9 +655,7 @@ private struct DictionaryEditor: View {
                         Text("Learn from my corrections")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Color.obsidianLabel(for: scheme))
-                        Text(learnedCount > 0
-                             ? "Haynoi has learned \(learnedCount) word\(learnedCount == 1 ? "" : "s") from you."
-                             : "Haynoi suggests new words when you fix a dictation.")
+                        Text(learnedSubtitle)
                             .font(.system(size: 11))
                             .foregroundStyle(Color.obsidianLabel3(for: scheme))
                     }
@@ -710,7 +734,7 @@ private struct DictionaryEditor: View {
                                     ? Color.obsidianLabel(for: scheme)
                                     : Color.obsidianLabel3(for: scheme))
                             if entry.kind == .replacement, let wrong = entry.wrong {
-                                Text("\(wrong) → \(entry.right)")
+                                Text("\(wrong) → \(entry.right)\(usageSuffix(entry))")
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundStyle(Color.obsidianLabel3(for: scheme))
                             }
