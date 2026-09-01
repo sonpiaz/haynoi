@@ -30,6 +30,7 @@ final class CorrectionLearningTests: XCTestCase {
 
         XCTAssertEqual(entry.confirmations, 0, "v1 file must default confirmations to 0")
         XCTAssertEqual(entry.fireCount, 0, "v1 file must default fireCount to 0")
+        XCTAssertEqual(entry.recorrectedCount, 0, "pre-scoreboard file must default recorrectedCount to 0")
         XCTAssertEqual(entry.right, "Hà Nội")
         XCTAssertEqual(entry.wrong, "Haynoi")
         XCTAssertEqual(entry.frequency, 3)
@@ -154,13 +155,32 @@ final class CorrectionLearningTests: XCTestCase {
         XCTAssertNotNil(upserted)
         XCTAssertNotNil(dict.enabledReplacement(matching: "selfHealX", right: "selfHealY"))
 
-        // User reverses it → disable.
+        // User reverses it → disable AND score the reversal (§F).
         let disabledID = dict.disableMatchingReplacement(wrong: "selfHealX", right: "selfHealY")
         XCTAssertNotNil(disabledID)
         XCTAssertNil(dict.enabledReplacement(matching: "selfHealX", right: "selfHealY"),
                      "disabled rule must no longer be returned as enabled")
+        if let id = disabledID {
+            XCTAssertEqual(dict.entries(withIDs: [id]).first?.recorrectedCount, 1,
+                           "a reversal must land on the rule's scoreboard")
+        }
 
         // Cleanup so the test doesn't pollute the real dictionary.
         if let id = disabledID { dict.delete(id: id) }
+    }
+
+    // MARK: - §F scoreboard: keptRate
+
+    func testKeptRateNeedsEvidence() {
+        let unfired = DictionaryEntry(right: "Y", wrong: "X", kind: .replacement)
+        XCTAssertNil(unfired.keptRate, "no fires → no accuracy claim")
+
+        let scored = DictionaryEntry(right: "Y", wrong: "X", kind: .replacement,
+                                     fireCount: 4, recorrectedCount: 1)
+        XCTAssertEqual(scored.keptRate, 0.75)
+
+        let overReversed = DictionaryEntry(right: "Y", wrong: "X", kind: .replacement,
+                                           fireCount: 1, recorrectedCount: 3)
+        XCTAssertEqual(overReversed.keptRate, 0, "rate clamps at 0, never negative")
     }
 }

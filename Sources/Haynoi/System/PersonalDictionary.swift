@@ -52,6 +52,17 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
     // v1.1 — explicit "fix that" correction capture (Signal C).
     var confirmations: Int       // explicit "fix that" confirms; gates .learned .replacement activation (>= 2)
     var fireCount: Int           // times this .replacement actually fired (self-heal + §F effectiveness)
+    // v2 scoreboard (§F) — times the user corrected AGAINST this rule after it
+    // fired (the self-heal event). fireCount vs recorrectedCount is the
+    // per-word accuracy ledger: "applied N× · M% kept".
+    var recorrectedCount: Int
+
+    /// Share of this rule's fires the user let stand, 0...1. nil until it has
+    /// fired at least once — no evidence, no claim.
+    var keptRate: Double? {
+        guard fireCount > 0 else { return nil }
+        return Double(max(0, fireCount - recorrectedCount)) / Double(fireCount)
+    }
 
     enum Kind: String, Codable { case term, replacement }
     enum Source: String, Codable { case manual, learned }
@@ -68,7 +79,8 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
         frequency: Int = 0,
         createdAt: Date = Date(),
         confirmations: Int = 0,
-        fireCount: Int = 0
+        fireCount: Int = 0,
+        recorrectedCount: Int = 0
     ) {
         self.id = id
         self.right = right
@@ -90,6 +102,7 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
         self.createdAt = createdAt
         self.confirmations = confirmations
         self.fireCount = fireCount
+        self.recorrectedCount = recorrectedCount
     }
 
     // Decode tolerantly — v1 `dictionary.json` files predate `confirmations`/
@@ -110,6 +123,7 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         confirmations = try c.decodeIfPresent(Int.self, forKey: .confirmations) ?? 0
         fireCount = try c.decodeIfPresent(Int.self, forKey: .fireCount) ?? 0
+        recorrectedCount = try c.decodeIfPresent(Int.self, forKey: .recorrectedCount) ?? 0
     }
 
     /// Activation predicate for a `.replacement` rule (§1.2): manual rules are
@@ -288,8 +302,24 @@ final class PersonalDictionary {
                 $0.right.precomposedStringWithCanonicalMapping.caseInsensitiveCompare(r) == .orderedSame
             }) else { return nil }
             entries[idx].enabled = false
+            // Scoreboard (§F): a reversal IS the evidence a fire was wrong.
+            entries[idx].recorrectedCount += 1
             persist()
             return entries[idx].id
+        }
+    }
+
+    /// Aggregate scoreboard across learned `.replacement` rules — total times
+    /// they fired vs. times the user corrected back. Drives the Dictionary
+    /// header's "applied N× · M% kept" and is the internal proof required
+    /// before any "it learns you" marketing claim (v2 Phase 5 §F).
+    var learnedScoreboard: (fires: Int, recorrections: Int) {
+        queue.sync {
+            entries
+                .filter { $0.source == .learned && $0.kind == .replacement }
+                .reduce((fires: 0, recorrections: 0)) {
+                    ($0.fires + $1.fireCount, $0.recorrections + $1.recorrectedCount)
+                }
         }
     }
 
