@@ -98,10 +98,13 @@ First run, either way:
 
 Two transcription tiers, switchable any time in Settings:
 
-| Tier | Model | Best for |
-|------|-------|----------|
-| **Quality** (default) | `gpt-4o-mini-transcribe` | Vietnamese + English, noisy rooms, technical vocabulary |
-| **Fast** | `whisper-v3-turbo` | Clear, simple speech |
+| Tier | Model | Kyma API endpoint | Best for |
+|------|-------|-------------------|----------|
+| **Quality** (default) | [`gpt-4o-mini-transcribe-2025-12-15`](https://kymaapi.com/models/gpt-4o-mini-transcribe-2025-12-15?utm_source=haynoi) | `POST https://kymaapi.com/v1/audio/transcriptions` | Vietnamese + English, noisy rooms, technical vocabulary |
+| **Fast** | [`whisper-v3-turbo`](https://kymaapi.com/models/whisper-v3-turbo?utm_source=haynoi) | `POST https://kymaapi.com/v1/audio/transcriptions` | Clear, simple speech |
+| **Rewrite** | [`gemini-2.5-flash`](https://kymaapi.com/models/gemini-2.5-flash?utm_source=haynoi) | `POST https://kymaapi.com/v1/chat/completions` | Cleaning up the transcript in Normal mode |
+
+Haynoi's server calls these endpoints on [Kyma API](https://kymaapi.com?utm_source=haynoi) for you, so the app never holds a model key.
 
 ## Privacy
 
@@ -155,7 +158,7 @@ Sources/Haynoi/
 |-----------|---------|
 | Swift 5.9 + SwiftUI | App |
 | AVFoundation | Audio capture & sound synthesis |
-| [Kyma API](https://kymaapi.com) | Speech-to-text (`gpt-4o-mini-transcribe` / `whisper-v3-turbo`) and rewrite (`gemini-2.5-flash`) |
+| [Kyma API](https://kymaapi.com) | Speech-to-text (`gpt-4o-mini-transcribe-2025-12-15` / `whisper-v3-turbo`) and rewrite (`gemini-2.5-flash`) |
 | Accessibility API + NSEvent | Text insertion + global hotkey (no Input Monitoring needed) |
 | [XcodeGen](https://github.com/yonaskolb/XcodeGen) | Project generation |
 
