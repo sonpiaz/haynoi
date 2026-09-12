@@ -161,7 +161,7 @@ Sources/Haynoi/
 
 ## Related
 
-- [Pheme](https://github.com/sonpiaz/pheme) — AI meeting notes for macOS, Vietnamese-optimized
+- [Pheme](https://www.trypheme.com) — AI meeting notes for macOS, Vietnamese-optimized
 - [kyma-dub](https://github.com/sonpiaz/kyma-dub) — time-aligned AI video dubbing CLI
 - [Kapt](https://github.com/sonpiaz/kapt) — macOS screenshot tool with annotation & OCR
 
