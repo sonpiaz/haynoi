@@ -90,6 +90,8 @@ First run, either way:
 2. **Sign in with Google** — one click, no passwords, nothing to paste
 3. Hold the left `⌥` Option key, say something, release — the guided first dictation shows you the loop
 
+**Runs on [Kyma API](https://kymaapi.com?utm_source=haynoi).** Kyma handles speech-to-text and rewrite for every dictation so Haynoi never holds a model key.
+
 ## Pricing
 
 **Free: 5,000 words per week**, resetting every Monday. That covers everyday dictation for most people — no card required, just the Google sign-in.
