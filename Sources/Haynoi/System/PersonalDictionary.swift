@@ -160,35 +160,73 @@ final class PersonalDictionary {
 
     private let queue = DispatchQueue(label: "com.haynoi.personaldictionary")
     private var entries: [DictionaryEntry]
-    private let fileURL: URL
+    /// The file this store reads and writes. Internal so tests can prove they
+    /// never point at the user's real dictionary.
+    let fileURL: URL
 
-    private init() {
-        self.fileURL = PersonalDictionary.defaultFileURL()
+    /// `fileURL` is injectable so tests round-trip a throwaway file; the app
+    /// always goes through `shared`.
+    init(fileURL: URL = PersonalDictionary.defaultFileURL()) {
+        self.fileURL = fileURL
         self.entries = PersonalDictionary.load(from: fileURL)
     }
 
     // MARK: Persistence
 
-    private static func defaultFileURL() -> URL {
-        let base = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
+    static func defaultFileURL() -> URL {
+        let fm = FileManager.default
+        var base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
+        // A test run hosts the app, so `shared` would otherwise read and write
+        // the user's real dictionary — which is how it got wiped on 2026-09-01.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            base = fm.temporaryDirectory
+                .appendingPathComponent("HaynoiTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+        }
         let dir = base.appendingPathComponent("Haynoi", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("dictionary.json")
+    }
+
+    /// The on-disk format lives in one place so the reader can't drift from the
+    /// writer again: 0.3.6–0.3.10 wrote ISO-8601 dates but decoded them as
+    /// numbers, so every launch silently started with an empty dictionary.
+    private static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys] // human-auditable file
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
     }
 
     private static func load(from url: URL) -> [DictionaryEntry] {
         guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([DictionaryEntry].self, from: data)) ?? []
+        do {
+            return try makeDecoder().decode([DictionaryEntry].self, from: data)
+        } catch {
+            // Never let the next persist() overwrite a file we couldn't read —
+            // set it aside so the words in it stay recoverable.
+            let aside = url.deletingLastPathComponent().appendingPathComponent(
+                "dictionary.corrupt-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8)).json")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+                NSLog("[Haynoi] dictionary.json unreadable, moved to %@: %@",
+                      aside.lastPathComponent, String(describing: error))
+            } catch let moveError {
+                NSLog("[Haynoi] dictionary.json unreadable and could NOT be set aside (%@) — the next save will overwrite it: %@",
+                      String(describing: moveError), String(describing: error))
+            }
+            return []
+        }
     }
 
     private func persist() {
-        // Called on `queue`. Pretty-printed for human auditability of the file.
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(entries) {
+        // Called on `queue`.
+        if let data = try? Self.makeEncoder().encode(entries) {
             try? data.write(to: fileURL, options: .atomic)
         }
     }
