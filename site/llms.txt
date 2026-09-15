@@ -1,6 +1,6 @@
 # Haynoi
 
-> Haynoi is push-to-talk dictation for macOS. Hold the left Option key, speak, release, and the text is typed into whatever app has focus: email, chat, code editors, terminals. Vietnamese-first, with English mixed in mid-sentence. Free: 5,000 words per week.
+> Haynoi is push-to-talk dictation for macOS. Hold a key (default: left Option, configurable), speak, release, and the text is typed into whatever app has focus: email, chat, code editors, terminals. Vietnamese-first, with English mixed in mid-sentence. Free: 5,000 words per week.
 
 Haynoi runs on macOS 14 or later, on Apple silicon and Intel Macs. Transcription happens in the cloud through Haynoi's backend on Kyma API, so it needs an internet connection; if the network drops, the recording stays on the Mac and can be retried. Audio is not stored on the server. The personal dictionary and dictation history stay on the Mac. Sign-in is with Google. Haynoi Pro (unlimited words) is coming soon.
 

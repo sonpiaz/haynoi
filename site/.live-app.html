@@ -15,49 +15,6 @@
   <meta name="twitter:title" content="Haynoi: Hold a Key. Speak. Done." />
   <meta name="twitter:description" content="macOS push-to-talk dictation with Vietnamese-first accuracy. Works in every app." />
   <meta name="twitter:image" content="https://haynoi.com/og.png" />
-  <link rel="canonical" href="https://haynoi.com/" />
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": "https://haynoi.com/#org",
-        "name": "Haynoi",
-        "url": "https://haynoi.com/",
-        "logo": "https://haynoi.com/icon.png",
-        "sameAs": ["https://github.com/sonpiaz/haynoi"]
-      },
-      {
-        "@type": "WebSite",
-        "@id": "https://haynoi.com/#website",
-        "url": "https://haynoi.com/",
-        "name": "Haynoi",
-        "inLanguage": "en",
-        "publisher": { "@id": "https://haynoi.com/#org" }
-      },
-      {
-        "@type": "SoftwareApplication",
-        "name": "Haynoi",
-        "description": "Push-to-talk dictation for macOS. Hold a key, speak, release, and the text appears in whatever app you are typing in. Vietnamese-first, with English mixed in mid-sentence.",
-        "url": "https://haynoi.com/",
-        "downloadUrl": "https://github.com/sonpiaz/haynoi/releases/latest",
-        "operatingSystem": "macOS 14 or later (Apple silicon and Intel)",
-        "applicationCategory": "UtilitiesApplication",
-        "inLanguage": ["vi", "en"],
-        "offers": {
-          "@type": "Offer",
-          "name": "Free",
-          "price": "0",
-          "priceCurrency": "USD",
-          "description": "5,000 words per week, resets every Monday"
-        },
-        "publisher": { "@id": "https://haynoi.com/#org" }
-      }
-    ]
-  }
-  </script>
 
   <link rel="icon" href="icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="icon.png" />
@@ -81,14 +38,6 @@
   html{scroll-behavior:smooth}
   body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.6;overflow-x:hidden;cursor:none}
   ::selection{background:var(--cyan);color:#000}
-
-  /* FAQ (moved from in-body per house convention) */
-  .qa{max-width:760px;margin:0 auto}
-  .qa h2{text-align:center;margin-bottom:36px}
-  .qa dl{border-top:1px solid var(--line)}
-  .qa dt{font-family:var(--disp);font-weight:600;font-size:1.02rem;padding:22px 0 8px}
-  .qa dd{color:var(--ink-dim);padding-bottom:22px;border-bottom:1px solid var(--line)}
-  .qa-vi{margin-top:56px}
   a{color:inherit;text-decoration:none}
   h1,h2,h3{text-wrap:balance}
 
@@ -287,7 +236,7 @@
   <div class="hero-body">
     <div class="eyebrow reveal in"><span class="dot"></span>macOS · Voice → polished text</div>
     <h1 class="hero reveal in d1">Hold a key.<br>Speak.<br><span class="g">Done.</span></h1>
-    <p class="hero-sub reveal in d2">Haynoi is push-to-talk dictation for macOS. Hold <kbd class="keycap">⌥</kbd>, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. <b>Sub-2-second</b> transcription with Vietnamese-first accuracy and an orb that disappears when you're finished.</p>
+    <p class="hero-sub reveal in d2">Hold <kbd class="keycap">⌥</kbd>, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. <b>Sub-2-second</b> transcription with Vietnamese-first accuracy and an orb that disappears when you're finished.</p>
     <div class="cta-row reveal in d3">
       <a href="/thanks/" class="btn btn-primary mag" data-cur>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="#050508"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.114 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
@@ -370,40 +319,6 @@
     <div class="pitem"><div class="p-label">Pro — unlimited</div><div class="p-val">$14.99/mo</div><div class="p-sub">Or $125.88/yr — save 30%</div></div>
     <div class="pitem"><div class="p-label">Sign in</div><div class="p-val">Google</div><div class="p-sub">One click, no passwords</div></div>
     <div class="pitem"><div class="p-label">macOS</div><div class="p-val">14+</div><div class="p-sub">Apple silicon &amp; Intel</div></div>
-  </div>
-</div></section>
-
-<section id="faq"><div class="wrap">
-  <div class="qa reveal">
-    <div class="sec-label" style="text-align:center">Questions</div>
-    <h2>Straight answers.</h2>
-    <dl>
-      <dt>What is Haynoi?</dt>
-      <dd>Push-to-talk dictation for macOS. Hold a key (the left Option key by default, or ⌘/⌃/fn), speak, release, and the text is typed into whatever app you are in: email, chat, code editors, terminals.</dd>
-      <dt>Which Macs does it run on?</dt>
-      <dd>macOS 14 or later, on Apple silicon and Intel.</dd>
-      <dt>How much does it cost?</dt>
-      <dd>Free for 5,000 words a week, resetting every Monday. Haynoi Pro with unlimited words is coming soon.</dd>
-      <dt>Does it understand Vietnamese and English together?</dt>
-      <dd>Yes. It is built for Vietnamese with English words mixed in mid-sentence, and you can also pin it to Vietnamese or English only.</dd>
-      <dt>Is my voice stored?</dt>
-      <dd>No. Audio is sent for transcription and then discarded; it is never stored on the server. Your dictionary and dictation history stay on your Mac.</dd>
-      <dt>Does it need an internet connection?</dt>
-      <dd>Yes, transcription runs in the cloud. If the network drops mid-dictation, the recording is kept on your Mac so you can retry it.</dd>
-    </dl>
-    <div class="qa-vi" id="hoi-dap" lang="vi">
-      <div class="sec-label" style="text-align:center">Hỏi đáp</div>
-      <dl>
-        <dt>Haynoi là gì?</dt>
-        <dd>Ứng dụng đọc chính tả cho macOS: giữ một phím (mặc định là Option bên trái, đổi được sang ⌘/⌃/fn), nói, thả ra, chữ hiện ngay trong ứng dụng bạn đang gõ.</dd>
-        <dt>Nói tiếng Việt xen tiếng Anh được không?</dt>
-        <dd>Được. Haynoi làm riêng cho tiếng Việt có xen từ tiếng Anh giữa câu.</dd>
-        <dt>Giá bao nhiêu?</dt>
-        <dd>Miễn phí 5.000 từ mỗi tuần, tính lại vào thứ Hai. Gói Pro không giới hạn sắp ra mắt.</dd>
-        <dt>Máy nào dùng được?</dt>
-        <dd>macOS 14 trở lên, cả máy chip Apple lẫn chip Intel.</dd>
-      </dl>
-    </div>
   </div>
 </div></section>
 

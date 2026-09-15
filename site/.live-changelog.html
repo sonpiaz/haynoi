@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Haynoi: Changelog</title>
+  <meta name="description" content="Everything that changes in Haynoi, release by release." />
+  <meta name="theme-color" content="#07070C" />
+  <link rel="icon" href="../icon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#07070C;--ink:#EEEEF6;--ink-dim:#9A9AAE;--ink-faint:#5A5A6E;--cyan:#38E8D0;--violet:#7C6BFF;--line:rgba(255,255,255,.09);--glass:rgba(255,255,255,.03);--disp:'Unbounded',sans-serif;--body:'Hanken Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.6;overflow-x:hidden;position:relative}
+    a{color:inherit;text-decoration:none}
+    body::before{content:"";position:fixed;width:50vw;height:50vw;left:-16vw;top:-18vw;border-radius:50%;background:radial-gradient(circle,var(--violet),transparent 68%);filter:blur(100px);opacity:.32;z-index:0;pointer-events:none}
+    body::after{content:"";position:fixed;width:40vw;height:40vw;right:-14vw;top:0;border-radius:50%;background:radial-gradient(circle,var(--cyan),transparent 66%);filter:blur(100px);opacity:.28;z-index:0;pointer-events:none}
+    .container{max-width:1040px;margin:0 auto;padding:0 32px;position:relative;z-index:2}
+    nav{border-bottom:1px solid var(--line);padding:16px 0;position:relative;z-index:3;background:rgba(7,7,12,.6);backdrop-filter:blur(14px)}
+    .nav-inner{max-width:1040px;margin:0 auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between}
+    .nav-logo{display:flex;align-items:center;gap:11px;font-family:var(--disp);font-weight:600;font-size:18px}
+    .nav-logo img{width:26px;height:26px;border-radius:7px}
+    .nav-links{display:flex;gap:28px;list-style:none;align-items:center;font-size:13.5px;color:var(--ink-dim)}
+    .nav-links a:hover{color:var(--ink)}
+    .nav-cta{background:linear-gradient(100deg,var(--cyan),var(--violet));color:#050508!important;font-family:var(--mono);font-size:12.5px;padding:10px 18px;border-radius:100px;transition:.3s}
+    .nav-cta:hover{box-shadow:0 8px 26px rgba(56,232,208,.3)}
+    @media(max-width:640px){.nav-links li:not(:last-child){display:none}}
+    main{position:relative;z-index:2}
+    .section-label{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:16px}
+    .log-hero{padding:8rem 0 1.5rem;text-align:center}
+    .log-hero h1{font-family:var(--disp);font-weight:800;font-size:clamp(2rem,6vw,3.4rem);letter-spacing:-.03em}
+    .log-hero em{font-style:normal;background:linear-gradient(100deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+    .serif{font-family:var(--disp)}
+    .log-wrap{max-width:720px;margin:0 auto;padding:1.5rem 32px 6rem;position:relative;z-index:2}
+    .release{border-top:1px solid var(--line);padding:2.2rem 0 1rem}
+    .release-head{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap}
+    .release-version{font-family:var(--disp);font-weight:600;font-size:1.5rem;letter-spacing:-.02em}
+    .release-date{color:var(--ink-faint);font-family:var(--mono);font-size:.82rem}
+    .release-tagline{margin-top:.5rem;color:var(--cyan);font-size:1rem}
+    .release ul{margin:1.1rem 0 0;padding-left:1.1rem}
+    .release li{margin-bottom:.55rem;line-height:1.65;font-size:.97rem;color:var(--ink-dim)}
+    .release li strong{color:var(--ink)}
+    .release-dl{margin-top:1.4rem}
+    .release-dl a{color:var(--cyan);text-decoration:underline;text-underline-offset:3px}
+    footer{border-top:1px solid var(--line);padding:36px 0;position:relative;z-index:2;color:var(--ink-faint);font-family:var(--mono);font-size:12px}
+    .footer-inner{max-width:1040px;margin:0 auto;padding:0 32px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:center}
+    .footer-left{display:flex;align-items:center;gap:9px}
+    .footer-left img{width:20px;height:20px;border-radius:5px}
+    .footer-brand{font-family:var(--disp);font-weight:600;color:var(--ink);font-size:13px}
+    .mit-badge{border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:10px}
+    .footer-copy{color:var(--ink-faint)}
+    .footer-links{display:flex;gap:22px;list-style:none;flex-wrap:wrap}
+    .footer-links a:hover{color:var(--ink)}
+  </style>
+
+  <!-- PostHog analytics -->
+  <script src="/analytics.js"></script>
+  <!-- Affitor partner tracking -->
+  <script src="https://api.affitor.com/js/affitor-tracker.js" data-affitor-program-id="1081" data-affitor-cookie-domain=".haynoi.com" async></script>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../">
+      <img src="../icon.png" alt="Haynoi icon" />
+      Haynoi
+    </a>
+    <ul class="nav-links">
+      <li><a href="../#how">How it works</a></li>
+      <li><a href="../#features">Features</a></li>
+      <li>
+        <a class="nav-cta" href="../thanks/">Download</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<main>
+  <section class="log-hero">
+    <div class="container">
+      <p class="section-label">Changelog</p>
+      <h1 class="serif">A ledger of the <em>ledger</em>.</h1>
+    </div>
+  </section>
+
+  <div class="log-wrap">
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.10</span>
+        <span class="release-date">September 1, 2026</span>
+      </div>
+      <p class="release-tagline">Honest errors, scored learning.</p>
+      <ul>
+        <li>When our servers have a problem, Haynoi now says so — instead of telling you that you're out of words, or signing you out.</li>
+        <li>Every learned word now carries a scoreboard: how many times it was applied and how often you let it stand — visible per word and summed up in the Dictionary tab.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.9</span>
+        <span class="release-date">August 29, 2026</span>
+      </div>
+      <p class="release-tagline">A same-day fix.</p>
+      <ul>
+        <li>Fixed a crash when reopening the main window after closing it — a long-standing window memory bug that 0.3.8 surfaced.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.8</span>
+        <span class="release-date">August 29, 2026</span>
+      </div>
+      <p class="release-tagline">It gets out of your way — and learns you.</p>
+      <ul>
+        <li>Other audio steps aside while you dictate: music and video pause and resume on their own; a live call or stream is dipped in volume instead — decided from what your Mac is actually playing, never a blind guess.</li>
+        <li>Your corrections now teach the AI cleanup pass. Fixes you've confirmed — like a name that sounds identical to a common word — are repaired automatically next time.</li>
+        <li>Haynoi notices when the transcriber wasn't sure of a word and gives that one dictation an extra pass through your personal fixes, matched by sound. Confident dictations skip it, so nothing gets slower.</li>
+        <li>You're in charge of what Haynoi learns: a master switch, a learned-words counter, and a one-tap "Forget all" in the Dictionary tab. Words you added yourself are always kept.</li>
+        <li>Fixed: scrolling froze for a moment right after every dictation, and "Pause audio while dictating" never ran on a fresh install.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.7</span>
+        <span class="release-date">July 5, 2026</span>
+      </div>
+      <p class="release-tagline">Pro is live.</p>
+      <ul>
+        <li>Haynoi Pro: unlimited dictation, all 4 modes, priority transcription — $14.99/month or $125.88/year. Upgrade in Settings → Plans &amp; Billing; checkout runs through Stripe in your browser and the app unlocks within seconds.</li>
+        <li>Fixed usage analytics silently not reporting (counts and timings only — never your words).</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.6</span>
+        <span class="release-date">July 4, 2026</span>
+      </div>
+      <p class="release-tagline">The relaunch.</p>
+      <ul>
+        <li>New sign-in: continue with Google — one click, no passwords. Accounts are now Haynoi's own. Existing users will be asked to sign in again once after updating.</li>
+        <li>Your personal dictionary now learns from corrections. Say "fix that", edit a dictation in place, or re-dictate — Haynoi notices the fix and gets the term right next time. Everything stays on your Mac.</li>
+        <li>Free tier is 5,000 words per week, resetting every Monday.</li>
+        <li>Obsidian Instrument relaunch: light-first redesign and the new "ń" tone-mark logo, now bigger in the Dock and shown throughout the app.</li>
+        <li>Dictation runs through Haynoi's own backend. Anonymous usage analytics (counts and timings only — never your words) with an opt-out toggle in Settings.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.5</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">A shorter glow.</p>
+      <ul>
+        <li>The microphone releases about 10 seconds after you finish dictating (it was a minute), so the macOS orange "mic in use" dot doesn't linger. Back-to-back dictations stay instant.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.4</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Tell me what's wrong.</p>
+      <ul>
+        <li>New “Test connection” button in Settings → Account — checks whether your dictation can reach our servers on each route and explains, in plain language, what's blocking it (network, sign-in, or credits). Free; it doesn't transcribe.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.3</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">The real fix for slow networks.</p>
+      <ul>
+        <li>Recordings now upload in a compressed format about 5× smaller, so dictation reaches the server even on congested networks where the larger upload used to stall. This is the true cause behind the "Something went wrong" errors some users saw after speaking — especially in Vietnam.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.2</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">A lighter touch on the network.</p>
+      <ul>
+        <li>The route check now pings a 93-byte health endpoint instead of downloading the full model list — checking your network routes uses almost no data.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.1</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Routes that follow you around.</p>
+      <ul>
+        <li>Haynoi re-checks its network routes whenever your connection changes — new Wi-Fi, VPN on or off, waking the laptop somewhere else — not just at launch.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.3.0</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Three roads, raced — your network picks the winner.</p>
+      <ul>
+        <li>Haynoi probes its API routes at launch and dictates over the fastest one that works from your network. A stalled route triggers a parallel race after 4 seconds, and the winner is remembered — a bad network costs seconds once, not on every sentence.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.7</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">For everyone who kept seeing “Something went wrong”.</p>
+      <ul>
+        <li>Dictation now works on networks where the audio upload stalls (reported from Vietnam) — Haynoi automatically retries through an alternate route.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.6</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Buttons that do what they say.</p>
+      <ul>
+        <li>The Settings gear and Sign in buttons in the menu bar panel work again — they had been calling a retired macOS hook that silently did nothing.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.5</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Out of the Dock, into the menu bar.</p>
+      <ul>
+        <li>Haynoi is now a menu-bar app — no Dock icon while you work; it appears only when the main window is open.</li>
+        <li>The menu bar panel lists your 5 most recent dictations with a copy button on each row.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.4</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">The panel that was hiding in 10 pixels.</p>
+      <ul>
+        <li>Clicking the menu bar icon shows the panel again — it had been opening collapsed to a 10-pixel sliver, which looked like nothing at all.</li>
+        <li>Insights, tidied: one headline, one unified row of stat cards (words · pace · streaks), the heatmap, and where your words go. Duplicate app rows merged.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.3</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Smooth again.</p>
+      <ul>
+        <li>Fixed the sluggishness after dictating — an internal signal was re-rendering the UI ~47×/second for a minute after each dictation. Scrolling and the menu bar panel are smooth again.</li>
+        <li>The copy button is back on every history row — always visible, rows never shift. Recent is gone; it duplicated History.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.2</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">History that holds still.</p>
+      <ul>
+        <li>History rows no longer shift on hover and the language badge is gone — Copy and Delete moved to the right-click menu.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.1</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Instant to the touch, cosmic to the eye, quieter to the ear.</p>
+      <ul>
+        <li>The press registers almost immediately — the start chime now lands about a tenth of a second after your finger does.</li>
+        <li>The indicator moved to the <strong>top-center</strong> of the screen, in a dark cosmic capsule with an aurora halo that swells only with your voice.</li>
+        <li>Exactly two tones per dictation: press and release. The “N words” chip appears silently; no more violet dot while transcribing.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.2.0</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">A waveform that tells the truth, and a kinder pair of bells.</p>
+      <ul>
+        <li>New recording indicator: <strong>Trail</strong> — a scrolling waveform where your last second of speech stays visible. Silence is a flat line; the trail only moves with your voice.</li>
+        <li>New default sound theme: <strong>Chime</strong> — a gentle bell pair on start and stop. Previous themes remain in Settings.</li>
+        <li>When your text lands, a small <strong>“N words”</strong> chip pops up with a subtle chime — both can be turned off in Settings → Sounds.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.1.9</span>
+        <span class="release-date">June 12, 2026</span>
+      </div>
+      <p class="release-tagline">Dictation now starts the instant you press the key.</p>
+      <ul>
+        <li>The microphone stays warm between dictations — no more cold-start wait when you press the key, even on Bluetooth headsets.</li>
+        <li>A 300ms pre-roll is captured before recording officially begins, so your first word is never clipped again.</li>
+        <li>The start tone now plays exactly when the mic is truly live — when you hear it, you can speak.</li>
+        <li>The recording waveform follows your real voice: silent means still, speaking means moving.</li>
+        <li>Pasting is ~250ms faster when dictating into the app you're already in.</li>
+        <li>Hotkey hints corrected everywhere: hold left Option (⌥) alone — there was never a Space involved.</li>
+      </ul>
+    </article>
+
+    <article class="release">
+      <div class="release-head">
+        <span class="release-version">0.1.0</span>
+        <span class="release-date">June 11, 2026</span>
+      </div>
+      <p class="release-tagline">The first public release.</p>
+      <ul>
+        <li>Push-to-talk dictation: hold ⌥ (or ⌘ / ⌃ / fn), speak, release — polished text lands in whatever app you're using.</li>
+        <li>Vietnamese-first transcription that keeps mixed English intact, with a language preference: auto-detect, Tiếng Việt, or English.</li>
+        <li>Your words are never lost — failed transcriptions save the recording locally and retry with one click.</li>
+        <li>Recording survives real life: AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully.</li>
+        <li>Auto-paste with clipboard restore afterwards, and dictated text stays hidden from clipboard managers.</li>
+        <li>A living status orb: recording, transcribing, success, and error each have their own state.</li>
+        <li>Custom dictionary, spoken snippets, smart modes (Normal, Clean, Email, Auto), and music auto-pause while you dictate.</li>
+        <li>Credit balance in Settings with clear out-of-credits guidance — pay as you go through Kyma, no subscription.</li>
+        <li>Quality and Fast transcription tiers, searchable local history, sound themes, and silent auto-updates via Sparkle.</li>
+        <li>The Mercury interface: a private ledger of everything you've said, on paper and ink, with one aurora hairline.</li>
+      </ul>
+      <p class="release-dl"><a href="https://github.com/sonpiaz/haynoi/releases/tag/v0.1.0">Download 0.1.0 from GitHub Releases</a></p>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-left">
+        <img src="../icon.png" alt="" aria-hidden="true" />
+        <span class="footer-brand">Haynoi</span>
+        <span class="mit-badge">MIT</span>
+      </div>
+      <p class="footer-copy" style="margin-top:0.4rem">© 2026 Affitor LLC. All rights reserved.</p>
+    </div>
+    <ul class="footer-links">
+      <li><a href="https://github.com/sonpiaz/haynoi" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="../thanks/">Download</a></li>
+      <li><a href="https://kymaapi.com" target="_blank" rel="noopener">Powered by Kyma</a></li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

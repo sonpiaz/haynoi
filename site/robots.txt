@@ -2,7 +2,12 @@
 #
 # One group for every crawler, AI assistants included: search engines and AI
 # answer engines may read and cite the site (decision 2026-09-14). A single `*`
-# group also means no crawler can escape the Disallow lines by being named.
+# group also means no crawler can escape a rule by being named.
+#
+# /account/, /thanks/ and /pricing/ are kept out of the index with a `noindex`
+# meta tag on the pages themselves, NOT with Disallow — a Disallowed page is
+# never fetched, so the crawler would never see the noindex and could still
+# index the bare URL from an inbound link.
 #
 # Cloudflare can prepend its own "BEGIN Cloudflare Managed content" block that
 # disallows AI crawlers. That block, and the zone's AI crawler blocking, live in
@@ -10,7 +15,5 @@
 
 User-agent: *
 Allow: /
-Disallow: /account/
-Disallow: /thanks/
 
 Sitemap: https://haynoi.com/sitemap.xml
