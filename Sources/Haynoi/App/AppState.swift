@@ -50,6 +50,9 @@ final class AppState: ObservableObject {
     /// Word count of the most recent successful dictation — shown by the
     /// floating orb's "N words" success chip.
     @Published var lastDictationWordCount: Int = 0
+    /// Live on-device SFSpeech partial while holding PTT. RAM-only; never
+    /// persisted, never inserted. Cleared on release / cancel.
+    @Published var interimPartial: String = ""
 
     // Fix #1: hotkey tap liveness
     @Published var hotkeyActive: Bool = false

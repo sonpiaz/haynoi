@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Darwin
 
 /// Records audio from the mic into a Float32 buffer at 16kHz mono (for Whisper).
 ///
@@ -50,6 +51,11 @@ final class AudioRecorder {
 
     /// Current RMS audio level (0…1), updated from the tap callback.
     @Published var audioLevel: Float = 0
+
+    /// Optional live PCM sink (hardware format) while capturing. The tap is
+    /// already installed for Whisper; SFSpeech reuses these buffers so we
+    /// never install a second tap. Not stored.
+    var liveCaptureBufferHandler: ((AVAudioPCMBuffer) -> Void)?
 
     // Track when the most recent tap callback fired so the watchdog can detect a
     // silent-death (AirPods disconnect, etc.) while capturing. Written from the
@@ -510,6 +516,11 @@ final class AudioRecorder {
             DispatchQueue.main.async { fire() }
         }
 
+        // Feed the same tap into on-device SFSpeech partials (no second tap).
+        if capturingNow, let handler = liveCaptureBufferHandler, let copy = Self.clonePCM(pcm) {
+            handler(copy)
+        }
+
         // RMS for the level meter — published ONLY while capturing. In warm
         // ring-buffer mode this used to fire ~47×/s (1024-frame buffers) and
         // re-rendered every AppState observer (main window, menubar popover)
@@ -519,6 +530,28 @@ final class AudioRecorder {
         DispatchQueue.main.async { [weak self] in
             self?.audioLevel = min(1.0, rms * 10)
         }
+    }
+
+    /// Copy a tap buffer — the engine reuses the original.
+    private static func clonePCM(_ src: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let dst = AVAudioPCMBuffer(pcmFormat: src.format, frameCapacity: src.frameCapacity) else { return nil }
+        dst.frameLength = src.frameLength
+        let channels = Int(src.format.channelCount)
+        let frames = Int(src.frameLength)
+        if src.format.commonFormat == .pcmFormatFloat32,
+           let from = src.floatChannelData, let to = dst.floatChannelData {
+            for ch in 0..<channels {
+                memcpy(to[ch], from[ch], frames * MemoryLayout<Float>.size)
+            }
+        } else if src.format.commonFormat == .pcmFormatInt16,
+                  let from = src.int16ChannelData, let to = dst.int16ChannelData {
+            for ch in 0..<channels {
+                memcpy(to[ch], from[ch], frames * MemoryLayout<Int16>.size)
+            }
+        } else {
+            return nil
+        }
+        return dst
     }
 }
 
