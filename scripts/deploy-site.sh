@@ -12,6 +12,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# $OUT becomes the site root that gets deployed.
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
@@ -20,21 +21,23 @@ trap 'rm -rf "$OUT"' EXIT
 if [[ "${HAYNOI_RELEASE_APPCAST:-}" == "1" ]]; then
   echo "HAYNOI_RELEASE_APPCAST=1 — publishing appcast.xml as-is."
 else
-  LIVE="$OUT/live-appcast.xml"
+  LIVE="$OUT/.live-appcast.xml"
   curl -fsS https://haynoi.com/appcast.xml -o "$LIVE"
   if ! cmp -s "$LIVE" appcast.xml; then
     echo "appcast.xml differs from production; refusing to deploy." >&2
     echo "Publishing a release? Rerun with HAYNOI_RELEASE_APPCAST=1." >&2
     exit 1
   fi
+  rm -f "$LIVE"
 fi
 
-# Guard 2 — stage only git-tracked files from site/, then the appcast.
+# Guard 2 — stage only git-tracked files from site/ into the deploy root,
+# then the appcast.
 git ls-files -z site | while IFS= read -r -d '' f; do
   rel=${f#site/}
   mkdir -p "$OUT/$(dirname "$rel")"
   cp "$f" "$OUT/$rel"
 done
-cp appcast.xml "$OUT/site/appcast.xml"
+cp appcast.xml "$OUT/appcast.xml"
 
-wrangler pages deploy "$OUT/site" --project-name=haynoi --branch=main --commit-dirty=true
+wrangler pages deploy "$OUT" --project-name=haynoi --branch=main --commit-dirty=true
