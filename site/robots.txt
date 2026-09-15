@@ -1,29 +1,19 @@
 # haynoi.com
 #
-# Two branches wrote this file without knowing about each other: one closing
-# the signed-in pages, one opening the door to AI crawlers. The naive union is
-# wrong. A crawler obeys the MOST SPECIFIC group matching its name and ignores
-# every other group, so naming GPTBot in its own block would exempt it from the
-# Disallow lines under `*`. The exclusions are repeated per group instead.
+# One group for every crawler, AI assistants included: search engines and AI
+# answer engines may read and cite the site (decision 2026-09-14). A single `*`
+# group also means no crawler can escape a rule by being named.
+#
+# /account/, /thanks/ and /pricing/ are kept out of the index with a `noindex`
+# meta tag on the pages themselves, NOT with Disallow — a Disallowed page is
+# never fetched, so the crawler would never see the noindex and could still
+# index the bare URL from an inbound link.
+#
+# Cloudflare can prepend its own "BEGIN Cloudflare Managed content" block that
+# disallows AI crawlers. That block, and the zone's AI crawler blocking, live in
+# the Cloudflare dashboard, not in this file.
 
 User-agent: *
 Allow: /
-Disallow: /account/
-Disallow: /thanks/
-
-User-agent: GPTBot
-Allow: /
-Disallow: /account/
-Disallow: /thanks/
-
-User-agent: ClaudeBot
-Allow: /
-Disallow: /account/
-Disallow: /thanks/
-
-User-agent: PerplexityBot
-Allow: /
-Disallow: /account/
-Disallow: /thanks/
 
 Sitemap: https://haynoi.com/sitemap.xml
