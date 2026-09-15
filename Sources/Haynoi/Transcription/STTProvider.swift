@@ -351,6 +351,21 @@ enum STTProvider {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
 
+        #if DEBUG
+        if let f = UserDefaults.standard.string(forKey: "HAYNOI_FORCE_STT_FAILURE") {
+            switch f {
+            case "outOfCredits":
+                throw STTError.outOfCredits
+            case "serverError":
+                throw STTError.serverError("forced upstream failure (test)")
+            case "noConnection":
+                throw STTError.noConnection
+            default:
+                break
+            }
+        }
+        #endif
+
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {

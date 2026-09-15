@@ -17,6 +17,7 @@ final class InterimSpeechRecognizer {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var generation: UInt64 = 0
+    private var latestFinalText: String = ""
 
     private init() {}
 
@@ -48,6 +49,12 @@ final class InterimSpeechRecognizer {
         }
     }
 
+    func finalText() -> String {
+        queue.sync {
+            latestFinalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
     /// Hardware-format PCM from AudioRecorder's existing tap (one tap per bus).
     func append(_ buffer: AVAudioPCMBuffer) {
         queue.async { [weak self] in
@@ -57,6 +64,7 @@ final class InterimSpeechRecognizer {
 
     private func startOnQueue() {
         stopOnQueue()
+        latestFinalText = ""
 
         let locale = Self.preferredLocale()
         guard let rec = SFSpeechRecognizer(locale: locale), rec.isAvailable else {
@@ -97,6 +105,7 @@ final class InterimSpeechRecognizer {
             self.queue.async {
                 guard gen == self.generation else { return }
                 if let text = result?.bestTranscription.formattedString, !text.isEmpty {
+                    self.latestFinalText = text
                     DispatchQueue.main.async {
                         AppState.shared.interimPartial = text
                     }

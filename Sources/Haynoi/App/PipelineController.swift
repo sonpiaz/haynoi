@@ -6,6 +6,11 @@ import Combine
 /// All methods run on @MainActor.
 @MainActor
 final class PipelineController {
+    enum Source: Equatable {
+        case cloud
+        case onDevice
+    }
+
     static let shared = PipelineController()
 
     private let recorder = AudioRecorder.shared
@@ -34,6 +39,8 @@ final class PipelineController {
     // the 200ms grace period + the user's reaction time so first words are never
     // lost, even on a cold Bluetooth mic.
     private static let preRollMs = 300
+    // Keep release latency bounded before falling back to on-device text.
+    private static let cloudDeadline: TimeInterval = 2.5
 
     // Fix #5 (AudioRecorder): observer for self-abort notifications.
     private var abortObserver: NSObjectProtocol?
@@ -284,69 +291,124 @@ final class PipelineController {
             // Wait for the previous insertion to finish first.
             await previousInsertion?.value
 
+            var cloudResult: Result<STTProvider.Result, Error>?
+            var deadlineExceeded = false
+            let cloudTask = Task { try await STTProvider.transcribeTracked(samples) }
+
             do {
-                let result = try await STTProvider.transcribeTracked(samples)
-                let text = result.text
-                guard !text.isEmpty else {
-                    await MainActor.run { state.isTranscribing = false }
-                    return
-                }
-
-                // v1.1 — if "fix that" is armed, this dictation is the CORRECTED
-                // version of the last one. Route it through the correction path
-                // and SKIP the normal addTranscription/insert success path so the
-                // corrected text is inserted exactly once (no double-insert).
-                if await MainActor.run(body: { state.isCorrectionArmed }) {
-                    await MainActor.run {
-                        state.isTranscribing = false
-                        state.isCorrectionArmed = false
-                        correctionDisarmTimer?.invalidate()
-                        correctionDisarmTimer = nil
+                let racedCloud = try await withThrowingTaskGroup(of: STTProvider.Result?.self) { group in
+                    group.addTask {
+                        try await cloudTask.value
                     }
-                    await handleCorrection(correctedTranscript: text)
-                    return
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: UInt64(Self.cloudDeadline * 1_000_000_000))
+                        return nil
+                    }
+                    let first = try await group.next() ?? nil
+                    group.cancelAll()
+                    return first
                 }
+                if let racedCloud {
+                    cloudResult = .success(racedCloud)
+                } else {
+                    deadlineExceeded = true
+                    cloudTask.cancel()
+                }
+            } catch {
+                cloudResult = .failure(error)
+            }
 
-                // Apply snippets
-                let finalText = SnippetManager.applySnippets(to: text)
-                NSLog("[Haynoi] Transcribed: %@", finalText)
-                // Capture attribution from the dictation target app (F2.3 / D17).
-                let attrBundleId = dictationTargetApp?.bundleIdentifier
-                let attrAppName = dictationTargetApp?.localizedName
-                let dictWordCount = finalText.split(whereSeparator: \.isWhitespace).count
+            let onDeviceText = InterimSpeechRecognizer.shared.finalText()
+            let cloudText = cloudResult.map { $0.map(\.text) }
+            guard let winner = Self.resolveTranscript(
+                cloud: cloudText,
+                deadlineExceeded: deadlineExceeded,
+                onDevice: onDeviceText
+            ) else {
+                let failureError: Error = {
+                    if let cloudResult, case .failure(let error) = cloudResult {
+                        return error
+                    }
+                    if deadlineExceeded {
+                        return STTError.noConnection
+                    }
+                    return STTError.parseError
+                }()
                 await MainActor.run {
                     state.isTranscribing = false
-                    state.addTranscription(finalText,
-                                           appBundleId: attrBundleId,
-                                           appName: attrAppName)
-                    // Orb: "N words" success chip then auto-hide. The optional
-                    // dink is quieter and tonally distinct from the stop tone
-                    // (founder pick from the 2026-06-12 sound contest) and can
-                    // be turned off in Settings → Sounds.
-                    state.lastDictationWordCount = dictWordCount
-                    FloatingBarController.shared.transition(to: .success)
-                    let defaults = UserDefaults.standard
-                    if defaults.bool(forKey: "soundEnabled"),
-                       defaults.bool(forKey: "successDinkEnabled") {
-                        SoundFeedback.shared.playSuccessTone()
-                    }
+                    NSLog("[Haynoi] Transcription fallback exhausted: %@", failureError.localizedDescription)
+                    FloatingBarController.shared.transition(to: .error)
+                    handleTranscriptionFailure(samples: samples, error: failureError)
                 }
-                // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
-                let insertResult = await TextInserter.insert(finalText, targetApp: dictationTargetApp)
-                // v1.1 — record what/where the last dictation landed so a "fix
-                // that" can replace it in place and learn from the diff. Keep
-                // lastTranscript = raw STT text (not finalText): snippets/replaces
-                // are deterministic and shouldn't be "learned"; diffing the raw
-                // transcript isolates the genuine recognition error.
-                // v1.2 — Signal B (re-dictation similarity). Compare this transcript
-                // to the previous one (RAM-only) BEFORE overwriting lastTranscript.
-                // A qualifying near-homophone re-dictation opportunistically SUGGESTS
-                // learning the corrected word as a SOFT-BIAS .term — never a
-                // .replacement (low confidence, can't corrupt output). Suggest-never-
-                // silent: the toast only adds on tap, suppressed in live contexts.
+                return
+            }
+
+            if winner.source == .cloud,
+               await MainActor.run(body: { state.isCorrectionArmed }) {
+                await MainActor.run {
+                    state.isTranscribing = false
+                    state.isCorrectionArmed = false
+                    correctionDisarmTimer?.invalidate()
+                    correctionDisarmTimer = nil
+                }
+                await handleCorrection(correctedTranscript: winner.text)
+                return
+            }
+
+            let snippetText = SnippetManager.applySnippets(to: winner.text)
+            let finalText = PersonalDictionary.shared.applyReplacements(to: snippetText)
+            guard !finalText.isEmpty else {
+                await MainActor.run {
+                    state.isTranscribing = false
+                    FloatingBarController.shared.transition(to: .error)
+                    handleTranscriptionFailure(samples: samples, error: STTError.parseError)
+                }
+                return
+            }
+
+            NSLog("[Haynoi] Transcribed (%@): %@", winner.source == .cloud ? "cloud" : "on-device", finalText)
+            // Capture attribution from the dictation target app (F2.3 / D17).
+            let attrBundleId = dictationTargetApp?.bundleIdentifier
+            let attrAppName = dictationTargetApp?.localizedName
+            let dictWordCount = finalText.split(whereSeparator: \.isWhitespace).count
+            await MainActor.run {
+                state.isTranscribing = false
+                state.addTranscription(finalText,
+                                       appBundleId: attrBundleId,
+                                       appName: attrAppName)
+                // Orb: "N words" success chip then auto-hide. The optional
+                // dink is quieter and tonally distinct from the stop tone
+                // (founder pick from the 2026-06-12 sound contest) and can
+                // be turned off in Settings → Sounds.
+                state.lastDictationWordCount = dictWordCount
+                FloatingBarController.shared.transition(to: .success)
+                let defaults = UserDefaults.standard
+                if defaults.bool(forKey: "soundEnabled"),
+                   defaults.bool(forKey: "successDinkEnabled") {
+                    SoundFeedback.shared.playSuccessTone()
+                }
+            }
+            // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
+            let insertResult = await TextInserter.insert(finalText, targetApp: dictationTargetApp)
+            // v1.2 — Signal B (re-dictation similarity). Compare this transcript
+            // to the previous one (RAM-only) BEFORE overwriting lastTranscript.
+            // A qualifying near-homophone re-dictation opportunistically SUGGESTS
+            // learning the corrected word as a SOFT-BIAS .term — never a
+            // .replacement (low confidence, can't corrupt output). Suggest-never-
+            // silent: the toast only adds on tap, suppressed in live contexts.
+            if winner.source == .cloud {
+                let cloudTranscript: String
+                let cloudFiredIDs: [UUID]
+                if let cloudResult, case .success(let result) = cloudResult {
+                    cloudTranscript = result.text
+                    cloudFiredIDs = result.firedIDs
+                } else {
+                    cloudTranscript = winner.text
+                    cloudFiredIDs = []
+                }
                 await MainActor.run {
                     if LearningSettings.isEnabled,
-                       let s = CorrectionDetector.shared.observe(text),
+                       let s = CorrectionDetector.shared.observe(cloudTranscript),
                        !LiveContext.isActive() {
                         let right = s.right
                         FloatingBarController.shared.showLearnToast(
@@ -363,14 +425,12 @@ final class PipelineController {
                             onIgnore: {}
                         )
                     }
-                }
-                await MainActor.run {
-                    state.lastTranscript = text
                     state.lastInsertedText = insertResult.inserted
                     state.lastTargetApp = insertResult.targetApp ?? dictationTargetApp
                     state.lastInsertionSpan = insertResult.span
                     state.lastDictationAt = Date()
-                    state.lastFiredRuleIDs = result.firedIDs
+                    state.lastTranscript = cloudTranscript
+                    state.lastFiredRuleIDs = cloudFiredIDs
 
                     // Product analytics — metadata only. `words` is the count;
                     // `mode` is the TranscriptionMode enum; `target_app_bundle` is
@@ -403,51 +463,76 @@ final class PipelineController {
                         ))
                     }
                 }
-                let wordCount = text.split(separator: " ").count
-                let dur = Double(samples.count) / 16000.0
-                // Snapshot total BEFORE recording for milestone threshold check (D15)
-                let totalBefore = UsageTracker.totalWords
-                UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur,
-                                                 appBundleId: attrBundleId,
-                                                 appName: attrAppName)
-                let totalAfter = UsageTracker.totalWords
-                MilestoneTracker.markUnseenIfNeeded(previousTotal: totalBefore, newTotal: totalAfter)
-                // Notify that a dictation completed so any open Settings panel can
-                // refresh the credit balance. Posted on the main actor: SwiftUI's
-                // .onReceive delivers on the posting thread.
+            } else {
                 await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .haynoiDictationCompleted, object: nil
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    state.isTranscribing = false
-                    NSLog("[Haynoi] Transcription error (detail): %@", error.localizedDescription)
-                    // Account-level errors (no credits / revoked key) are not
-                    // transient: saving the WAV and offering a retry would just
-                    // loop into the same failure. Surface the actionable copy.
-                    // Orb: error flash then auto-hide
-                    FloatingBarController.shared.transition(to: .error)
-                    if let sttErr = error as? STTError,
-                       case .outOfCredits = sttErr {
-                        state.error = sttErr.errorDescription
-                        if UserDefaults.standard.bool(forKey: "soundEnabled") {
-                            SoundFeedback.shared.playErrorTone()
-                        }
-                        return
-                    }
-                    if let sttErr = error as? STTError,
-                       case .sessionExpired = sttErr {
-                        state.error = sttErr.errorDescription
-                        if UserDefaults.standard.bool(forKey: "soundEnabled") {
-                            SoundFeedback.shared.playErrorTone()
-                        }
-                        return
-                    }
-                    handleTranscriptionFailure(samples: samples, error: error)
+                    state.lastInsertedText = insertResult.inserted
+                    state.lastTargetApp = insertResult.targetApp ?? dictationTargetApp
+                    state.lastInsertionSpan = insertResult.span
+                    state.lastDictationAt = Date()
+                    state.lastTranscript = nil
+                    state.lastFiredRuleIDs = []
                 }
             }
+
+            let wordCount = winner.text.split(separator: " ").count
+            let dur = Double(samples.count) / 16000.0
+            // Snapshot total BEFORE recording for milestone threshold check (D15)
+            let totalBefore = UsageTracker.totalWords
+            UsageTracker.recordTranscription(wordCount: wordCount, durationSeconds: dur,
+                                             appBundleId: attrBundleId,
+                                             appName: attrAppName)
+            let totalAfter = UsageTracker.totalWords
+            MilestoneTracker.markUnseenIfNeeded(previousTotal: totalBefore, newTotal: totalAfter)
+            // Notify that a dictation completed so any open Settings panel can
+            // refresh the credit balance. Posted on the main actor: SwiftUI's
+            // .onReceive delivers on the posting thread.
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .haynoiDictationCompleted, object: nil
+                )
+            }
+        }
+    }
+
+    nonisolated static func resolveTranscript(
+        cloud: Result<String, Error>?,
+        deadlineExceeded: Bool,
+        onDevice: String
+    ) -> (text: String, source: Source)? {
+        let trimmedOnDevice = onDevice.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cloud, case .success(let cloudText) = cloud {
+            let trimmedCloud = cloudText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !deadlineExceeded, !trimmedCloud.isEmpty {
+                return (trimmedCloud, .cloud)
+            }
+            if trimmedCloud.isEmpty, !trimmedOnDevice.isEmpty {
+                return (trimmedOnDevice, .onDevice)
+            }
+        }
+        if !trimmedOnDevice.isEmpty {
+            if deadlineExceeded {
+                return (trimmedOnDevice, .onDevice)
+            }
+            if let cloud, case .failure(let error) = cloud,
+               shouldUseOnDeviceFallback(for: error) {
+                return (trimmedOnDevice, .onDevice)
+            }
+        }
+        return nil
+    }
+
+    nonisolated static func shouldUseOnDeviceFallback(for error: Error) -> Bool {
+        if error is URLError {
+            return true
+        }
+        guard let sttError = error as? STTError else {
+            return false
+        }
+        switch sttError {
+        case .outOfCredits, .serverError, .rateLimited, .noConnection, .sessionExpired, .notSignedIn:
+            return true
+        case .parseError:
+            return false
         }
     }
 
