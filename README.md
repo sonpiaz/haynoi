@@ -71,7 +71,7 @@ Haynoi's dictionary fills itself instead of asking you to maintain it:
 - **Email polish never eats the draft** — if rewrite fails, the raw transcript is still inserted
 - **Honest errors** — a server problem is labeled as ours. It does not tell you that you're out of words, and it does not sign you out
 - **Survives real life** — AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully instead of eating your dictation
-- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers)
+- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers). **In-place replace** (rewriting the same bytes — “fix that”, or swapping a first-pass transcript for a better one) needs the target to expose a text field to macOS Accessibility (`AXValue` and a caret range). GPU/PTY terminals and similar views do not; there Haynoi pastes once and will not try to overwrite what it already inserted.
 - **Other audio gets out of your way** — music and video pause and resume around your dictation; a live call or stream is dipped in volume instead, decided from what your Mac is actually playing
 - **Living status orb** — recording, transcribing, success, and error each have their own state
 - **Snippets** — say a trigger word, get expanded text
