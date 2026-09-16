@@ -784,6 +784,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         PipelineController.shared.setup()
 
+        #if DEBUG
+        if CommandLine.arguments.contains("--grok-standard-hud") {
+            let marker = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/.grok-standard-hud-started.txt")
+            try? "started args=\(CommandLine.arguments)\n".write(to: marker, atomically: true, encoding: .utf8)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                PipelineController.shared.debugCaptureListeningHUD()
+            }
+        }
+        #endif
+
         // Product analytics — metadata only, gated by the "shareUsageData"
         // opt-out (default ON). start() self-identifies on relaunch if signed in.
         Analytics.start()
@@ -803,7 +813,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             self?.showOnboarding()
         }
 
-        if !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
+        let grokHudShot: Bool = {
+            #if DEBUG
+            return CommandLine.arguments.contains("--grok-standard-hud")
+            #else
+            return false
+            #endif
+        }()
+        if !grokHudShot, !UserDefaults.standard.bool(forKey: "onboardingCompleted") {
             showOnboarding()
         }
     }
