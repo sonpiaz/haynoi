@@ -9,8 +9,6 @@ final class OverlayPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    static let dockGap: CGFloat = 8
-
     static func makeIndicator(size: NSSize, clickThrough: Bool) -> OverlayPanel {
         let panel = OverlayPanel(
             contentRect: NSRect(origin: .zero, size: size),
@@ -39,17 +37,17 @@ final class OverlayPanel: NSPanel {
         return panel
     }
 
-    /// Bottom-center of `visibleFrame` (already excludes the Dock and menu bar).
-    static func bottomCenteredFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
+    /// Top-center of `visibleFrame` (already excludes the menu bar).
+    static func topCenteredFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
         let x = visibleFrame.midX - size.width / 2
-        let y = visibleFrame.minY + dockGap
+        let y = visibleFrame.maxY - size.height - CaptionLayout.menuGap
         return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
-    /// Learn toast sits one row above the caption so they never overlap.
+    /// Learn toast sits one row under the caption pill.
     static func toastFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
         let x = visibleFrame.midX - size.width / 2
-        let y = visibleFrame.minY + dockGap + CaptionLayout.height + 8
+        let y = visibleFrame.maxY - CaptionLayout.height - CaptionLayout.menuGap - size.height - 8
         return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 

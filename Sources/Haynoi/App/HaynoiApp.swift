@@ -785,7 +785,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         PipelineController.shared.setup()
 
         #if DEBUG
-        if CommandLine.arguments.contains("--grok-standard-hud") {
+        if CommandLine.arguments.contains("--grok-standard-hud")
+            || CommandLine.arguments.contains("--caption-snapshot") {
             let marker = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/.grok-standard-hud-started.txt")
             try? "started args=\(CommandLine.arguments)\n".write(to: marker, atomically: true, encoding: .utf8)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -816,6 +817,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         let grokHudShot: Bool = {
             #if DEBUG
             return CommandLine.arguments.contains("--grok-standard-hud")
+                || CommandLine.arguments.contains("--caption-snapshot")
             #else
             return false
             #endif

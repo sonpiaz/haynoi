@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Combine
 
 // MARK: - Orb State
 
@@ -16,8 +15,8 @@ enum OrbState: Equatable {
 
 // MARK: - Controller
 
-/// Floating voice indicator — Superwhisper-style caption pill.
-/// Bottom-center, above the Dock. Never becomes key (PTT must not steal scroll).
+/// Option A caption pill — frosted glass, fixed width, top-center under the
+/// menu bar. Never becomes key (PTT must not steal scroll).
 class FloatingBarController {
     static let shared = FloatingBarController()
 
@@ -28,7 +27,6 @@ class FloatingBarController {
     // ignoresMouseEvents = true, so it can't host buttons).
     private var toastWindow: OverlayPanel?
     private var toastDismissTimer: Timer?
-    private var layoutCancellable: AnyCancellable?
 
     private init() {}
 
@@ -47,7 +45,8 @@ class FloatingBarController {
             .environmentObject(AppState.shared)
         let hosting = NSHostingView(rootView: view)
 
-        let size = NSSize(width: CaptionLayout.minWidth, height: CaptionLayout.height)
+        let screenWidth = NSScreen.main?.visibleFrame.width ?? 1440
+        let size = CaptionLayout.pillSize(screenWidth: screenWidth)
         hosting.frame = NSRect(origin: .zero, size: size)
 
         let win = OverlayPanel.makeIndicator(size: size, clickThrough: true)
@@ -56,18 +55,6 @@ class FloatingBarController {
         win.presentWithoutActivating()
         window = win
         hostingView = hosting
-
-        layoutCancellable = Publishers.CombineLatest(
-            AppState.shared.$interimPartial,
-            AppState.shared.$orbState
-        )
-        .receive(on: RunLoop.main)
-        .sink { [weak self] _, _ in
-            Task { @MainActor in
-                self?.relayout()
-            }
-        }
-        relayout()
     }
 
     /// Transitions to a non-recording state (transcribing / success / error).
@@ -101,8 +88,6 @@ class FloatingBarController {
 
     /// Hides and destroys the orb window.
     @MainActor func hide() {
-        layoutCancellable?.cancel()
-        layoutCancellable = nil
         guard let win = window else { return }
         win.orderOut(nil)
 
@@ -195,33 +180,6 @@ class FloatingBarController {
 
     // MARK: - Private
 
-    @MainActor
-    private func relayout() {
-        guard let win = window, let hosting = hostingView else { return }
-        applyFrame(win, hosting: hosting, size: currentSize())
-    }
-
-    @MainActor
-    private func currentSize() -> NSSize {
-        let screenWidth = NSScreen.main?.visibleFrame.width ?? 1440
-        switch AppState.shared.orbState {
-        case .recording, .transcribing:
-            return NSSize(
-                width: CaptionLayout.pillWidth(
-                    for: AppState.shared.interimPartial,
-                    screenWidth: screenWidth
-                ),
-                height: CaptionLayout.height
-            )
-        case .success:
-            return NSSize(width: 180, height: 48)
-        case .error:
-            return NSSize(width: 48, height: 48)
-        case .idle:
-            return NSSize(width: CaptionLayout.minWidth, height: CaptionLayout.height)
-        }
-    }
-
     private func applyFrame(_ win: NSWindow, hosting: NSView, size: NSSize) {
         hosting.frame = NSRect(origin: .zero, size: size)
         guard let screen = NSScreen.main else {
@@ -229,7 +187,7 @@ class FloatingBarController {
             return
         }
         win.setFrame(
-            OverlayPanel.bottomCenteredFrame(size: size, visibleFrame: screen.visibleFrame),
+            OverlayPanel.topCenteredFrame(size: size, visibleFrame: screen.visibleFrame),
             display: true
         )
     }
@@ -242,19 +200,11 @@ class FloatingBarController {
 struct FloatingBarView: View {
     @EnvironmentObject private var state: AppState
 
-    // Audio-reactive fields — updated by the display link when recording
-    @State private var displayLevel: CGFloat = 0.05
-    @State private var levelHistory: [CGFloat] = Array(repeating: 0, count: 6)
-    /// Scrolling level history for the Trail waveform — newest sample last.
-    @State private var trailHistory: [CGFloat] = Array(repeating: 0, count: 12)
-    @State private var displayLink: Timer?
-
-    // Success / error — checkmark scale + color injection
     @State private var successScale: CGFloat = 1.0
-    @State private var successOpacity: Double = 1.0
     @State private var orbVisible: Bool = true
     /// Grow-only committed prefix so Vietnamese tokens already shown stay put.
     @State private var lockedCommitted: String = ""
+    @State private var listenPulse = false
 
     var body: some View {
         ZStack {
@@ -283,111 +233,84 @@ struct FloatingBarView: View {
             let advanced = CaptionLayout.advanceLock(raw: new, locked: lockedCommitted)
             lockedCommitted = advanced.newLock
         }
+        .environment(\.colorScheme, .dark)
         .onAppear {
-            startAnimationLoop()
             orbVisible = true
-        }
-        .onDisappear {
-            stopAnimationLoop()
+            listenPulse = true
         }
     }
 
-    // MARK: - Recording Orb — "Trail" (founder pick, 2026-06-12 contest)
-    //
-    // Voice-Memos style scrolling history: the newest level sample lands on
-    // the right and older bars march left, dimming with age — the last second
-    // of your voice stays visible. HONEST by construction: silence appends
-    // zero-height samples, so a quiet trail is a flat line of dashes — there
-    // is no time-driven motion of bar amplitude at all.
+    // MARK: - Option A — frosted pill, text only, invisible when silent
 
-    private let trailBarCount = 12
-    private let trailBarWidth: CGFloat = 2.2
-    private let trailBarGap: CGFloat = 1.0
-    private let trailMaxBarHeight: CGFloat = 16
-
+    @ViewBuilder
     private var recordingOrb: some View {
-        HStack(spacing: 10) {
-            trailStrip
-                .frame(width: 40, height: 18)
-
-            captionLine
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if state.orbState == .recording, !interimLine.isEmpty {
-                Capsule()
-                    .fill(Color.accent)
-                    .frame(width: 1.5, height: 13)
-                    .opacity(0.9)
+        if interimLine.isEmpty, state.orbState == .recording {
+            listenDot
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if interimLine.isEmpty {
+            Color.clear
+        } else {
+            HStack(spacing: 8) {
+                if state.orbState == .recording {
+                    listenDot
+                }
+                marqueeCaption
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(HUDBlur().clipShape(Capsule()))
+            .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 2)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.orbBodyTop, Color.orbBodyBottom],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
-                .shadow(color: .black.opacity(0.38), radius: 10, y: 3)
-                .shadow(color: Color.accent.opacity(min(0.06 + displayLevel * 1.4, 0.38)), radius: CGFloat(6) + displayLevel * 12)
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var trailStrip: some View {
-        Canvas { context, size in
-            let stride = trailBarWidth + trailBarGap
-            let total = CGFloat(trailHistory.count) * stride - trailBarGap
-            let x0 = (size.width - total) / 2
-            let midY = size.height / 2
-            for (i, v) in trailHistory.enumerated() {
-                let h = max(1.6, min(v, 1) * trailMaxBarHeight)
-                let rect = CGRect(x: x0 + CGFloat(i) * stride,
-                                  y: midY - h / 2,
-                                  width: trailBarWidth,
-                                  height: h)
-                let path = Path(roundedRect: rect, cornerRadius: trailBarWidth / 2)
-                let age = CGFloat(i) / CGFloat(max(trailHistory.count - 1, 1))
-                if v < 0.05 {
-                    context.fill(path, with: .color(Color.white.opacity(0.40 * age + 0.12)))
-                } else {
-                    var bar = context
-                    bar.opacity = 0.18 + 0.82 * age
-                    bar.fill(path, with: .linearGradient(
-                        Gradient(colors: [Color.accent, Color.accentDeep]),
-                        startPoint: CGPoint(x: rect.midX, y: rect.maxY),
-                        endPoint: CGPoint(x: rect.midX, y: rect.minY)
-                    ))
+    private var listenDot: some View {
+        Circle()
+            .fill(Color.white.opacity(listenPulse ? 0.22 : 0.75))
+            .frame(width: 4, height: 4)
+            .animation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: listenPulse)
+            .accessibilityLabel("Listening")
+    }
+
+    private var marqueeCaption: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    Text(captionAttributed)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .id("caption-end")
                 }
             }
+            .scrollDisabled(true)
+            .onAppear {
+                proxy.scrollTo("caption-end", anchor: .trailing)
+            }
+            .onChange(of: interimLine) { _, _ in
+                proxy.scrollTo("caption-end", anchor: .trailing)
+            }
         }
-    }
-
-    private var captionLine: some View {
-        Text(captionAttributed)
-            .lineLimit(1)
-            .truncationMode(.head)
-            .opacity(interimLine.isEmpty ? 0 : 1)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .clipped()
     }
 
     private var captionAttributed: AttributedString {
         // After release the clause is committed — drop bold so it reads as settled.
         if state.orbState != .recording {
             var settled = AttributedString(interimLine)
-            settled.font = .system(size: CaptionLayout.fontSize, weight: .regular)
-            settled.foregroundColor = Color.inkDarkBody
+            settled.font = .system(size: CaptionLayout.fontSize, weight: .light)
+            settled.foregroundColor = Color.white.opacity(0.78)
             return settled
         }
         let parts = CaptionLayout.advanceLock(raw: state.interimPartial, locked: lockedCommitted)
         var result = AttributedString()
         if !parts.committed.isEmpty {
             var committed = AttributedString(parts.committed)
-            committed.font = .system(size: CaptionLayout.fontSize, weight: .regular)
-            committed.foregroundColor = Color.inkDarkBody
+            committed.font = .system(size: CaptionLayout.fontSize, weight: .light)
+            committed.foregroundColor = Color.white.opacity(0.78)
             result += committed
             if !parts.fresh.isEmpty {
                 result += AttributedString(" ")
@@ -396,7 +319,7 @@ struct FloatingBarView: View {
         if !parts.fresh.isEmpty {
             var fresh = AttributedString(parts.fresh)
             fresh.font = .system(size: CaptionLayout.fontSize, weight: .semibold)
-            fresh.foregroundColor = Color.inkDarkPrimary
+            fresh.foregroundColor = Color.white.opacity(0.96)
             result += fresh
         }
         return result
@@ -515,13 +438,9 @@ struct FloatingBarView: View {
         switch newState {
         case .recording:
             orbVisible = true
-            // Fresh dictation — the trail starts flat.
-            trailHistory = Array(repeating: 0, count: trailBarCount)
             lockedCommitted = ""
 
         case .transcribing:
-            // Intentionally invisible (renders Color.clear) — the window stays
-            // alive so the "N words" chip can spring in on success.
             orbVisible = true
 
         case .success:
@@ -558,53 +477,20 @@ struct FloatingBarView: View {
         }
     }
 
-    // MARK: - Animation Loop (recording only)
+}
 
-    private func startAnimationLoop() {
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { _ in
-            Task { @MainActor [self] in
-                guard state.orbState == .recording else { return }
-
-                // Raw mic level with a tiny floor so the orb never reads as 0
-                // (silence still shows a low, *still* bar — not a flat line).
-                let rawLevel = CGFloat(max(state.audioLevel, 0.0))
-                levelHistory.append(rawLevel)
-                if levelHistory.count > 6 { levelHistory.removeFirst() }
-
-                // Short weighted-average so the input isn't jittery, but stays
-                // responsive — recent frames dominate.
-                let weights: [CGFloat] = [0.05, 0.08, 0.12, 0.15, 0.25, 0.35]
-                var smoothed: CGFloat = 0
-                for (i, w) in weights.enumerated() {
-                    if i < levelHistory.count { smoothed += levelHistory[i] * w }
-                }
-
-                // Calm resting floor — silence parks at ~0.04 (≈5pt bars).
-                let target = max(smoothed, 0.04)
-                // Fast attack (~50ms to ~63%), slower graceful release (~200ms)
-                // so speech onset is instant and decay glides down, never bobs.
-                let attack: CGFloat = 0.33   // up
-                let release: CGFloat = 0.085 // down
-                let speed = target > displayLevel ? attack : release
-                displayLevel += (target - displayLevel) * speed
-
-                // Trail: newest sample lands on the right; silence appends ~0,
-                // which renders as a flat dash — no synthetic motion ever.
-                trailHistory.append(smoothed)
-                if trailHistory.count > trailBarCount {
-                    trailHistory.removeFirst(trailHistory.count - trailBarCount)
-                }
-            }
-        }
-        // commonModes so updates survive modal runs
-        RunLoop.main.add(timer, forMode: .common)
-        displayLink = timer
+/// Frosted glass behind the Option A pill — blurs whatever is under the HUD.
+private struct HUDBlur: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.wantsLayer = true
+        return view
     }
 
-    private func stopAnimationLoop() {
-        displayLink?.invalidate()
-        displayLink = nil
-    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - Learn Toast (v1.1 — "Nhớ: <wrong> → <right>?")
