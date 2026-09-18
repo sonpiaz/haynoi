@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<title>Haynoi — streaming caption mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<style>
+  :root {
+    --obsidian-top: #2a2c31;
+    --obsidian-bot: #16171a;
+    --ink: #e8e6e1;
+    --ink-dim: rgba(232,230,225,.55);
+    --cyan: #38e1c6;
+    --cyan-deep: #1aa58f;
+    --err: #ff5c5c;
+    --menu: #1c1d20;
+    --max-pill: min(56vw, 960px);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  body {
+    background: #1a1c1f;
+    color: #ddd;
+    overflow: hidden;
+  }
+
+  /* Simulated desktop — screencapture -x was denied (TCC). Layout matches
+     a 1728-logical-wide Retina main display: menu bar 28px, Dock ~70px. */
+  .desktop {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(1200px 600px at 50% 110%, #1b3a44 0%, transparent 55%),
+      linear-gradient(180deg, #3a4a52 0%, #1e262b 55%, #121518 100%);
+  }
+  .menubar {
+    height: 28px;
+    background: rgba(20,21,24,.88);
+    backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px;
+    font-size: 12px; color: #e8e8ea;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    z-index: 20; position: relative;
+  }
+  .menubar .left { display: flex; gap: 16px; }
+  .menubar .right { opacity: .85; } /* keep caption off this corner */
+
+  .fake-window {
+    position: absolute;
+    top: 72px; left: 48px; right: 48px; bottom: 88px;
+    background: #1e1f22;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    overflow: hidden;
+  }
+  .fake-window .titlebar {
+    height: 38px; background: #2a2b2e;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px;
+    font-size: 12px; color: #aaa;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  .fake-window .body { padding: 18px 22px; font-size: 13px; color: #8a8d93; line-height: 1.5; }
+
+  .dock {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    height: 56px; padding: 6px 10px;
+    background: rgba(30,32,36,.55); backdrop-filter: blur(20px);
+    border-radius: 16px; border: 1px solid rgba(255,255,255,.12);
+    display: flex; gap: 8px; align-items: flex-end; z-index: 20;
+  }
+  .dock i {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(#4a4d55, #2c2e33);
+    display: block;
+  }
+
+  /* Default = BOTTOM, just above Dock (video + brief). Top = current FloatingBar. */
+  .caption-slot {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    pointer-events: none;
+    max-width: var(--max-pill);
+    display: flex; justify-content: center;
+    bottom: 72px; /* 8 dock pad + 56 dock + 8 gap — never covers Dock */
+    top: auto;
+  }
+  body[data-pos="top"] .caption-slot {
+    top: 38px;
+    bottom: auto;
+  }
+  .fake-window { bottom: 88px; }
+  body[data-pos="top"] .fake-window { top: 88px; bottom: 88px; }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--obsidian-top), var(--obsidian-bot));
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 18px rgba(56,225,198,.12);
+    color: var(--ink);
+    max-width: var(--max-pill);
+  }
+  .pill.error { box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 16px rgba(255,92,92,.22); }
+
+  .trail {
+    display: flex; align-items: center; gap: 1.2px; height: 22px; flex: none;
+  }
+  .trail b {
+    display: block; width: 2.6px; border-radius: 2px;
+    background: var(--cyan);
+    opacity: .25;
+  }
+  .trail b.on { opacity: .95; }
+
+  .line {
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: -.01em;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: calc(var(--max-pill) - 72px);
+    /* Long line: keep the TAIL (latest words). Fade the cut on the left. */
+    mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 100%);
+  }
+  .line.short { mask-image: none; -webkit-mask-image: none; }
+  /* Video: bold = newest uncommitted stretch, not keywords. Drop bold on commit. */
+  .line .fresh { font-weight: 600; color: #fff; }
+  .caret {
+    display: inline-block; width: 1.5px; height: 13px;
+    background: var(--cyan); margin-left: 3px; vertical-align: -1px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .target {
+    flex: none;
+    font-size: 11px; font-weight: 600; color: var(--cyan);
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(56,225,198,.14);
+  }
+  .err-msg { font-size: 14px; color: #ffd0d0; }
+
+  /* Controls — mockup only, not in the app */
+  .panel {
+    position: absolute; right: 16px; bottom: 80px; z-index: 40;
+    width: 280px; padding: 12px 14px;
+    background: rgba(18,19,22,.92); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px; font-size: 12px; line-height: 1.45;
+    pointer-events: auto;
+  }
+  .panel h1 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #888; margin: 0 0 8px; font-weight: 600; }
+  .panel button {
+    display: block; width: 100%; text-align: left; margin: 0 0 4px;
+    background: #2a2c31; color: #eee; border: 1px solid #3a3d44;
+    border-radius: 8px; padding: 7px 10px; cursor: pointer; font: inherit;
+  }
+  .panel button.on { border-color: var(--cyan); color: var(--cyan); }
+  .panel .note { color: #8b8e94; margin-top: 8px; font-size: 11px; }
+
+  body[data-state="1"] .only-caption { display: none; }
+  body[data-state="1"] .pill { padding: 8px 14px; }
+</style>
+</head>
+<body data-state="2">
+  <div class="desktop">
+    <div class="menubar">
+      <div class="left"><span> Haynoi</span><span>File</span><span>Edit</span></div>
+      <div class="right">Thu 17 Sep&nbsp;&nbsp;3:20</div>
+    </div>
+
+    <div class="fake-window">
+      <div class="titlebar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span>Mandeck — pane đang gõ</span>
+      </div>
+      <div class="body">
+        Ô gõ. Mặc định pill <b>đáy, trên Dock</b> (video). Phím T / nút đổi sang trên giữa (orb Haynoi hiện tại). <code>pointer-events: none</code>.
+      </div>
+    </div>
+
+    <div class="caption-slot" aria-hidden="true">
+      <div class="pill" id="pill">
+        <div class="trail" id="trail"></div>
+        <div class="line short" id="line"></div>
+      </div>
+    </div>
+
+    <div class="dock" title="Dock — caption must not cover this">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <h1>Vị trí pill — Sơn chọn</h1>
+    <button type="button" id="pos-bottom" class="on">Đáy · trên Dock (video)</button>
+    <button type="button" id="pos-top">Trên · dưới menu bar (orb hiện tại)</button>
+    <h1>Sáu trạng thái</h1>
+    <button data-s="1">1 · Chờ (orb, chưa chữ)</button>
+    <button data-s="2" class="on">2 · Đang nói</button>
+    <button data-s="3">3 · Chốt câu (~0,6s)</button>
+    <button data-s="4">4 · Đang gõ vào app</button>
+    <button data-s="5">5 · Lỗi (3 kiểu)</button>
+    <button data-s="6">6 · Câu dài</button>
+    <div class="note" id="legend"></div>
+  </aside>
+
+<script>
+const trail = document.getElementById("trail");
+for (let i = 0; i < 18; i++) {
+  const b = document.createElement("b");
+  b.style.height = (4 + Math.abs(Math.sin(i * 0.7)) * 16) + "px";
+  if (i > 8) b.className = "on";
+  trail.appendChild(b);
+}
+
+const STATES = {
+  1: {
+    html: "",
+    legend: "Chờ: chỉ trail 176×52 như orb hiện tại. Chưa chữ. Biến mất khi user bắt đầu nói (sau 100ms giữ phím).",
+    error: false, target: false, long: false, trail: true
+  },
+  2: {
+    html: 'mở cái file config rồi chạy <span class="fresh">npm run build giúp</span><span class="caret"></span>',
+    legend: "Đang nói: phần đã chốt chữ thường (dấu Việt khóa). Phần mới nhất chưa chốt IN ĐẬM — như video “Let's make the”. Không dùng đậm cho từ khóa.",
+    error: false, target: false, long: false, trail: true
+  },
+  3: {
+    html: 'mở cái file config rồi chạy npm run build giúp anh',
+    legend: "Chốt câu: bỏ hết đậm, giữ ~0,6s rồi sang 4.",
+    error: false, target: false, long: false, trail: false
+  },
+  4: {
+    html: 'mở cái file config rồi chạy npm run build giúp anh',
+    legend: "Đang gõ vào app: nhãn → Mandeck (app đang focus). Video gốc không có cái này; Hãy Nói cần vì chữ bay vào app khác. Biến mất khi insert xong (success orb).",
+    error: false, target: true, long: false, trail: false
+  },
+  5: {
+    html: '<span class="err-msg">Không nghe thấy gì</span>',
+    legend: "Lỗi (đổi 5a/5b/5c bằng phím A/B/C): im lặng · mic từ chối · mất mạng. Biến mất sau ~1,2s. Không dán chữ.",
+    error: true, target: false, long: false, trail: false,
+    errs: [
+      "Không nghe thấy gì",
+      "Cần quyền Microphone",
+      "Mất mạng — thử lại"
+    ]
+  },
+  6: {
+    html: '…cần nhìn hiệu suất từng agent và trạng thái trên một sơ đồ để duyệt bằng hình, đừng chỉ đọc tài liệu dài rồi mới <span class="fresh">npm run build</span><span class="caret"></span>',
+    legend: "Câu dài: 1 dòng, max 56% ngang. Cắt đầu, hiện đuôi. Đuôi chưa chốt in đậm.",
+    error: false, target: false, long: true, trail: true
+  }
+};
+
+const line = document.getElementById("line");
+const pill = document.getElementById("pill");
+const legend = document.getElementById("legend");
+const trailEl = document.getElementById("trail");
+let errI = 0;
+
+function show(n) {
+  const s = STATES[n];
+  document.body.dataset.state = n;
+  document.querySelectorAll(".panel button[data-s]").forEach(b => {
+    b.classList.toggle("on", b.dataset.s === String(n));
+  });
+  pill.classList.toggle("error", s.error);
+  trailEl.style.display = s.trail ? "flex" : "none";
+  line.className = "line" + (s.long ? "" : " short");
+  if (s.error) {
+    line.innerHTML = '<span class="err-msg">' + s.errs[errI] + "</span>";
+  } else {
+    line.innerHTML = s.html;
+  }
+  // target chip
+  let t = pill.querySelector(".target");
+  if (s.target) {
+    if (!t) {
+      t = document.createElement("span");
+      t.className = "target";
+      t.textContent = "→ Mandeck";
+      pill.appendChild(t);
+    }
+  } else if (t) t.remove();
+  legend.textContent = s.legend;
+}
+
+document.querySelectorAll(".panel button[data-s]").forEach(b => {
+  b.addEventListener("click", () => show(+b.dataset.s));
+});
+document.addEventListener("keydown", e => {
+  if (e.key >= "1" && e.key <= "6") show(+e.key);
+  if (e.key === "a" || e.key === "A") { errI = 0; if (document.body.dataset.state === "5") show(5); }
+  if (e.key === "b" || e.key === "B") { errI = 1; if (document.body.dataset.state === "5") show(5); }
+  if (e.key === "c" || e.key === "C") { errI = 2; if (document.body.dataset.state === "5") show(5); }
+  if (e.key === "t" || e.key === "T") setPos(document.body.dataset.pos === "top" ? "bottom" : "top");
+});
+
+function setPos(pos) {
+  document.body.dataset.pos = pos;
+  document.getElementById("pos-bottom").classList.toggle("on", pos === "bottom");
+  document.getElementById("pos-top").classList.toggle("on", pos === "top");
+}
+document.getElementById("pos-bottom").onclick = () => setPos("bottom");
+document.getElementById("pos-top").onclick = () => setPos("top");
+
+const q = new URLSearchParams(location.search);
+setPos(q.get("pos") === "top" ? "top" : "bottom");
+if (q.get("state")) show(+q.get("state"));
+else show(2);
+if (q.get("err")) { errI = +q.get("err"); show(5); }
+</script>
+</body>
+</html>

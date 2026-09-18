@@ -12,7 +12,15 @@ struct HaynoiApp: App {
 
     init() {
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            // Debug is a side-by-side "Haynoi Dev" build. Do not let Sparkle
+            // pull the production appcast over it.
+            startingUpdater: {
+                #if DEBUG
+                false
+                #else
+                true
+                #endif
+            }(),
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
@@ -26,7 +34,10 @@ struct HaynoiApp: App {
                 .frame(width: 360)
                 .haynoiTheme()
         } label: {
-            Label("Haynoi", systemImage: appState.menuBarIcon)
+            Label(
+                Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Haynoi",
+                systemImage: appState.menuBarIcon
+            )
         }
         .menuBarExtraStyle(.window)
 
@@ -747,7 +758,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             "successDinkEnabled": false, // founder feedback: 2 tones max — chip shows silently
             "soundTheme": "chime",      // founder pick: gentle bell pair (contest 2026-06-12)
             "appTheme": "light",       // founder default: white-gray light look
-            "hotkeyChoice": "option",  // founder default: left Option push-to-talk
+            // Dev runs beside production; Control so it does not steal Left Option.
+            "hotkeyChoice": {
+                #if DEBUG
+                "control"
+                #else
+                "option"
+                #endif
+            }(),
             "fixThatHotkeyChoice": "ctrlOption", // v1.1: ⌃⌥ chord tap (never collides with PTT)
             "signalAEnabled": true,    // v1.3: learn when you edit a word in-app (AX-cooperative apps only)
             "learningEnabled": true,   // v2 Phase 5: master switch for correction capture (A/B/C)

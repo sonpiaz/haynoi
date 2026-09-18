@@ -33,6 +33,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi
         PRODUCT_NAME: Haynoi
+        HAYNOI_DISPLAY_NAME: Haynoi
         MARKETING_VERSION: "0.3.10"
         CURRENT_PROJECT_VERSION: "32"
         INFOPLIST_FILE: Resources/Info.plist
@@ -59,6 +60,7 @@ targets:
       configs:
         debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi.dev
+          HAYNOI_DISPLAY_NAME: "Haynoi Dev"
           CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
           DEVELOPMENT_TEAM: 6WMWJ85DDY
           ENABLE_HARDENED_RUNTIME: false
