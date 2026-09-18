@@ -292,51 +292,27 @@ final class PipelineController {
             await previousInsertion?.value
 
             var cloudResult: Result<STTProvider.Result, Error>?
-            var deadlineExceeded = false
-            let cloudTask = Task { try await STTProvider.transcribeTracked(samples) }
-
-            // Race the deadline against cloud, but never cancel the cloud task.
-            // Quality may still arrive and replace the on-device insert in place.
-            enum CloudRace {
-                case cloud(Result<STTProvider.Result, Error>)
-                case deadline
-            }
-            let raced: CloudRace = await withTaskGroup(of: CloudRace.self) { group in
-                group.addTask {
-                    do {
-                        return .cloud(.success(try await cloudTask.value))
-                    } catch {
-                        return .cloud(.failure(error))
-                    }
-                }
-                group.addTask {
-                    try? await Task.sleep(nanoseconds: UInt64(Self.cloudDeadline * 1_000_000_000))
-                    return .deadline
-                }
-                let first = await group.next() ?? .deadline
-                group.cancelAll()
-                return first
-            }
-            switch raced {
-            case .cloud(let result):
-                cloudResult = result
-            case .deadline:
-                deadlineExceeded = true
+            // Wait for Quality. Cancelling the cloud call at 2.5s (32.7–32.9)
+            // dropped the rest of the sentence. On-device is the fallback only
+            // when the cloud actually fails. Do not paste-then-replaceSpan (#32):
+            // Mandeck has no AX span, so Quality never upgrades.
+            do {
+                let result = try await STTProvider.transcribeTracked(samples)
+                cloudResult = .success(result)
+            } catch {
+                cloudResult = .failure(error)
             }
 
             let onDeviceText = InterimSpeechRecognizer.shared.finalText()
             let cloudText = cloudResult.map { $0.map(\.text) }
             guard let winner = Self.resolveTranscript(
                 cloud: cloudText,
-                deadlineExceeded: deadlineExceeded,
+                deadlineExceeded: false,
                 onDevice: onDeviceText
             ) else {
                 let failureError: Error = {
                     if let cloudResult, case .failure(let error) = cloudResult {
                         return error
-                    }
-                    if deadlineExceeded {
-                        return STTError.noConnection
                     }
                     return STTError.parseError
                 }()
@@ -396,14 +372,6 @@ final class PipelineController {
             }
             // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
             let insertResult = await TextInserter.insert(finalText, targetApp: dictationTargetApp)
-            if winner.source == .onDevice, deadlineExceeded {
-                await Self.upgradeOnDeviceInsertIfCloudArrives(
-                    cloudTask: cloudTask,
-                    insertedText: insertResult.inserted,
-                    targetApp: insertResult.targetApp ?? dictationTargetApp,
-                    span: insertResult.span
-                )
-            }
             // v1.2 — Signal B (re-dictation similarity). Compare this transcript
             // to the previous one (RAM-only) BEFORE overwriting lastTranscript.
             // A qualifying near-homophone re-dictation opportunistically SUGGESTS
@@ -506,69 +474,6 @@ final class PipelineController {
                 )
             }
         }
-    }
-
-    /// After an on-device insert at the 2.5s deadline, Quality may still arrive.
-    /// Replace in place only when the pasted span is intact and the user did not
-    /// switch apps. Never delete the on-device text on cloud failure.
-    static func upgradeOnDeviceInsertIfCloudArrives(
-        cloudTask: Task<STTProvider.Result, Error>,
-        insertedText: String,
-        targetApp: NSRunningApplication?,
-        span: NSRange?
-    ) async {
-        let result: STTProvider.Result
-        do {
-            result = try await cloudTask.value
-        } catch {
-            NSLog("[Haynoi] Cloud follow-up failed — keeping on-device text: %@", error.localizedDescription)
-            return
-        }
-
-        let snippetText = SnippetManager.applySnippets(to: result.text)
-        let upgraded = PersonalDictionary.shared.applyReplacements(to: snippetText)
-        let front = NSWorkspace.shared.frontmostApplication
-        let sameApp = front?.processIdentifier == targetApp?.processIdentifier
-            || (front?.bundleIdentifier != nil && front?.bundleIdentifier == targetApp?.bundleIdentifier)
-
-        guard cloudUpgradeDecision(
-            cloud: .success(upgraded),
-            onDeviceInserted: insertedText,
-            sameApp: sameApp,
-            spanStillMatches: span != nil && span?.location != NSNotFound
-        ) else { return }
-
-        let replaced = await TextInserter.replaceSpan(
-            span,
-            with: upgraded,
-            oldText: insertedText,
-            targetApp: targetApp,
-            fallbackInsert: false
-        )
-        if replaced {
-            NSLog("[Haynoi] Transcribed (cloud-upgrade): %@", upgraded)
-            await MainActor.run {
-                AppState.shared.lastInsertedText = upgraded
-                AppState.shared.lastInsertionSpan = span
-            }
-        } else {
-            NSLog("[Haynoi] Cloud follow-up skipped replace — keeping on-device text")
-        }
-    }
-
-    /// Pure gate for the cloud follow-up. `spanStillMatches` is supplied by the
-    /// caller (AX verify lives in `replaceSpan`); this function stays testable.
-    nonisolated static func cloudUpgradeDecision(
-        cloud: Result<String, Error>,
-        onDeviceInserted: String,
-        sameApp: Bool,
-        spanStillMatches: Bool
-    ) -> Bool {
-        guard sameApp, spanStillMatches else { return false }
-        guard case .success(let text) = cloud else { return false }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        return trimmed != onDeviceInserted.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     nonisolated static func resolveTranscript(

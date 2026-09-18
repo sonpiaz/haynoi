@@ -51,5 +51,19 @@ final class TranscriptFallbackResolutionTests: XCTestCase {
         )
         XCTAssertNil(resolved)
     }
+
+    func testCloudDeadlineIsTwoAndAHalfSeconds() {
+        XCTAssertEqual(PipelineController.cloudDeadline, 2.5, accuracy: 0.001)
+    }
+
+    func testNoConnectionFallsBackToOnDevice() {
+        let resolved = PipelineController.resolveTranscript(
+            cloud: .failure(STTError.noConnection),
+            deadlineExceeded: false,
+            onDevice: "on device text"
+        )
+        XCTAssertEqual(resolved?.text, "on device text")
+        XCTAssertEqual(resolved?.source, .onDevice)
+    }
 }
 

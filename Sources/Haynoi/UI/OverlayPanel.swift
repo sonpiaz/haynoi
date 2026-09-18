@@ -1,0 +1,59 @@
+import AppKit
+
+/// HUD / toast panel that must never steal key status from the app the user
+/// is dictating into. A regular `NSWindow.orderFront` during PTT made Ghostty
+/// (and other terminals) lose the key window, so scroll died until release
+/// (W37-738). `NSPanel` + `.nonactivatingPanel` + `canBecomeKey == false`
+/// keeps the front app key; `ignoresMouseEvents` lets the wheel pass through.
+final class OverlayPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+
+    static let dockGap: CGFloat = 8
+
+    static func makeIndicator(size: NSSize, clickThrough: Bool) -> OverlayPanel {
+        let panel = OverlayPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.hidesOnDeactivate = false
+        panel.worksWhenModal = true
+        panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.level = .statusBar
+        panel.ignoresMouseEvents = clickThrough
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .stationary,
+            .fullScreenAuxiliary,
+            .ignoresCycle
+        ]
+        panel.animationBehavior = .none
+        panel.acceptsMouseMovedEvents = false
+        return panel
+    }
+
+    /// Bottom-center of `visibleFrame` (already excludes the Dock and menu bar).
+    static func bottomCenteredFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
+        let x = visibleFrame.midX - size.width / 2
+        let y = visibleFrame.minY + dockGap
+        return NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    /// Learn toast sits one row above the caption so they never overlap.
+    static func toastFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
+        let x = visibleFrame.midX - size.width / 2
+        let y = visibleFrame.minY + dockGap + CaptionLayout.height + 8
+        return NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    func presentWithoutActivating() {
+        orderFrontRegardless()
+    }
+}

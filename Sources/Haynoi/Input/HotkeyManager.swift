@@ -111,6 +111,9 @@ final class HotkeyManager {
     /// when the target modifier is Option — only the left key triggers dictation.
     private var lastFlagKeyCode: UInt16 = 0
 
+    /// Keyboard-only. Scroll must keep going to the front app while PTT is held.
+    static let pttEventMask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown]
+
     // Carbon virtual key codes for the left/right option keys.
     private let kLeftOptionKeyCode: UInt16 = 58   // kVK_Option
     private let kRightOptionKeyCode: UInt16 = 61  // kVK_RightOption
@@ -158,8 +161,10 @@ final class HotkeyManager {
 
         // GLOBAL monitor: fires for events in OTHER apps (primary path).
         // Does not return the event — global monitors are observe-only.
+        // Keyboard flags only. Never .scrollWheel — holding PTT must not
+        // swallow scroll in the front app (W37-738).
         globalMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.flagsChanged, .keyDown]
+            matching: Self.pttEventMask
         ) { [weak self] event in
             self?.handle(event)
         }
@@ -167,7 +172,7 @@ final class HotkeyManager {
         // LOCAL monitor: fires when Haynoi itself is frontmost. Must return the
         // event unchanged so it still reaches Haynoi's own UI.
         localMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.flagsChanged, .keyDown]
+            matching: Self.pttEventMask
         ) { [weak self] event in
             self?.handle(event)
             return event
