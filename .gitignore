@@ -39,3 +39,10 @@ redesign/
 site/appcast.xml
 site/.live-*.html
 site/_shots/
+
+# Local HUD / verify screenshots — not product
+.grok-standard-hud*
+d1.png
+d2.png
+dev-stream.png
+verify-84-*.png
