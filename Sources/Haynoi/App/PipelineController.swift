@@ -40,7 +40,7 @@ final class PipelineController {
     // lost, even on a cold Bluetooth mic.
     private static let preRollMs = 300
     // Keep release latency bounded before falling back to on-device text.
-    private static let cloudDeadline: TimeInterval = 2.5
+    static let cloudDeadline: TimeInterval = 2.5
 
     // Fix #5 (AudioRecorder): observer for self-abort notifications.
     private var abortObserver: NSObjectProtocol?
@@ -292,28 +292,12 @@ final class PipelineController {
             await previousInsertion?.value
 
             var cloudResult: Result<STTProvider.Result, Error>?
-            var deadlineExceeded = false
-            let cloudTask = Task { try await STTProvider.transcribeTracked(samples) }
-
+            // Wait for Quality. Cancelling the cloud call at 2.5s (32.7–32.9)
+            // dropped the rest of the sentence. On-device is the fallback only
+            // when the cloud actually fails.
             do {
-                let racedCloud = try await withThrowingTaskGroup(of: STTProvider.Result?.self) { group in
-                    group.addTask {
-                        try await cloudTask.value
-                    }
-                    group.addTask {
-                        try await Task.sleep(nanoseconds: UInt64(Self.cloudDeadline * 1_000_000_000))
-                        return nil
-                    }
-                    let first = try await group.next() ?? nil
-                    group.cancelAll()
-                    return first
-                }
-                if let racedCloud {
-                    cloudResult = .success(racedCloud)
-                } else {
-                    deadlineExceeded = true
-                    cloudTask.cancel()
-                }
+                let result = try await STTProvider.transcribeTracked(samples)
+                cloudResult = .success(result)
             } catch {
                 cloudResult = .failure(error)
             }
@@ -322,15 +306,12 @@ final class PipelineController {
             let cloudText = cloudResult.map { $0.map(\.text) }
             guard let winner = Self.resolveTranscript(
                 cloud: cloudText,
-                deadlineExceeded: deadlineExceeded,
+                deadlineExceeded: false,
                 onDevice: onDeviceText
             ) else {
                 let failureError: Error = {
                     if let cloudResult, case .failure(let error) = cloudResult {
                         return error
-                    }
-                    if deadlineExceeded {
-                        return STTError.noConnection
                     }
                     return STTError.parseError
                 }()
