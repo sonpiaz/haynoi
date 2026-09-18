@@ -43,7 +43,7 @@ class FloatingBarController {
 
         let view = FloatingBarView()
             .environmentObject(AppState.shared)
-        let hosting = NSHostingView(rootView: view)
+        let hosting = ClickThroughHostingView(rootView: view)
 
         let screen = OverlayPanel.activeScreen()
         let screenWidth = screen?.visibleFrame.width ?? 1440
@@ -54,6 +54,10 @@ class FloatingBarController {
         win.contentView = hosting
         applyFrame(win, hosting: hosting, size: size, screen: screen)
         win.presentWithoutActivating()
+        NSLog("[Haynoi] overlay shown key=%d ignoreMouse=%d frame=%@ front=%@",
+              win.isKeyWindow, win.ignoresMouseEvents,
+              NSStringFromRect(win.frame) as NSString,
+              NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")
         window = win
         hostingView = hosting
     }
@@ -232,6 +236,7 @@ struct FloatingBarView: View {
     /// Grow-only committed prefix so Vietnamese tokens already shown stay put.
     @State private var lockedCommitted: String = ""
     @State private var listenPulse = false
+    @State private var captionTextWidth: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -300,28 +305,24 @@ struct FloatingBarView: View {
             .accessibilityLabel("Listening")
     }
 
+    /// Newest words stay on the right by shifting the line left. No NSScrollView —
+    /// a ScrollView in a floating panel can become key and steal wheel events
+    /// from the front CLI while PTT is held.
     private var marqueeCaption: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    Text(captionAttributed)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                    Color.clear
-                        .frame(width: 1, height: 1)
-                        .id("caption-end")
-                }
-            }
-            .scrollDisabled(true)
-            .onAppear {
-                proxy.scrollTo("caption-end", anchor: .trailing)
-            }
-            .onChange(of: interimLine) { _, _ in
-                proxy.scrollTo("caption-end", anchor: .trailing)
-            }
+        GeometryReader { geo in
+            Text(captionAttributed)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .background(
+                    GeometryReader { inner in
+                        Color.clear.preference(key: CaptionTextWidthKey.self, value: inner.size.width)
+                    }
+                )
+                .offset(x: min(0, geo.size.width - captionTextWidth))
+                .frame(width: geo.size.width, alignment: .leading)
+                .clipped()
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .clipped()
+        .onPreferenceChange(CaptionTextWidthKey.self) { captionTextWidth = $0 }
     }
 
     private var captionAttributed: AttributedString {
@@ -508,8 +509,8 @@ struct FloatingBarView: View {
 
 /// Frosted glass behind the Option A pill — blurs whatever is under the HUD.
 private struct HUDBlur: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
+    func makeNSView(context: Context) -> ClickThroughEffectView {
+        let view = ClickThroughEffectView()
         view.material = .hudWindow
         view.blendingMode = .behindWindow
         view.state = .active
@@ -517,7 +518,21 @@ private struct HUDBlur: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ nsView: ClickThroughEffectView, context: Context) {}
+}
+
+private struct CaptionTextWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+/// SwiftUI hosting that never takes first responder or hits.
+final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    override var acceptsFirstResponder: Bool { false }
+    override func becomeFirstResponder() -> Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 // MARK: - Learn Toast (v1.1 — "Nhớ: <wrong> → <right>?")

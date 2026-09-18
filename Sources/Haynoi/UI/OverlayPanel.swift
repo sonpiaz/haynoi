@@ -8,6 +8,15 @@ import AppKit
 final class OverlayPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+    override var acceptsFirstResponder: Bool { false }
+
+    override func becomeKey() {
+        // Scroll-wheel events follow the key window. If this HUD ever becomes
+        // key, the front CLI stops scrolling while PTT is held.
+        NSLog("[Haynoi] overlay refused becomeKey (front=%@)",
+              NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?")
+        resignKey()
+    }
 
     static func makeIndicator(size: NSSize, clickThrough: Bool) -> OverlayPanel {
         let panel = OverlayPanel(
@@ -34,6 +43,7 @@ final class OverlayPanel: NSPanel {
         ]
         panel.animationBehavior = .none
         panel.acceptsMouseMovedEvents = false
+        panel.isExcludedFromWindowsMenu = true
         return panel
     }
 
@@ -59,5 +69,13 @@ final class OverlayPanel: NSPanel {
 
     func presentWithoutActivating() {
         orderFrontRegardless()
+        resignKey()
+        makeFirstResponder(nil)
     }
+}
+
+/// Frosted glass that never eats mouse or first responder.
+final class ClickThroughEffectView: NSVisualEffectView {
+    override var acceptsFirstResponder: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
