@@ -45,13 +45,14 @@ class FloatingBarController {
             .environmentObject(AppState.shared)
         let hosting = NSHostingView(rootView: view)
 
-        let screenWidth = NSScreen.main?.visibleFrame.width ?? 1440
+        let screen = OverlayPanel.activeScreen()
+        let screenWidth = screen?.visibleFrame.width ?? 1440
         let size = CaptionLayout.pillSize(screenWidth: screenWidth)
         hosting.frame = NSRect(origin: .zero, size: size)
 
         let win = OverlayPanel.makeIndicator(size: size, clickThrough: true)
         win.contentView = hosting
-        applyFrame(win, hosting: hosting, size: size)
+        applyFrame(win, hosting: hosting, size: size, screen: screen)
         win.presentWithoutActivating()
         window = win
         hostingView = hosting
@@ -84,6 +85,32 @@ class FloatingBarController {
     @MainActor var debugWindowFrame: NSRect? { window?.frame }
 
     @MainActor var debugWindowNumber: Int { window?.windowNumber ?? 0 }
+
+    /// Full-display capture so Son can see the pill sits under the menu bar.
+    /// Uses the window-server snapshot of this process's screen. Returns false
+    /// if Screen Recording TCC refuses (same as `screencapture`).
+    @MainActor func debugDesktopCapture(to url: URL) -> Bool {
+        guard let screen = window?.screen ?? OverlayPanel.activeScreen() else { return false }
+        let frame = screen.frame
+        // Quartz: (0,0) is the top-left of the primary display.
+        let primaryH = NSScreen.screens.first?.frame.height ?? frame.height
+        let quartz = CGRect(
+            x: frame.origin.x,
+            y: primaryH - (frame.origin.y + frame.height),
+            width: frame.width,
+            height: frame.height
+        )
+        guard let cg = CGWindowListCreateImage(
+            quartz,
+            [.optionOnScreenOnly],
+            kCGNullWindowID,
+            [.bestResolution, .boundsIgnoreFraming]
+        ) else { return false }
+        let rep = NSBitmapImageRep(cgImage: cg)
+        guard let data = rep.representation(using: .png, properties: [:]) else { return false }
+        try? data.write(to: url)
+        return true
+    }
     #endif
 
     /// Hides and destroys the orb window.
@@ -142,7 +169,7 @@ class FloatingBarController {
 
         let win = OverlayPanel.makeIndicator(size: size, clickThrough: false)
         win.contentView = hosting
-        if let screen = NSScreen.main {
+        if let screen = OverlayPanel.activeScreen() {
             win.setFrame(OverlayPanel.toastFrame(size: size, visibleFrame: screen.visibleFrame), display: true)
         }
         win.presentWithoutActivating()
@@ -180,9 +207,9 @@ class FloatingBarController {
 
     // MARK: - Private
 
-    private func applyFrame(_ win: NSWindow, hosting: NSView, size: NSSize) {
+    private func applyFrame(_ win: NSWindow, hosting: NSView, size: NSSize, screen: NSScreen? = nil) {
         hosting.frame = NSRect(origin: .zero, size: size)
-        guard let screen = NSScreen.main else {
+        guard let screen = screen ?? OverlayPanel.activeScreen() else {
             win.setContentSize(size)
             return
         }

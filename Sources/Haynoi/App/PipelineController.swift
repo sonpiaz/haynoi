@@ -543,16 +543,25 @@ final class PipelineController {
             FloatingBarController.shared.show()
             mark("orb-only (no mic TCC on Dev bundle)")
         }
-        // Seed a long line so the snapshot shows the locked Option A marquee
-        // (newest words on the right), not an empty listen-dot.
-        state.interimPartial = "Mở file báo cáo tháng chín, và xuất sang định dạng PDF, sau đó gửi cho anh Sơn kiểm tra luôn giúp"
+        // After start()'s async clear of interimPartial, seed a long line so
+        // the snapshot shows the Option A marquee (newest words on the right).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            AppState.shared.interimPartial = "Mở file báo cáo tháng chín, và xuất sang định dạng PDF, sau đó gửi cho anh Sơn kiểm tra luôn giúp"
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
             FloatingBarController.shared.debugSnapshot(to: dest)
+            let desktop = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/design/2026-09-17-caption-cao-cap/desktop-after-install.png")
+            try? FileManager.default.createDirectory(at: desktop.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let ok = FloatingBarController.shared.debugDesktopCapture(to: desktop)
+            mark(ok ? "desktop capture \(desktop.path)" : "desktop capture refused (TCC)")
             if let f = FloatingBarController.shared.debugWindowFrame {
-                let line = String(format: "%d %d %d %d %d\n",
+                let screen = OverlayPanel.activeScreen()
+                let vis = screen?.visibleFrame ?? .zero
+                let line = String(format: "%d %d %d %d %d visMaxY=%.0f visMinY=%.0f\n",
                                   Int(f.origin.x), Int(f.origin.y),
                                   Int(f.size.width), Int(f.size.height),
-                                  FloatingBarController.shared.debugWindowNumber)
+                                  FloatingBarController.shared.debugWindowNumber,
+                                  vis.maxY, vis.minY)
                 try? line.write(to: frameDest, atomically: true, encoding: .utf8)
                 mark("frame \(line.trimmingCharacters(in: .whitespacesAndNewlines))")
             } else {

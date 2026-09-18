@@ -32,6 +32,8 @@ final class PTTScrollIsolationTests: XCTestCase {
         XCTAssertEqual(frame.midX, visible.midX, accuracy: 0.1)
         XCTAssertGreaterThan(frame.minY, visible.midY)
         XCTAssertLessThan(frame.maxY, visible.maxY)
+        // Must not sit on the Dock (visible.minY).
+        XCTAssertGreaterThan(frame.minY - visible.minY, 400)
         XCTAssertEqual(frame.width, CaptionLayout.fixedWidth(screenWidth: 1728), accuracy: 0.5)
     }
 }
