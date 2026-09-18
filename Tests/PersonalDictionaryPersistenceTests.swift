@@ -52,4 +52,45 @@ final class PersonalDictionaryPersistenceTests: XCTestCase {
         XCTAssertNotEqual(PersonalDictionary.shared.fileURL.standardizedFileURL, real.standardizedFileURL,
                           "tests wiped the user's real dictionary on 2026-09-01")
     }
+
+    func testSupportFolderSplitsDevFromProduction() {
+        XCTAssertEqual(
+            PersonalDictionary.supportFolderName(bundleIdentifier: "com.sonpiaz.haynoi", isRunningTests: false),
+            "Haynoi"
+        )
+        XCTAssertEqual(
+            PersonalDictionary.supportFolderName(bundleIdentifier: "com.sonpiaz.haynoi.dev", isRunningTests: false),
+            "Haynoi-Dev"
+        )
+        let prod = PersonalDictionary.defaultFileURL(
+            bundleIdentifier: "com.sonpiaz.haynoi",
+            isRunningTests: false
+        )
+        let dev = PersonalDictionary.defaultFileURL(
+            bundleIdentifier: "com.sonpiaz.haynoi.dev",
+            isRunningTests: false
+        )
+        XCTAssertTrue(PersonalDictionary.isProductionDictionaryURL(prod))
+        XCTAssertFalse(PersonalDictionary.isProductionDictionaryURL(dev))
+        XCTAssertTrue(dev.path.contains("Haynoi-Dev"))
+        XCTAssertNotEqual(prod.standardizedFileURL, dev.standardizedFileURL)
+    }
+
+    func testDevPersistDoesNotChangeProductionFileBytes() throws {
+        let real = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Haynoi/dictionary.json")
+        let before = try Data(contentsOf: real)
+        XCTAssertGreaterThan(before.count, 4, "P0 restore must already be on disk before this test")
+
+        let devURL = dir.appendingPathComponent("Haynoi-Dev/dictionary.json")
+        try FileManager.default.createDirectory(at: devURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let dict = PersonalDictionary(fileURL: devURL)
+        dict.addTerm("DevMustNotLeak")
+
+        let after = try Data(contentsOf: real)
+        XCTAssertEqual(before, after, "a Dev/test persist must not change the live dictionary")
+        XCTAssertTrue(PersonalDictionary.isProductionDictionaryURL(real))
+        XCTAssertFalse(PersonalDictionary.isProductionBundle(bundleIdentifier: "com.sonpiaz.haynoi.dev"))
+        XCTAssertFalse(PersonalDictionary.isProductionBundle(bundleIdentifier: "com.sonpiaz.haynoiTests"))
+    }
 }
