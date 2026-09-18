@@ -52,11 +52,15 @@ final class CaptionLayoutTests: XCTestCase {
         XCTAssertEqual(next.fresh, "đang chạy nhanh")
     }
 
-    func testPillWidthCapsAtFractionOfScreen() {
+    func testPillWidthIsFixedNotGrownByText() {
         let long = String(repeating: "chào ", count: 80)
-        let width = CaptionLayout.pillWidth(for: long, screenWidth: 1728)
-        XCTAssertEqual(width, 1728 * 0.56, accuracy: 0.5)
-        let short = CaptionLayout.pillWidth(for: "", screenWidth: 1728)
-        XCTAssertEqual(short, CaptionLayout.minWidth)
+        let empty = CaptionLayout.pillWidth(for: "", screenWidth: 1728)
+        let filled = CaptionLayout.pillWidth(for: long, screenWidth: 1728)
+        XCTAssertEqual(empty, filled)
+        XCTAssertEqual(empty, CaptionLayout.fixedWidth(screenWidth: 1728))
+        // 1728 * 0.24 = 414.72 → 415, inside 360...420
+        XCTAssertEqual(empty, 415, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(CaptionLayout.fixedWidth(screenWidth: 1000), CaptionLayout.minWidth)
+        XCTAssertLessThanOrEqual(CaptionLayout.fixedWidth(screenWidth: 3000), CaptionLayout.maxWidth)
     }
 }

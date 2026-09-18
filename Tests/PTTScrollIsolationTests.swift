@@ -23,14 +23,15 @@ final class PTTScrollIsolationTests: XCTestCase {
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
     }
 
-    func testCaptionSitsAboveDockNotUnderMenuBar() {
+    func testCaptionSitsTopCenterUnderMenuBar() {
         // 1728-wide display: Dock ~70pt, menu bar excluded from visibleFrame.
         let visible = NSRect(x: 0, y: 70, width: 1728, height: 1000)
-        let size = NSSize(width: 240, height: CaptionLayout.height)
-        let frame = OverlayPanel.bottomCenteredFrame(size: size, visibleFrame: visible)
-        XCTAssertEqual(frame.minY, 70 + OverlayPanel.dockGap, accuracy: 0.1)
+        let size = CaptionLayout.pillSize(screenWidth: visible.width)
+        let frame = OverlayPanel.topCenteredFrame(size: size, visibleFrame: visible)
+        XCTAssertEqual(frame.maxY, visible.maxY - CaptionLayout.menuGap, accuracy: 0.1)
         XCTAssertEqual(frame.midX, visible.midX, accuracy: 0.1)
-        XCTAssertLessThan(frame.maxY, visible.midY)
-        XCTAssertGreaterThan(frame.minY, visible.minY)
+        XCTAssertGreaterThan(frame.minY, visible.midY)
+        XCTAssertLessThan(frame.maxY, visible.maxY)
+        XCTAssertEqual(frame.width, CaptionLayout.fixedWidth(screenWidth: 1728), accuracy: 0.5)
     }
 }

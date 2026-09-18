@@ -543,6 +543,9 @@ final class PipelineController {
             FloatingBarController.shared.show()
             mark("orb-only (no mic TCC on Dev bundle)")
         }
+        // Seed a long line so the snapshot shows the locked Option A marquee
+        // (newest words on the right), not an empty listen-dot.
+        state.interimPartial = "Mở file báo cáo tháng chín, và xuất sang định dạng PDF, sau đó gửi cho anh Sơn kiểm tra luôn giúp"
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
             FloatingBarController.shared.debugSnapshot(to: dest)
             if let f = FloatingBarController.shared.debugWindowFrame {

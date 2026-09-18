@@ -1,14 +1,30 @@
 import AppKit
 
-/// Live-speech caption pill. Matches Superwhisper video `960d0b1a2bc6`
-/// (tamarajtran, 17 Sep): bottom pill, committed regular, newest tail bold.
+/// Option A locked 17 Sep: frosted pill, fixed narrow width, text scrolls
+/// left so the newest words stay on the right. Bold = uncommitted tail.
 enum CaptionLayout {
-    static let fontSize: CGFloat = 15
-    static let maxWidthFraction: CGFloat = 0.56
-    static let minWidth: CGFloat = 176
-    static let height: CGFloat = 44
-    static let chromeWidth: CGFloat = 72 // trail + padding + caret
+    /// Slightly smaller than the mockup's 18pt.
+    static let fontSize: CGFloat = 14
+    static let height: CGFloat = 32
+    static let widthFraction: CGFloat = 0.24
+    static let minWidth: CGFloat = 360
+    static let maxWidth: CGFloat = 420
     static let freshWordCount = 3
+    static let menuGap: CGFloat = 8
+
+    static func fixedWidth(screenWidth: CGFloat) -> CGFloat {
+        min(maxWidth, max(minWidth, (screenWidth * widthFraction).rounded()))
+    }
+
+    static func pillSize(screenWidth: CGFloat) -> NSSize {
+        NSSize(width: fixedWidth(screenWidth: screenWidth), height: height)
+    }
+
+    /// Width does not depend on the transcript — Son locked a fixed frame.
+    static func pillWidth(for raw: String, screenWidth: CGFloat) -> CGFloat {
+        _ = raw
+        return fixedWidth(screenWidth: screenWidth)
+    }
 
     /// Last `freshWordCount` words are the streaming tail. A trailing
     /// sentence end-mark commits the whole line (no bold).
@@ -55,14 +71,5 @@ enum CaptionLayout {
             fresh = parts.fresh
         }
         return (newLock, fresh, newLock)
-    }
-
-    static func pillWidth(for raw: String, screenWidth: CGFloat) -> CGFloat {
-        let parts = split(raw)
-        let text = [parts.committed, parts.fresh].filter { !$0.isEmpty }.joined(separator: " ")
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .regular)
-        let textW = (text as NSString).size(withAttributes: [.font: font]).width
-        let maxW = screenWidth * maxWidthFraction
-        return min(max(minWidth, ceil(textW) + chromeWidth), maxW)
     }
 }
