@@ -12,7 +12,7 @@ final class PTTScrollIsolationTests: XCTestCase {
     }
 
     func testIndicatorPanelCannotBecomeKeyOrEatClicks() {
-        let panel = OverlayPanel.makeIndicator(size: OverlayPanel.orbSize, clickThrough: true)
+        let panel = OverlayPanel.makeIndicator(size: NSSize(width: 200, height: 44), clickThrough: true)
         defer { panel.close() }
         XCTAssertFalse(panel.canBecomeKey)
         XCTAssertFalse(panel.canBecomeMain)
@@ -23,14 +23,14 @@ final class PTTScrollIsolationTests: XCTestCase {
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
     }
 
-    func testOrbSitsTopCenterNotOverTheDock() {
+    func testCaptionSitsAboveDockNotUnderMenuBar() {
         // 1728-wide display: Dock ~70pt, menu bar excluded from visibleFrame.
         let visible = NSRect(x: 0, y: 70, width: 1728, height: 1000)
-        let size = OverlayPanel.orbSize
-        let frame = OverlayPanel.topCenteredFrame(size: size, visibleFrame: visible)
-        XCTAssertEqual(frame.maxY, visible.maxY - OverlayPanel.menuGap, accuracy: 0.1)
+        let size = NSSize(width: 240, height: CaptionLayout.height)
+        let frame = OverlayPanel.bottomCenteredFrame(size: size, visibleFrame: visible)
+        XCTAssertEqual(frame.minY, 70 + OverlayPanel.dockGap, accuracy: 0.1)
         XCTAssertEqual(frame.midX, visible.midX, accuracy: 0.1)
-        XCTAssertGreaterThan(frame.minY, visible.midY)
-        XCTAssertLessThan(frame.maxY, visible.maxY)
+        XCTAssertLessThan(frame.maxY, visible.midY)
+        XCTAssertGreaterThan(frame.minY, visible.minY)
     }
 }

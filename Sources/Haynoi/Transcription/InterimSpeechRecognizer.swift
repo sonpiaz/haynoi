@@ -41,9 +41,8 @@ final class InterimSpeechRecognizer {
     }
 
     func stop() {
-        DispatchQueue.main.async {
-            AppState.shared.interimPartial = ""
-        }
+        // Keep the last partial on screen as committed (no bold) until hide /
+        // the next hold. Blanking here made the caption vanish on key-up.
         queue.async { [weak self] in
             self?.stopOnQueue()
         }
@@ -93,7 +92,9 @@ final class InterimSpeechRecognizer {
         let onDevice = rec.supportsOnDeviceRecognition
         request.requiresOnDeviceRecognition = onDevice
         if #available(macOS 13.0, *) {
-            request.addsPunctuation = false
+            // Sentence-end marks let the HUD drop bold on a finished clause.
+            // Display-only — inserted text still comes from the cloud POST.
+            request.addsPunctuation = true
         }
 
         generation += 1
