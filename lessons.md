@@ -1,5 +1,17 @@
 # Haynoi lessons
 
+## Dev and tests must not write the live dictionary (2026-09-17)
+
+The live file is `~/Library/Application Support/Haynoi/dictionary.json`.
+On 2026-09-17 18:29 it went from 30 manual entries to empty (`[]`, 4 bytes)
+while Debug builds were being installed. Tests already used a temp folder
+(wipe of 2026-09-01); Debug still shared the production folder.
+
+Debug (`com.sonpiaz.haynoi.dev`) writes `Application Support/Haynoi-Dev/`.
+Tests stay in a per-PID temp folder. `persist()` refuses the production
+path unless the bundle id is exactly `com.sonpiaz.haynoi`. Restore from
+`.internal/backups/` and `uchg`-lock until the user relaunches.
+
 ## Email rewrite must not drop the transcript (2026-09-15)
 
 The Email (and Auto→Email) path ran STT then `try await rewriteWithKyma`. HTTP

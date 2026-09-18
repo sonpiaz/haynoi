@@ -169,22 +169,63 @@ final class PersonalDictionary {
     init(fileURL: URL = PersonalDictionary.defaultFileURL()) {
         self.fileURL = fileURL
         self.entries = PersonalDictionary.load(from: fileURL)
+        PersonalDictionary.clearUserImmutable(at: fileURL)
     }
 
     // MARK: Persistence
 
-    static func defaultFileURL() -> URL {
+    /// Production Release only. Debug (`com.sonpiaz.haynoi.dev`) and tests
+    /// must not share this folder — a Debug persist wiped the live file on
+    /// 2026-09-17 (30 entries → empty at 18:29).
+    static let productionFolderName = "Haynoi"
+    static let developmentFolderName = "Haynoi-Dev"
+
+    static func isRunningTests(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    static func supportFolderName(
+        bundleIdentifier: String,
+        isRunningTests: Bool
+    ) -> String {
+        if isRunningTests { return productionFolderName }
+        if bundleIdentifier.hasSuffix(".dev") || bundleIdentifier.lowercased().contains("test") {
+            return developmentFolderName
+        }
+        return productionFolderName
+    }
+
+    static func defaultFileURL(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = PersonalDictionary.isRunningTests()
+    ) -> URL {
         let fm = FileManager.default
         var base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
         // A test run hosts the app, so `shared` would otherwise read and write
         // the user's real dictionary — which is how it got wiped on 2026-09-01.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+        if isRunningTests {
             base = fm.temporaryDirectory
                 .appendingPathComponent("HaynoiTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
         }
-        let dir = base.appendingPathComponent("Haynoi", isDirectory: true)
+        let dir = base.appendingPathComponent(
+            supportFolderName(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests),
+            isDirectory: true
+        )
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("dictionary.json")
+    }
+
+    static func isProductionDictionaryURL(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        return path.hasSuffix("/Application Support/\(productionFolderName)/dictionary.json")
+    }
+
+    static func isProductionBundle(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? ""
+    ) -> Bool {
+        bundleIdentifier == "com.sonpiaz.haynoi"
     }
 
     /// The on-disk format lives in one place so the reader can't drift from the
@@ -226,9 +267,23 @@ final class PersonalDictionary {
 
     private func persist() {
         // Called on `queue`.
+        if Self.isProductionDictionaryURL(fileURL), !Self.isProductionBundle() {
+            NSLog("[Haynoi] refused to write the production dictionary from bundle %@",
+                  Bundle.main.bundleIdentifier ?? "?")
+            return
+        }
         if let data = try? Self.makeEncoder().encode(entries) {
             try? data.write(to: fileURL, options: .atomic)
         }
+    }
+
+    /// The restore lock (`uchg`) stops a still-running empty build from
+    /// overwriting the file. The next production launch must be able to save.
+    static func clearUserImmutable(at url: URL) {
+        var mutable = url
+        var values = URLResourceValues()
+        values.isUserImmutable = false
+        try? mutable.setResourceValues(values)
     }
 
     // MARK: Read
