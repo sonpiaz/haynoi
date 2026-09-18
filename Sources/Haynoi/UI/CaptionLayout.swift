@@ -3,9 +3,9 @@ import AppKit
 /// Option A locked 17 Sep: frosted pill, fixed narrow width, text scrolls
 /// left so the newest words stay on the right. Bold = uncommitted tail.
 enum CaptionLayout {
-    /// Slightly smaller than the mockup's 18pt.
-    static let fontSize: CGFloat = 14
-    static let height: CGFloat = 32
+    /// Smaller than the 32.14 pill (14/32) and the mockup's 18pt.
+    static let fontSize: CGFloat = 13
+    static let height: CGFloat = 28
     static let widthFraction: CGFloat = 0.24
     static let minWidth: CGFloat = 360
     static let maxWidth: CGFloat = 420

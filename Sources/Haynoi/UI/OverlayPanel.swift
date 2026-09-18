@@ -37,6 +37,12 @@ final class OverlayPanel: NSPanel {
         return panel
     }
 
+    /// Screen under the mouse (the one Son is looking at), else the key-window screen.
+    static func activeScreen() -> NSScreen? {
+        let p = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(p, $0.frame, false) } ?? NSScreen.main
+    }
+
     /// Top-center of `visibleFrame` (already excludes the menu bar).
     static func topCenteredFrame(size: NSSize, visibleFrame: NSRect) -> NSRect {
         let x = visibleFrame.midX - size.width / 2
