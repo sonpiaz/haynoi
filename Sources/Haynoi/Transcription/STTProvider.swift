@@ -75,9 +75,13 @@ enum STTProvider {
         var text = transcribed.text
 
         if mode.needsRewrite, !text.isEmpty {
-            text = try await rewriteWithKyma(
-                token: token, text: text, systemPrompt: mode.rewritePrompt
-            )
+            // Email polish is optional. A timeout or 401 here used to fail the
+            // whole dictation and drop the STT text. Keep the raw transcript.
+            text = await keepTranscriptIfRewriteFails(text) {
+                try await rewriteWithKyma(
+                    token: token, text: text, systemPrompt: mode.rewritePrompt
+                )
+            }
         } else if !text.isEmpty,
                   shouldRunCorrectionPass(
                       needsRewrite: mode.needsRewrite,
@@ -498,6 +502,21 @@ enum STTProvider {
         }
         sections.append(base)
         return sections.joined(separator: "\n\n")
+    }
+
+    /// Email rewrite is optional polish. Any thrown error (timeout, 401, network)
+    /// must leave the original transcript intact so the user still gets words.
+    static func keepTranscriptIfRewriteFails(
+        _ original: String,
+        rewrite: () async throws -> String
+    ) async -> String {
+        do {
+            let polished = try await rewrite()
+            return polished.isEmpty ? original : polished
+        } catch {
+            NSLog("[Haynoi] Rewrite failed — using raw transcription: %@", error.localizedDescription)
+            return original
+        }
     }
 
     private static func rewriteWithKyma(

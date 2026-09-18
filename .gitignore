@@ -37,3 +37,5 @@ HANDLES.md
 redesign/
 *.xcuserstate
 site/appcast.xml
+site/.live-*.html
+site/_shots/

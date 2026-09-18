@@ -386,7 +386,13 @@ enum TextInserter {
     /// inserted at the cursor and the old text still remains (caller surfaces a
     /// quiet status). Never crashes, never double-inserts.
     @discardableResult
-    static func replaceSpan(_ span: NSRange?, with newText: String, oldText: String, targetApp: NSRunningApplication?) async -> Bool {
+    static func replaceSpan(
+        _ span: NSRange?,
+        with newText: String,
+        oldText: String,
+        targetApp: NSRunningApplication?,
+        fallbackInsert: Bool = true
+    ) async -> Bool {
         let axTrusted = AXIsProcessTrusted()
 
         // Wait for modifiers + restore focus, mirroring the insert path.
@@ -401,19 +407,16 @@ enum TextInserter {
         // old text. Insert the correction at the cursor; the old text remains.
         guard let span, span.location != NSNotFound, axTrusted, focusOK else {
             NSLog("[Haynoi] replaceSpan: span unknown / AX unavailable — inserting at cursor")
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
 
         guard let app = targetApp ?? NSWorkspace.shared.frontmostApplication else {
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
         let element = AXUIElementCreateApplication(app.processIdentifier)
         var focusedRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success else {
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
         let focused = focusedRef as! AXUIElement
 
@@ -429,8 +432,7 @@ enum TextInserter {
         guard let currentValue = focusedElementValue(in: app) else {
             // Can't read the value to verify — don't risk a blind positional write.
             NSLog("[Haynoi] replaceSpan: cannot read focused value to verify span — inserting at cursor")
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
         let valueUTF16 = Array(currentValue.utf16)
         guard span.length >= 0,
@@ -440,24 +442,21 @@ enum TextInserter {
             // / wrong element). Bail to insert-at-cursor.
             NSLog("[Haynoi] replaceSpan: span out of bounds (loc=%d len=%d count=%d) — inserting at cursor",
                   span.location, span.length, valueUTF16.count)
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
         let spanText = String(decoding: valueUTF16[span.location..<(span.location + span.length)], as: UTF16.self)
         guard spanText.precomposedStringWithCanonicalMapping
                 == oldText.precomposedStringWithCanonicalMapping else {
             // The text under the span is no longer the user's old text — replacing
-            // would destroy whatever now occupies those offsets. Insert at cursor.
+            // would destroy whatever now occupies those offsets.
             NSLog("[Haynoi] replaceSpan: span no longer matches oldText — inserting at cursor")
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
 
         // Set the selection to the old span.
         var cfSpan = CFRangeMake(span.location, span.length)
         guard let axSpan = AXValueCreate(.cfRange, &cfSpan) else {
-            _ = await insert(newText, targetApp: targetApp)
-            return false
+            return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
         }
         let selSet = AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, axSpan)
 
@@ -504,7 +503,18 @@ enum TextInserter {
 
         // Could not replace in place — insert at cursor (old text remains).
         NSLog("[Haynoi] replaceSpan: all in-place paths failed — inserting at cursor")
-        _ = await insert(newText, targetApp: targetApp)
+        return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
+    }
+
+    /// Cloud follow-up must never insert a second copy. Correction still may.
+    private static func fallbackOrSkip(
+        _ newText: String,
+        targetApp: NSRunningApplication?,
+        fallbackInsert: Bool
+    ) async -> Bool {
+        if fallbackInsert {
+            _ = await insert(newText, targetApp: targetApp)
+        }
         return false
     }
 

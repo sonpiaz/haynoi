@@ -294,7 +294,8 @@ final class PipelineController {
             var cloudResult: Result<STTProvider.Result, Error>?
             // Wait for Quality. Cancelling the cloud call at 2.5s (32.7–32.9)
             // dropped the rest of the sentence. On-device is the fallback only
-            // when the cloud actually fails.
+            // when the cloud actually fails. Do not paste-then-replaceSpan (#32):
+            // Mandeck has no AX span, so Quality never upgrades.
             do {
                 let result = try await STTProvider.transcribeTracked(samples)
                 cloudResult = .success(result)

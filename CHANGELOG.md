@@ -5,6 +5,15 @@ All notable changes to Haynoi are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Words Haynoi learns from your corrections now stick.** Since 0.3.6 the
+  personal dictionary was read back in the wrong format, so it quietly came
+  back empty every time Haynoi restarted — learned fixes, words you added
+  yourself, and their scoreboard all reset. They now survive a restart, and a
+  dictionary file Haynoi can't read is set aside instead of overwritten.
+
 ## [0.3.10] - 2026-09-01
 
 ### Fixed
