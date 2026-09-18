@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Haynoi
 
@@ -21,6 +22,15 @@ final class PTTScrollIsolationTests: XCTestCase {
         XCTAssertTrue(panel.styleMask.contains(.borderless))
         XCTAssertTrue(panel.collectionBehavior.contains(.ignoresCycle))
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        XCTAssertFalse(panel.acceptsFirstResponder)
+        XCTAssertFalse(panel.canBecomeKey)
+    }
+
+    func testHostingViewDoesNotTakeFirstResponderOrHits() {
+        let hosting = ClickThroughHostingView(rootView: Color.clear)
+        XCTAssertFalse(hosting.acceptsFirstResponder)
+        XCTAssertFalse(hosting.becomeFirstResponder())
+        XCTAssertNil(hosting.hitTest(NSPoint(x: 1, y: 1)))
     }
 
     func testCaptionSitsTopCenterUnderMenuBar() {
