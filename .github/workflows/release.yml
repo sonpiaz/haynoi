@@ -90,11 +90,15 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          echo "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle.key
+          # Owner-only temp file, removed on every exit path (a failed
+          # make_appcast.sh used to skip the rm and leave the key behind).
+          umask 077
+          KEY_FILE="$(mktemp "$RUNNER_TEMP/sparkle.XXXXXX")"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          echo "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
           source version.env
-          SPARKLE_PRIVATE_KEY_FILE=/tmp/sparkle.key \
+          SPARKLE_PRIVATE_KEY_FILE="$KEY_FILE" \
             ./scripts/make_appcast.sh "Haynoi-${MARKETING_VERSION}-universal.zip"
-          rm /tmp/sparkle.key
 
       - name: Read release notes
         id: notes
