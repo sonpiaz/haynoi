@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  Vietnamese-first, English-friendly. Powered by <a href="https://kymaapi.com">Kyma API</a>.
+  Vietnamese-first, English-friendly. Current release <b>0.3.10</b>. Powered by <a href="https://kymaapi.com">Kyma API</a>.
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ Most dictation tools treat Vietnamese as an afterthought. **Haynoi is built for 
 
 - **Speaks your language(s).** Vietnamese-optimized speech-to-text that handles Vi/En code-switching — and a personal dictionary that **learns from your corrections**, so names and jargon come out right the next time without you configuring anything.
 - **Works in every app.** Text is inserted directly where your cursor is — editor, browser, chat, terminal — via the Accessibility API, with clipboard fallback.
-- **Nothing to configure.** Sign in once with Google. No API keys to paste, no model menus to study. Free tier included.
+- **Nothing to paste.** Sign in once with Google. No API keys. Free tier included; Quality transcription is the default.
 
 ## How it works
 
@@ -38,42 +38,51 @@ Most dictation tools treat Vietnamese as an afterthought. **Haynoi is built for 
 Hold ⌥  →  speak  →  release  →  text appears
 ```
 
-That's the whole product. A floating bar shows the waveform while you talk; a layered chord confirms start/stop.
+Two steps after you release:
+
+1. **Listen** — Haynoi transcribes what you said (Quality by default, or Fast).
+2. **Rewrite** — only in **Email / Formal** (and Auto when you're in Mail). Your spoken draft is turned into a professional message. If that polish step fails or times out, **the original transcript is still pasted** — you don't lose the words.
+
+A floating orb shows the waveform while you hold; a layered chord confirms start and stop. Full notes: [CHANGELOG](CHANGELOG.md).
 
 ## Smart modes
 
 | Mode | What it does |
 |------|--------------|
-| **Normal** | Transcribes exactly what you say |
-| **Clean** | Drops filler words (ừm, à, uh…) |
-| **Email / Formal** | Rewrites your rambling into a professional message |
-| **Auto** | Picks a mode from the app you're in — formal in Mail, clean in chat |
+| **Normal** | Transcribes exactly what you say (no rewrite) |
+| **Clean** | Drops filler words (ừm, à, uh…) at transcription time |
+| **Email / Formal** | Transcribe, then rewrite into a professional message |
+| **Auto** | Picks a mode from the app you're in — Email in Mail, Clean in chat |
 
 ## It learns you
 
 Haynoi's dictionary fills itself instead of asking you to maintain it:
 
-- **Fix it once, it sticks.** Say "fix that" (⌃⌥) and re-dictate, edit the inserted text in place, or just repeat yourself — Haynoi notices the correction and suggests remembering it. Confirmed fixes are applied automatically from then on.
+- **Fix it once, it sticks.** Say "fix that" (⌃⌥) and re-dictate, edit the inserted text in place, or just repeat yourself — Haynoi notices the correction and suggests remembering it. Confirmed fixes are applied automatically from then on, and they **survive a restart**.
 - **It knows when it wasn't sure.** When the transcriber hesitates on a word that *sounds like* a name you use — "Afider" for "Affitor", "Sun" for "Sơn" — that one dictation gets an extra cleanup pass with your personal terms. Confident dictations skip it, so nothing gets slower.
+- **You can see if a fix is earning its keep.** Each learned word shows how often it was applied and how often you let it stand. The Dictionary header sums that up.
 - **You stay in charge.** A master learning switch, a counter of what's been learned, and a one-tap "Forget all" live in Settings → Dictionary. Learning runs on transcript text only — never audio — and your dictionary never leaves your Mac.
 
 ## Features
 
 - **Push-to-talk** — hold the left `⌥` Option key (or `⌘` / `⌃` / `fn`), release to transcribe
 - **Language preference** — auto-detect by default, or pin Tiếng Việt / English
-- **Your words are never lost** — if the network fails mid-transcription, the recording is saved locally and retried with one click
+- **Failed dictations are saved** — if the network dies mid-upload, the recording stays on your Mac and retries with one click
+- **Email polish never eats the draft** — if rewrite fails, the raw transcript is still inserted
+- **Honest errors** — a server problem is labeled as ours. It does not tell you that you're out of words, and it does not sign you out
 - **Survives real life** — AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully instead of eating your dictation
-- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers)
+- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers). **In-place replace** (rewriting the same bytes — “fix that”, or swapping a first-pass transcript for a better one) needs the target to expose a text field to macOS Accessibility (`AXValue` and a caret range). GPU/PTY terminals and similar views do not; there Haynoi pastes once and will not try to overwrite what it already inserted.
 - **Other audio gets out of your way** — music and video pause and resume around your dictation; a live call or stream is dipped in volume instead, decided from what your Mac is actually playing
-- **Living status orb** — recording, transcribing, success, and error each have their own state, so you always know where your words are
+- **Living status orb** — recording, transcribing, success, and error each have their own state
 - **Snippets** — say a trigger word, get expanded text
 - **Transcription history** — searchable, stored locally, grouped by date
+- **Test connection** in Settings → Account (doesn't use your word quota)
 - **Premium sound feedback** — harmonic chords for start / stop / cancel / success
 - **Silent auto-updates** via Sparkle, launch at login, guided onboarding
 
 ## Install
 
-**Download** the latest `Haynoi.dmg` from [haynoi.com](https://haynoi.com) or [GitHub Releases](https://github.com/sonpiaz/haynoi/releases/latest), drag it to Applications, and open it. The app is signed and notarized — no security warnings, and updates install themselves.
+**Download** Haynoi **0.3.10** (`Haynoi.dmg`) from [haynoi.com](https://haynoi.com) or [GitHub Releases](https://github.com/sonpiaz/haynoi/releases/latest), drag it to Applications, and open it. The app is signed and notarized — no security warnings, and updates install themselves.
 
 Prefer building from source?
 
@@ -94,19 +103,19 @@ First run, either way:
 
 ## Pricing
 
-**Free: 5,000 words per week**, resetting every Monday. That covers everyday dictation for most people — no card required, just the Google sign-in.
+**Free: 5,000 words per week**, resetting every Monday. No card required — just Google sign-in.
 
-**Haynoi Pro** (unlimited words) is coming soon.
+**Haynoi Pro** — unlimited dictation: **$14.99 / month** or **$125.88 / year**. Upgrade in Settings → Plans & Billing; the app unlocks after payment. Manage or cancel anytime.
 
-Two transcription tiers, switchable any time in Settings:
+Two listening tiers, switchable in Settings. Email / Formal adds a rewrite pass after that:
 
-| Tier | Model | Kyma API endpoint | Best for |
-|------|-------|-------------------|----------|
-| **Quality** (default) | [`gpt-4o-mini-transcribe-2025-12-15`](https://kymaapi.com/models/gpt-4o-mini-transcribe-2025-12-15?utm_source=haynoi) | `POST https://kymaapi.com/v1/audio/transcriptions` | Vietnamese + English, noisy rooms, technical vocabulary |
-| **Fast** | [`whisper-v3-turbo`](https://kymaapi.com/models/whisper-v3-turbo?utm_source=haynoi) | `POST https://kymaapi.com/v1/audio/transcriptions` | Clear, simple speech |
-| **Rewrite** | [`gemini-2.5-flash`](https://kymaapi.com/models/gemini-2.5-flash?utm_source=haynoi) | `POST https://kymaapi.com/v1/chat/completions` | Cleaning up the transcript in Normal mode |
+| Step | Setting | Model | Best for |
+|------|---------|-------|----------|
+| **Listen** | Quality (default) | [`gpt-4o-mini-transcribe-2025-12-15`](https://kymaapi.com/models/gpt-4o-mini-transcribe-2025-12-15?utm_source=haynoi) | Vietnamese + English, noisy rooms, technical vocabulary |
+| **Listen** | Fast | [`whisper-v3-turbo`](https://kymaapi.com/models/whisper-v3-turbo?utm_source=haynoi) | Clear, simple speech |
+| **Rewrite** | Email / Formal only | [`gemini-2.5-flash`](https://kymaapi.com/models/gemini-2.5-flash?utm_source=haynoi) | Turn a spoken draft into a message. If this step fails, the original transcript is still pasted. |
 
-Haynoi's server calls these endpoints on [Kyma API](https://kymaapi.com?utm_source=haynoi) for you, so the app never holds a model key.
+Haynoi calls these through [Kyma API](https://kymaapi.com?utm_source=haynoi) so the app never holds a model key.
 
 ## Privacy
 
@@ -143,10 +152,10 @@ Sources/Haynoi/
 │   ├── HotkeyManager.swift       — Global hotkey via NSEvent monitors (Accessibility)
 │   └── TextInserter.swift        — AX API + clipboard text insertion
 ├── Transcription/
-│   ├── STTProvider.swift         — Transcription + confidence-gated correction pass
+│   ├── STTProvider.swift         — Transcription, Email rewrite, correction pass
 │   └── TranscriptionMode.swift   — Normal / Clean / Email / Auto modes
 ├── Settings/
-│   └── SettingsView.swift        — Account, quality, hotkey, dictionary
+│   └── SettingsView.swift        — Account, plans, quality, hotkey, dictionary
 ├── UI/                           — History list, main window, floating bar
 └── System/                       — Personal dictionary + correction learning,
                                     media control, launch at login, usage stats
@@ -160,7 +169,7 @@ Sources/Haynoi/
 |-----------|---------|
 | Swift 5.9 + SwiftUI | App |
 | AVFoundation | Audio capture & sound synthesis |
-| [Kyma API](https://kymaapi.com) | Speech-to-text (`gpt-4o-mini-transcribe-2025-12-15` / `whisper-v3-turbo`) and rewrite (`gemini-2.5-flash`) |
+| [Kyma API](https://kymaapi.com) | Speech-to-text and rewrite (Haynoi never holds a model key) |
 | Accessibility API + NSEvent | Text insertion + global hotkey (no Input Monitoring needed) |
 | [XcodeGen](https://github.com/yonaskolb/XcodeGen) | Project generation |
 
