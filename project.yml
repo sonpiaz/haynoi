@@ -9,10 +9,10 @@ options:
 packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    from: 2.9.1
+    exactVersion: 2.10.0
   PostHog:
     url: https://github.com/PostHog/posthog-ios
-    from: 3.0.0
+    exactVersion: 3.79.0
 
 targets:
   Haynoi:
