@@ -293,7 +293,7 @@ final class CorrectionWatcher {
             onRemember: {
                 _ = PersonalDictionary.shared.upsertLearnedReplacement(
                     wrong: wrong, right: right, confirmations: 2)
-                NSLog("[Haynoi] Learned (Signal A, AX read-back): %@ → %@", wrong, right)
+                NSLog("[Haynoi] Learned (Signal A, AX read-back): %ld → %ld chars", wrong.count, right.count)
                 // Metadata only: just which detector fired — never the term strings.
                 Analytics.capture("dictionary_term_learned", ["signal": "ax_edit"])
             },
