@@ -418,8 +418,7 @@ enum STTProvider {
                 NSLog("[Haynoi] Rate limited by proxy")
                 throw STTError.rateLimited
             default:
-                let rawBody = String(data: data, encoding: .utf8) ?? ""
-                NSLog("[Haynoi] Transcription proxy error %d: %@", http.statusCode, rawBody)
+                NSLog("[Haynoi] Transcription proxy error %ld (%ld-byte body)", http.statusCode, data.count)
                 throw STTError.serverError(
                     parseProxyErrorMessage(data: data)
                         ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
@@ -569,8 +568,7 @@ enum STTProvider {
                 continue
             }
             guard http.statusCode == 200 else {
-                let rawBody = String(data: data, encoding: .utf8) ?? ""
-                NSLog("[Haynoi] Rewrite failed (%d): %@ — using raw transcription", http.statusCode, rawBody)
+                NSLog("[Haynoi] Rewrite failed (%ld, %ld-byte body) — using raw transcription", http.statusCode, data.count)
                 return text
             }
             rewriteData = data

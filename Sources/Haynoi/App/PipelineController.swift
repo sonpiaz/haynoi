@@ -348,7 +348,7 @@ final class PipelineController {
                 return
             }
 
-            NSLog("[Haynoi] Transcribed (%@): %@", winner.source == .cloud ? "cloud" : "on-device", finalText)
+            NSLog("[Haynoi] Transcribed (%@): %ld chars", winner.source == .cloud ? "cloud" : "on-device", finalText.count)
             // Capture attribution from the dictation target app (F2.3 / D17).
             let attrBundleId = dictationTargetApp?.bundleIdentifier
             let attrAppName = dictationTargetApp?.localizedName
@@ -400,7 +400,7 @@ final class PipelineController {
                                 // .replacement. The .term feeds the prompt/rewrite
                                 // glossary; it can never trigger a hard swap.
                                 _ = PersonalDictionary.shared.addTerm(right, source: .learned)
-                                NSLog("[Haynoi] Learned (re-dictation, term-only): %@", right)
+                                NSLog("[Haynoi] Learned (re-dictation, term-only): %ld chars", right.count)
                                 // Metadata only: just which detector fired — never the term string.
                                 Analytics.capture("dictionary_term_learned", ["signal": "redictation"])
                             },
@@ -679,7 +679,7 @@ final class PipelineController {
             }
             if let reversed, let w = reversed.wrong {
                 _ = PersonalDictionary.shared.disableMatchingReplacement(wrong: w, right: reversed.right)
-                NSLog("[Haynoi] Self-heal: disabled reversed rule %@ → %@", w, reversed.right)
+                NSLog("[Haynoi] Self-heal: disabled a reversed rule")
             } else {
                 // Propose learning — suppress the toast in live contexts (§5.1)
                 // and when the learning master switch is off (the replace itself
@@ -694,7 +694,7 @@ final class PipelineController {
                             // clears the >=2 activation gate immediately (§1.2).
                             _ = PersonalDictionary.shared.upsertLearnedReplacement(
                                 wrong: wrong, right: right, confirmations: 2)
-                            NSLog("[Haynoi] Learned (fix-that): %@ → %@", wrong, right)
+                            NSLog("[Haynoi] Learned (fix-that): %ld → %ld chars", wrong.count, right.count)
                             // Metadata only: just which detector fired — never the term strings.
                             Analytics.capture("dictionary_term_learned", ["signal": "fixthat"])
                         },
@@ -828,7 +828,7 @@ final class PipelineController {
                     return
                 }
                 let finalText = SnippetManager.applySnippets(to: text)
-                NSLog("[Haynoi] Retry succeeded: %@", finalText)
+                NSLog("[Haynoi] Retry succeeded: %ld chars", finalText.count)
                 // Fix #2: delete the saved WAV BEFORE recomputing hasFailedDictation
                 // so the Retry button disappears and a second retry cannot replay
                 // the same recording.
