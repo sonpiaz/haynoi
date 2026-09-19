@@ -12,6 +12,17 @@ enum CaptionLayout {
     static let freshWordCount = 3
     static let menuGap: CGFloat = 8
 
+    /// The pill shows ~60 characters. A long hold now keeps every utterance,
+    /// so cap what the marquee lays out; it only ever shows the right end.
+    static let maxChars = 240
+
+    static func tail(_ text: String) -> String {
+        guard text.count > maxChars else { return text }
+        let end = text.suffix(maxChars)
+        guard let space = end.firstIndex(of: " ") else { return String(end) }
+        return String(end[end.index(after: space)...])
+    }
+
     static func fixedWidth(screenWidth: CGFloat) -> CGFloat {
         min(maxWidth, max(minWidth, (screenWidth * widthFraction).rounded()))
     }

@@ -17,6 +17,7 @@ final class InterimSpeechRecognizer {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var generation: UInt64 = 0
+    private var transcript = InterimTranscript()
     private var latestFinalText: String = ""
 
     private init() {}
@@ -63,6 +64,7 @@ final class InterimSpeechRecognizer {
 
     private func startOnQueue() {
         stopOnQueue()
+        transcript = InterimTranscript()
         latestFinalText = ""
 
         let locale = Self.preferredLocale()
@@ -105,10 +107,15 @@ final class InterimSpeechRecognizer {
             guard let self else { return }
             self.queue.async {
                 guard gen == self.generation else { return }
-                if let text = result?.bestTranscription.formattedString, !text.isEmpty {
+                if let result {
+                    self.transcript.ingest(
+                        result.bestTranscription.formattedString,
+                        endsUtterance: result.speechRecognitionMetadata != nil
+                    )
+                    let text = self.transcript.text
                     self.latestFinalText = text
                     DispatchQueue.main.async {
-                        AppState.shared.interimPartial = text
+                        AppState.shared.interimPartial = CaptionLayout.tail(text)
                     }
                 }
                 if let error {
@@ -135,5 +142,33 @@ final class InterimSpeechRecognizer {
         case "en": return Locale(identifier: "en-US")
         default: return Locale(identifier: "vi-VN")
         }
+    }
+}
+
+/// Every partial of one PTT hold.
+///
+/// On-device SFSpeech (vi-VN, macOS 26) restarts `formattedString` after each
+/// pause: the result that closes an utterance carries
+/// `speechRecognitionMetadata`, and the next partial holds only the new
+/// utterance. Showing the raw partial blanked the caption mid-hold, and the
+/// on-device fallback kept only the last sentence. Keep finished utterances.
+struct InterimTranscript {
+    private var finished = ""
+    private var current = ""
+    private var utteranceEnded = false
+
+    var text: String {
+        finished.isEmpty ? current : current.isEmpty ? finished : finished + " " + current
+    }
+
+    mutating func ingest(_ partial: String, endsUtterance: Bool) {
+        guard !partial.isEmpty else { return }
+        // A recognizer that marks the pause but keeps the words is a continuation.
+        if utteranceEnded, !partial.hasPrefix(current) {
+            finished = text
+            current = ""
+        }
+        current = partial
+        utteranceEnded = endsUtterance
     }
 }
