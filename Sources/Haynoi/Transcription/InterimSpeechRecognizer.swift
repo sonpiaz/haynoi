@@ -145,12 +145,30 @@ final class InterimSpeechRecognizer {
     }
 }
 
-/// Every partial of one PTT hold. Still shows only the latest partial.
+/// Every partial of one PTT hold.
+///
+/// On-device SFSpeech (vi-VN, macOS 26) restarts `formattedString` after each
+/// pause: the result that closes an utterance carries
+/// `speechRecognitionMetadata`, and the next partial holds only the new
+/// utterance. Showing the raw partial blanked the caption mid-hold, and the
+/// on-device fallback kept only the last sentence. Keep finished utterances.
 struct InterimTranscript {
-    private(set) var text = ""
+    private var finished = ""
+    private var current = ""
+    private var utteranceEnded = false
+
+    var text: String {
+        finished.isEmpty ? current : current.isEmpty ? finished : finished + " " + current
+    }
 
     mutating func ingest(_ partial: String, endsUtterance: Bool) {
         guard !partial.isEmpty else { return }
-        text = partial
+        // A recognizer that marks the pause but keeps the words is a continuation.
+        if utteranceEnded, !partial.hasPrefix(current) {
+            finished = text
+            current = ""
+        }
+        current = partial
+        utteranceEnded = endsUtterance
     }
 }
