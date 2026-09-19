@@ -59,7 +59,7 @@ targets:
       configs:
         debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.sonpiaz.haynoi.dev
-          CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
+          CODE_SIGN_IDENTITY: "Apple Development"
           DEVELOPMENT_TEAM: 6WMWJ85DDY
           ENABLE_HARDENED_RUNTIME: false
     entitlements:
@@ -83,7 +83,7 @@ targets:
         GENERATE_INFOPLIST_FILE: true
         # Tests only run in Debug — development cert (Developer ID can't host XCTest).
         DEVELOPMENT_TEAM: 6WMWJ85DDY
-        CODE_SIGN_IDENTITY: "Apple Development: me.nguyentungson@gmail.com (LC36QSW9KK)"
+        CODE_SIGN_IDENTITY: "Apple Development"
     scheme:
       testTargets:
         - HaynoiTests
