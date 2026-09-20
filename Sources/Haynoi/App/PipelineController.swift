@@ -338,7 +338,23 @@ final class PipelineController {
             }
 
             let snippetText = SnippetManager.applySnippets(to: winner.text)
-            let finalText = PersonalDictionary.shared.applyReplacements(to: snippetText)
+            let replaced = PersonalDictionary.shared.applyReplacementsTracked(to: snippetText)
+            let finalText = replaced.text
+            // What Haynoi corrected on its own, for the History row: the rules
+            // that fired in the cloud pass plus the ones that fired here.
+            let firedIDs: [UUID] = {
+                var ids: [UUID] = []
+                if winner.source == .cloud, let cloudResult, case .success(let r) = cloudResult {
+                    ids = r.firedIDs
+                }
+                ids.append(contentsOf: replaced.firedIDs)
+                return ids
+            }()
+            let fixes: [Transcription.Fix] = PersonalDictionary.shared.entries(withIDs: firedIDs)
+                .compactMap { entry in
+                    guard let wrong = entry.wrong, !wrong.isEmpty else { return nil }
+                    return Transcription.Fix(wrong: wrong, right: entry.right)
+                }
             guard !finalText.isEmpty else {
                 await MainActor.run {
                     state.isTranscribing = false
@@ -357,7 +373,8 @@ final class PipelineController {
                 state.isTranscribing = false
                 state.addTranscription(finalText,
                                        appBundleId: attrBundleId,
-                                       appName: attrAppName)
+                                       appName: attrAppName,
+                                       fixes: fixes)
                 // Orb: "N words" success chip then auto-hide. The optional
                 // dink is quieter and tonally distinct from the stop tone
                 // (founder pick from the 2026-06-12 sound contest) and can

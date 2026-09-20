@@ -278,6 +278,19 @@ struct HistoryRow: View {
 
     @State private var copied = false
 
+    /// One fix reads in full; more than one stays a count so the row keeps the
+    /// still, one-line meta the founder asked for. The rest is in the tooltip.
+    static func fixLabel(for fixes: [Transcription.Fix]) -> String {
+        guard let first = fixes.first else { return "" }
+        return fixes.count == 1
+            ? "fixed \(first.wrong) → \(first.right)"
+            : "fixed \(fixes.count) words"
+    }
+
+    static func fixTooltip(for fixes: [Transcription.Fix]) -> String {
+        fixes.map { "\($0.wrong) → \($0.right)" }.joined(separator: "\n")
+    }
+
     var body: some View {
         // Founder feedback 2026-06-12: rows stay simple and STILL — no language
         // badge, no hover re-layout. One always-present copy button (fixed slot,
@@ -299,6 +312,11 @@ struct HistoryRow: View {
                     if let source = sourceApp {
                         metaDot
                         Text(source)
+                    }
+                    if let fixes = entry.fixes, !fixes.isEmpty {
+                        metaDot
+                        Text(HistoryRow.fixLabel(for: fixes))
+                            .help(HistoryRow.fixTooltip(for: fixes))
                     }
                 }
                 .font(.system(size: 11))
