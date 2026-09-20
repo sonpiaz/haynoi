@@ -110,11 +110,13 @@ enum TextInserter {
 
         // Step 3: AX insertion fallback (works for native macOS apps)
         if axTrusted {
+            let app = targetApp ?? NSWorkspace.shared.frontmostApplication
+            let beforeAX = focusedElementValue(in: app)
             let axSpan = tryAXInsertionReturningSpan(text, targetApp: targetApp)
-            if let span = axSpan {
+            if let span = axSpan, axInsertionLanded(before: beforeAX, after: focusedElementValue(in: app)) {
                 NSLog("[Haynoi] Insert via AX")
-                // The sentence is in the field, so the clipboard no longer has to
-                // carry it: give the user back whatever they had copied.
+                // The field really changed, so the clipboard does not have to carry
+                // the sentence any more: give the user back whatever they copied.
                 if case .notTakenTextKept(let restoreUserClipboard) = pasteAttempt {
                     restoreUserClipboard()
                 }
@@ -122,6 +124,9 @@ enum TextInserter {
                 // but the location was unknown (selectedText path). Normalize.
                 let usable = span.location == NSNotFound ? nil : span
                 return InsertionResult(inserted: text, span: usable, targetApp: targetApp)
+            }
+            if axSpan != nil {
+                NSLog("[Haynoi] AX reported success but the field did not change — not trusting it")
             }
         }
 
@@ -144,6 +149,18 @@ enum TextInserter {
             )
         }
         return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
+    }
+
+    /// Whether an AX insertion actually put the text in the field.
+    ///
+    /// A `.success` from the AX write is not evidence: on Electron apps the write
+    /// succeeds and the text is silently dropped, and in terminals the value cannot
+    /// be read at all. Only a field whose value changed counts; anything else falls
+    /// through to the clipboard-and-notify path, so a sentence is never taken off
+    /// the clipboard on the strength of an insertion that may not have happened.
+    static func axInsertionLanded(before: String?, after: String?) -> Bool {
+        guard let before, let after else { return false }
+        return before != after
     }
 
     /// Whether a synthetic ⌘V may be posted. It goes to whatever app is up front,
@@ -541,9 +558,17 @@ enum TextInserter {
         // Fallback B — selection set worked but setSelectedText didn't: paste over
         // the selection (Cmd+V replaces the selected old text).
         if selSet == .success {
-            if case .taken = await pasteViaClipboard(newText, targetApp: targetApp) {
+            switch await pasteViaClipboard(newText, targetApp: targetApp) {
+            case .taken:
                 NSLog("[Haynoi] replaceSpan: paste-over-selection OK")
                 return true
+            case .notTakenTextKept(let restoreUserClipboard):
+                // Whatever happens next inserts the correction another way and takes
+                // its own snapshot of the clipboard. Put the user's copy back first,
+                // or that snapshot preserves our correction instead of their copy.
+                restoreUserClipboard()
+            case .notTakenClipboardIsTheirs, .notTakenNothingLeft:
+                break
             }
         }
 
@@ -606,8 +631,9 @@ enum TextInserter {
 
     /// One attempt, one keystroke. A timeout proves nobody has read the clipboard
     /// *yet*, never that the first ⌘V was discarded, so a second one can paste the
-    /// same sentence twice when both were merely queued behind a busy app. The
-    /// budget makes that second post impossible rather than merely unwritten.
+    /// same sentence twice when both were merely queued behind a busy app.
+    /// `postCommandV` spends the budget itself and refuses once it is spent, so a
+    /// second post has to be a deliberate change to this type — not a slip.
     struct KeystrokeBudget {
         private var spent = false
 
@@ -681,7 +707,7 @@ enum TextInserter {
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
         var budget = KeystrokeBudget()
-        guard budget.take(), await postCommandV() else {
+        guard await postCommandV(spending: &budget) else {
             restorePasteboard(pb, items: savedItems, writtenChangeCount: postWriteChangeCount)
             return .notTakenNothingLeft
         }
@@ -740,8 +766,14 @@ enum TextInserter {
         return receipt.wasServed
     }
 
-    /// Posts ⌘V at the HID tap. Returns false when the event could not be built.
-    private static func postCommandV() async -> Bool {
+    /// Posts ⌘V at the HID tap. Returns false when the budget is already spent or
+    /// the event could not be built.
+    private static func postCommandV(spending budget: inout KeystrokeBudget) async -> Bool {
+        guard budget.take() else {
+            NSLog("[Haynoi] Refusing a second ⌘V for one dictation")
+            return false
+        }
+
         // Fix #8: resolve 'v' keycode from current keyboard layout at runtime.
         let vKeyCode = resolveVKeyCode()
 

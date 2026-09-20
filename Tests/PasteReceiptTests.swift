@@ -120,6 +120,21 @@ final class PasteReceiptTests: XCTestCase {
         XCTAssertEqual(pb.string(forType: .string), "copy mới của người dùng")
     }
 
+    // MARK: - PR51-R3-AX-UNVERIFIED
+
+    /// An AX write returning `.success` is not evidence: on Electron apps the write
+    /// succeeds and the text is dropped, and terminals expose no value to read. The
+    /// sentence may only be taken off the clipboard when the field really changed.
+    func testAXCountsAsLandedOnlyWhenTheFieldActuallyChanged() {
+        XCTAssertTrue(TextInserter.axInsertionLanded(before: "xin chào ", after: "xin chào bạn"))
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: "xin chào ", after: "xin chào "),
+                       "the write claimed success and nothing changed — the app swallowed it")
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: nil, after: nil),
+                       "a terminal exposes no value, so there is nothing to call proof")
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: "xin chào ", after: nil))
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: nil, after: "xin chào bạn"))
+    }
+
     // MARK: - PR51-R1-DUPLICATE
 
     /// A timeout proves nobody has read the clipboard *yet* — never that the first
@@ -141,7 +156,7 @@ final class PasteReceiptTests: XCTestCase {
         let text = try String(contentsOf: source, encoding: .utf8)
         let body = try XCTUnwrap(text.components(separatedBy: "private static func pasteViaClipboard").last)
             .components(separatedBy: "\n    static func leaveTextForManualPaste").first
-        let posts = try XCTUnwrap(body).components(separatedBy: "await postCommandV()").count - 1
+        let posts = try XCTUnwrap(body).components(separatedBy: "postCommandV(").count - 1
         XCTAssertEqual(posts, 1, "one paste attempt posts ⌘V once; a retry can duplicate the sentence")
     }
 }
