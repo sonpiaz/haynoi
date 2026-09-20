@@ -186,4 +186,21 @@ final class PersonalDictionaryPersistenceTests: XCTestCase {
 
         XCTAssertFalse(app.all.contains { $0.id == alpha.id }, "a deleted row stays deleted")
     }
+
+    func testOneDictationUsesOnePhoneticSnapshot() throws {
+        let url = dir.appendingPathComponent("dictionary.json")
+        let app = PersonalDictionary(fileURL: url)
+        app.addTerm("Affitor")
+        let terms = app.phoneticCandidateTerms()
+
+        var disk = try readEntries(at: url)
+        disk.append(DictionaryEntry(right: "Mandeck", kind: .term))
+        try writeEntries(disk, to: url)
+
+        XCTAssertEqual(app.phoneticCandidates(for: "Afider", in: terms), ["Affitor"])
+        XCTAssertEqual(app.phoneticCandidates(for: "Mandec", in: terms), [],
+                       "hints for one dictation come from one snapshot, even if the file changes")
+        XCTAssertEqual(app.phoneticCandidates(for: "Mandec"), ["Mandeck"],
+                       "a fresh lookup still sees the row that appeared")
+    }
 }

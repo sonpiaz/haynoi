@@ -538,21 +538,31 @@ final class PersonalDictionary {
     /// Dictionary `right` forms that sound like `word` (v2 Phase 4) — named
     /// candidates for a low-confidence span, fed to the correction pass as a
     /// targeted hint. Sound-alike only; never applied as a replacement.
-    func phoneticCandidates(for word: String, max limit: Int = 3) -> [String] {
+    func phoneticCandidates(for word: String, max limit: Int = 3, in terms: [String]? = nil) -> [String] {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         var seen = Set<String>()
         var result: [String] = []
-        for entry in enabledEntries(kinds: [.term, .replacement])
-            .sorted(by: { $0.frequency > $1.frequency }) {
-            let right = entry.right.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !right.isEmpty, seen.insert(right.lowercased()).inserted else { continue }
+        for right in terms ?? phoneticCandidateTerms() {
+            guard seen.insert(right.lowercased()).inserted else { continue }
             if Phonetics.close(trimmed, right) {
                 result.append(right)
                 if result.count >= limit { break }
             }
         }
         return result
+    }
+
+    /// The `right` forms a phonetic lookup walks, most used first. Take this
+    /// once before looping over the doubtful words of one dictation: every
+    /// `phoneticCandidates(for:)` call otherwise reads the store again, and a
+    /// read now also stats the file. One dictation then also sees one
+    /// dictionary, even if the file changes while the hints are being built.
+    func phoneticCandidateTerms() -> [String] {
+        enabledEntries(kinds: [.term, .replacement])
+            .sorted(by: { $0.frequency > $1.frequency })
+            .map { $0.right.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     /// Pure filter behind `deleteAllLearned` — split out so the invariant
