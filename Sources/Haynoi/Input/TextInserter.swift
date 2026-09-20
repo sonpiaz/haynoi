@@ -128,7 +128,9 @@ enum TextInserter {
             notifyFallback(text, reason: "Auto-paste failed. Press ⌘V to paste.")
         case .notTakenClipboardIsTheirs:
             // The user copied something while we were pasting — never clobber it.
-            notifyFallback(text, reason: "Your copy was kept — the sentence is in Haynoi's history.")
+            notifyFallback(text,
+                           reason: "Your copy was kept — the sentence is in Haynoi's history.",
+                           banner: "Kept your copy — sentence in History")
         default:
             copyToClipboardWithNotification(text,
                 reason: axTrusted
@@ -902,7 +904,9 @@ enum TextInserter {
 
     /// Same notification without touching the clipboard — for the cases where the
     /// sentence is already there, or where the clipboard now belongs to the user.
-    private static func notifyFallback(_ text: String, reason: String) {
+    /// `banner` is the one-liner the app itself shows, so it never tells the user to
+    /// press ⌘V when ⌘V would paste what they copied, not what they said.
+    private static func notifyFallback(_ text: String, reason: String, banner: String = "⌘V to paste") {
         let content = UNMutableNotificationContent()
         content.title = "Haynoi"
         content.subtitle = reason
@@ -917,7 +921,7 @@ enum TextInserter {
         UNUserNotificationCenter.current().add(request)
 
         Task { @MainActor in
-            AppState.shared.error = "⌘V to paste"
+            AppState.shared.error = banner
         }
     }
 }
