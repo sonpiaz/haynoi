@@ -210,6 +210,16 @@ final class PipelineController {
         }
     }
 
+    /// The wrong → right pairs History shows, from the rules that actually
+    /// changed the text. One place, so every path that writes a history row
+    /// (first try and retry) says the same thing.
+    static func fixes(forRuleIDs ids: [UUID]) -> [Transcription.Fix] {
+        PersonalDictionary.shared.entries(withIDs: ids).compactMap { entry in
+            guard let wrong = entry.wrong, !wrong.isEmpty else { return nil }
+            return Transcription.Fix(wrong: wrong, right: entry.right)
+        }
+    }
+
     func stopRecording() {
         guard state.isRecording else { return }
 
@@ -350,11 +360,7 @@ final class PipelineController {
                 ids.append(contentsOf: replaced.firedIDs)
                 return ids
             }()
-            let fixes: [Transcription.Fix] = PersonalDictionary.shared.entries(withIDs: firedIDs)
-                .compactMap { entry in
-                    guard let wrong = entry.wrong, !wrong.isEmpty else { return nil }
-                    return Transcription.Fix(wrong: wrong, right: entry.right)
-                }
+            let fixes = Self.fixes(forRuleIDs: firedIDs)
             guard !finalText.isEmpty else {
                 await MainActor.run {
                     state.isTranscribing = false
@@ -839,12 +845,14 @@ final class PipelineController {
 
         Task {
             do {
-                let text = try await STTProvider.transcribe(samples)
+                let result = try await STTProvider.transcribeTracked(samples)
+                let text = result.text
                 guard !text.isEmpty else {
                     await MainActor.run { state.isTranscribing = false }
                     return
                 }
                 let finalText = SnippetManager.applySnippets(to: text)
+                let retryFixes = Self.fixes(forRuleIDs: result.firedIDs)
                 NSLog("[Haynoi] Retry succeeded: %ld chars", finalText.count)
                 // Fix #2: delete the saved WAV BEFORE recomputing hasFailedDictation
                 // so the Retry button disappears and a second retry cannot replay
@@ -857,7 +865,8 @@ final class PipelineController {
                     state.isTranscribing = false
                     state.addTranscription(finalText,
                                            appBundleId: retryBundleId,
-                                           appName: retryAppName)
+                                           appName: retryAppName,
+                                           fixes: retryFixes)
                     state.hasFailedDictation = FailedDictationStore.hasAny
                 }
                 await TextInserter.insert(finalText, targetApp: retryTargetApp)

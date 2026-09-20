@@ -37,6 +37,18 @@ final class HistoryFixesTests: XCTestCase {
         XCTAssertNil(Transcription(text: "a").fixes)
     }
 
+    func testALongPairFallsBackToACountSoTheRowStaysOneLine() {
+        let long: [Transcription.Fix] = [
+            .init(wrong: "international customer", right: "international customers")
+        ]
+        XCTAssertGreaterThan("fixed \(long[0].wrong) → \(long[0].right)".count,
+                             HistoryRow.maxInlineFixLength)
+        XCTAssertEqual(HistoryRow.fixLabel(for: long), "fixed 1 word")
+        XCTAssertEqual(HistoryRow.fixTooltip(for: long),
+                       "international customer → international customers",
+                       "the pair itself stays reachable in the tooltip")
+    }
+
     func testRowReadsOneFixInFullAndCountsTheRest() {
         let one: [Transcription.Fix] = [.init(wrong: "Keyma", right: "Kyma")]
         XCTAssertEqual(HistoryRow.fixLabel(for: one), "fixed Keyma → Kyma")
