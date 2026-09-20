@@ -65,8 +65,8 @@ enum TextInserter {
         try? await Task.sleep(nanoseconds: settleNs)
 
         // Fix #1: last-instant check — confirm the correct app is still frontmost.
+        let frontmost = NSWorkspace.shared.frontmostApplication
         if let target = targetApp {
-            let frontmost = NSWorkspace.shared.frontmostApplication
             if frontmost?.processIdentifier != target.processIdentifier {
                 NSLog("[Haynoi] ⚠️ Frontmost mismatch after settle (%@ vs %@) — clipboard fallback",
                       frontmost?.bundleIdentifier ?? "?",
@@ -74,6 +74,13 @@ enum TextInserter {
                 copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
                 return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
             }
+        } else if frontmost?.bundleIdentifier == Bundle.main.bundleIdentifier {
+            // No target was captured (the app that was frontmost when recording
+            // started had already gone) and we are frontmost ourselves — a synthetic
+            // ⌘V would land in Haynoi's own window and the text would be lost.
+            NSLog("[Haynoi] ⚠️ No target app and Haynoi is frontmost — clipboard fallback")
+            copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
+            return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
 
         // Step 2: Clipboard + Cmd+V — PRIMARY method (like Wispr Flow)
@@ -86,6 +93,10 @@ enum TextInserter {
             let pasted = await pasteViaClipboard(text, targetApp: targetApp)
             if pasted {
                 NSLog("[Haynoi] Insert via Cmd+V")
+                // The paste now returns as soon as the app takes the text, which can
+                // be before it has drawn it. Let the caret settle or the derived span
+                // (used by "fix that") would be read too early.
+                try? await Task.sleep(nanoseconds: 150_000_000)
                 let span = pasteSpan(preCaret: preCaret, text: text, targetApp: targetApp)
                 return InsertionResult(inserted: text, span: span, targetApp: targetApp)
             }
@@ -520,16 +531,68 @@ enum TextInserter {
 
     // MARK: - Clipboard + Cmd+V (Fix #2, #3, #8)
 
+    /// Proof that a paste really happened.
+    ///
+    /// The text goes onto the pasteboard *lazily*: macOS calls this back the moment
+    /// a reader — the app handling our synthetic ⌘V — asks for the data. Measured in
+    /// a background app, the callback can also fire while the app is deciding whether
+    /// it can paste, so it proves the keystroke reached the app and the app asked for
+    /// the sentence; it does not prove the sentence is in the box. That is still the
+    /// only app-agnostic evidence available: AX is blind in terminals (Mandeck
+    /// exposes no text element at all, so the old pre/post value check compared nil
+    /// to nil and reported success for every paste, including the ones that never
+    /// arrived, whose text the restore timer then wiped off the clipboard).
+    ///
+    /// Measured: the pasteboard server caches the data after the first callback, so
+    /// an app that reads twice while handling one ⌘V (Mandeck asks for file URLs,
+    /// then the terminal asks for the string) gets the same text both times and the
+    /// callback fires once.
+    final class PasteReceipt: NSObject, NSPasteboardItemDataProvider {
+        private let text: String
+        private let lock = NSLock()
+        private var served = false
+
+        init(_ text: String) { self.text = text }
+
+        var wasServed: Bool {
+            lock.lock(); defer { lock.unlock() }
+            return served
+        }
+
+        func pasteboard(_ pasteboard: NSPasteboard?,
+                        item: NSPasteboardItem,
+                        provideDataForType type: NSPasteboard.PasteboardType) {
+            lock.lock()
+            served = true
+            lock.unlock()
+            item.setString(text, forType: type)
+        }
+    }
+
+    /// Holds the provider alive while its item sits on the pasteboard.
+    private static var liveReceipt: PasteReceipt?
+
+    /// Wait before deciding the first ⌘V never became a paste.
+    private static let receiptFirstWaitNs: UInt64 = 800_000_000
+    /// Wait after the retry before giving up and leaving the text on the clipboard.
+    private static let receiptRetryWaitNs: UInt64 = 1_200_000_000
+    /// Grace before the user's clipboard goes back. A read proves the app asked for
+    /// the text, not that the text is in the box, so the sentence stays available to
+    /// a manual ⌘V for a couple of seconds either way.
+    private static let restoreGraceNs: UInt64 = 2_000_000_000
+    /// After a retry was posted, how long the text stays readable before it is
+    /// blanked — long enough for the paste's own second read, short enough that a
+    /// retry still in flight pastes nothing instead of the text a second time.
+    private static let duplicateGuardNs: UInt64 = 300_000_000
+
     private static func pasteViaClipboard(_ text: String, targetApp: NSRunningApplication?) async -> Bool {
         let pb = NSPasteboard.general
 
         // Fix #2: check for a focused text element before investing in a paste.
-        // If AX reports no settable/readable text element, skip Cmd+V and fall through.
+        // If AX reports no settable/readable text element, note it and paste anyway —
+        // terminals and Electron apps report nothing and still paste fine.
         if let app = targetApp ?? NSWorkspace.shared.frontmostApplication {
-            let hasFocusedText = hasFocusedTextElement(in: app)
-            if !hasFocusedText {
-                // AX was denied entirely — proceed anyway (best available, per spec).
-                // Only skip if AX explicitly reports no text field.
+            if !hasFocusedTextElement(in: app) {
                 NSLog("[Haynoi] AX: no focused text element in %@, proceeding with Cmd+V",
                       app.bundleIdentifier ?? "?")
             }
@@ -539,10 +602,12 @@ enum TextInserter {
         let savedItems = snapshotPasteboard(pb)
         let preWriteChangeCount = pb.changeCount
 
-        // Write our text, concealed from clipboard managers.
+        // Write our text lazily (see PasteReceipt) so we learn when the target takes it.
+        let receipt = PasteReceipt(text)
+        liveReceipt = receipt
         pb.clearContents()
         let item = NSPasteboardItem()
-        item.setString(text, forType: .string)
+        item.setDataProvider(receipt, forTypes: [.string])
         // Fix #3: ConcealedType tells clipboard managers (Alfred, Paste, etc.) to skip this entry.
         item.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
         pb.writeObjects([item])
@@ -553,16 +618,86 @@ enum TextInserter {
         // Small delay to let pasteboard sync.
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
-        // Fix #2: snapshot value of focused element BEFORE paste for change detection.
-        let preValue = focusedElementValue(in: targetApp ?? NSWorkspace.shared.frontmostApplication)
+        guard await postCommandV() else {
+            restorePasteboard(pb, items: savedItems, writtenChangeCount: postWriteChangeCount)
+            liveReceipt = nil
+            return false
+        }
 
+        var taken = await waitForReceipt(receipt, timeout: receiptFirstWaitNs)
+
+        // Nobody read the clipboard: the keystroke never became a paste (event
+        // dropped, app busy, secure input). Nothing was consumed, so posting ⌘V
+        // once more is safe.
+        var retried = false
+        if !taken, stillFrontmost(targetApp) {
+            NSLog("[Haynoi] Cmd+V not taken in %dms — posting once more",
+                  Int(receiptFirstWaitNs / 1_000_000))
+            if await postCommandV() {
+                retried = true
+                taken = await waitForReceipt(receipt, timeout: receiptRetryWaitNs)
+            }
+        }
+
+        if taken {
+            NSLog("[Haynoi] Paste taken by target")
+            let didRetry = retried
+            var restoreChangeCount = postWriteChangeCount
+            Task { @MainActor in
+                let pb = NSPasteboard.general
+                if didRetry {
+                    // A second ⌘V may still be in flight. Blank the text once the
+                    // paste has finished reading it so a late arrival pastes nothing
+                    // rather than the same sentence twice.
+                    try? await Task.sleep(nanoseconds: duplicateGuardNs)
+                    if pb.changeCount == restoreChangeCount {
+                        pb.clearContents()
+                        pb.setString("", forType: .string)
+                        restoreChangeCount = pb.changeCount
+                    }
+                }
+                try? await Task.sleep(nanoseconds: restoreGraceNs)
+                restorePasteboard(pb, items: savedItems, writtenChangeCount: restoreChangeCount)
+                liveReceipt = nil
+            }
+            return true
+        }
+
+        // Never taken. Leave the dictated text on the clipboard as a plain item, so
+        // ⌘V works — and works twice. Restoring the old clipboard here (what the
+        // 400ms timer used to do) is exactly what made a failed paste unrecoverable.
+        NSLog("[Haynoi] Paste never taken — leaving text on the clipboard")
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        liveReceipt = nil
+        return false
+    }
+
+    /// Polls the receipt until the target reads the clipboard or the window closes.
+    private static func waitForReceipt(_ receipt: PasteReceipt, timeout: UInt64) async -> Bool {
+        let step: UInt64 = 20_000_000 // 20ms
+        var waited: UInt64 = 0
+        while waited < timeout {
+            if receipt.wasServed { return true }
+            try? await Task.sleep(nanoseconds: step)
+            waited += step
+        }
+        return receipt.wasServed
+    }
+
+    /// True when the app we captured at record time is still the one up front.
+    private static func stillFrontmost(_ targetApp: NSRunningApplication?) -> Bool {
+        guard let target = targetApp else { return true }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier == target.processIdentifier
+    }
+
+    /// Posts ⌘V at the HID tap. Returns false when the event could not be built.
+    private static func postCommandV() async -> Bool {
         // Fix #8: resolve 'v' keycode from current keyboard layout at runtime.
         let vKeyCode = resolveVKeyCode()
 
-        // Simulate Cmd+V.
         guard let src = CGEventSource(stateID: .hidSystemState) else {
             NSLog("[Haynoi] CGEventSource failed")
-            restorePasteboard(pb, items: savedItems, writtenChangeCount: postWriteChangeCount)
             return false
         }
 
@@ -586,7 +721,6 @@ enum TextInserter {
         guard let down = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: true),
               let up   = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: false) else {
             NSLog("[Haynoi] CGEvent creation failed")
-            restorePasteboard(pb, items: savedItems, writtenChangeCount: postWriteChangeCount)
             return false
         }
 
@@ -600,36 +734,7 @@ enum TextInserter {
         up.post(tap: .cghidEventTap)
 
         NSLog("[Haynoi] Cmd+V posted (keyCode=0x%02X)", vKeyCode)
-
-        // Fix #2: wait ~300ms then check whether the focused element's value changed.
-        try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
-
-        let postValue = focusedElementValue(in: targetApp ?? NSWorkspace.shared.frontmostApplication)
-        let pasteDetected: Bool
-        if let pre = preValue, let post = postValue {
-            // Paste landed if value changed, OR if text was inserted (post contains pre's text plus ours).
-            pasteDetected = post != pre
-        } else {
-            // Can't read AX value (AX denied) — assume paste worked (best available).
-            pasteDetected = true
-        }
-
-        // Fix #3: restore old clipboard ~400ms after paste, unless someone else wrote.
-        // 400ms total = 300ms we waited + 100ms additional here.
-        // All pasteboard access is confined to @MainActor, eliminating Sendable warnings.
-        let restoreChangeCount = postWriteChangeCount
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms more = ~400ms total
-            restorePasteboard(NSPasteboard.general, items: savedItems, writtenChangeCount: restoreChangeCount)
-        }
-
-        if pasteDetected {
-            return true
-        }
-
-        // Fix #2: value unchanged — fall through to AX insertion.
-        NSLog("[Haynoi] Cmd+V: value unchanged after 300ms, falling through to AX")
-        return false
+        return true
     }
 
     // MARK: - Pasteboard Snapshot / Restore (Fix #3)
