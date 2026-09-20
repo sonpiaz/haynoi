@@ -299,22 +299,32 @@ final class PersonalDictionary {
                   Bundle.main.bundleIdentifier ?? "?")
             return
         }
-        // The file changed under us: keep the rows it has and we never had.
-        // 2026-09-17 a still-running app with an empty dictionary wrote over a
-        // restore of 30 entries. A stamp is a guard, not a lock — two writes in
-        // the same second with the same size still look unchanged.
-        if let onDisk = Self.stamp(of: fileURL), onDisk != fileStamp {
-            let theirs = Self.load(from: fileURL).filter { !seenIDs.contains($0.id) }
-            if !theirs.isEmpty {
-                entries.append(contentsOf: theirs)
-                NSLog("[Haynoi] dictionary.json changed under us — kept %ld row(s) of it", theirs.count)
-            }
-        }
+        takeRowsThatAppearedOnDisk()
         seenIDs.formUnion(entries.map(\.id))
         if let data = try? Self.makeEncoder().encode(entries) {
             try? data.write(to: fileURL, options: .atomic)
             fileStamp = Self.stamp(of: fileURL)
         }
+    }
+
+    /// The file changed under us: keep the rows it has and this store never
+    /// had. 2026-09-17 a still-running app with an empty dictionary wrote over
+    /// a restore of 30 entries. Called before a write and before a read, so a
+    /// restore reaches the glossary at the next dictation, not at the next save.
+    ///
+    /// A stamp is a guard, not a lock: two versions with the same size and the
+    /// same modification date still look unchanged, and a file replaced between
+    /// our write and the stamp that follows it is read as ours.
+    private func takeRowsThatAppearedOnDisk() {
+        // Called on `queue`.
+        guard let onDisk = Self.stamp(of: fileURL), onDisk != fileStamp else { return }
+        let theirs = Self.load(from: fileURL).filter { !seenIDs.contains($0.id) }
+        if !theirs.isEmpty {
+            entries.append(contentsOf: theirs)
+            seenIDs.formUnion(theirs.map(\.id))
+            NSLog("[Haynoi] dictionary.json changed under us — kept %ld row(s) of it", theirs.count)
+        }
+        fileStamp = onDisk
     }
 
     /// The restore lock (`uchg`) stops a still-running empty build from
@@ -330,13 +340,17 @@ final class PersonalDictionary {
 
     /// All entries (any state). Snapshot copy — safe to use off-queue.
     var all: [DictionaryEntry] {
-        queue.sync { entries }
+        queue.sync {
+            takeRowsThatAppearedOnDisk()
+            return entries
+        }
     }
 
     /// Enabled entries of the given kinds, newest-meaningful first by frequency.
     func enabledEntries(kinds: Set<DictionaryEntry.Kind>) -> [DictionaryEntry] {
         queue.sync {
-            entries.filter { $0.enabled && kinds.contains($0.kind) }
+            takeRowsThatAppearedOnDisk()
+            return entries.filter { $0.enabled && kinds.contains($0.kind) }
         }
     }
 
