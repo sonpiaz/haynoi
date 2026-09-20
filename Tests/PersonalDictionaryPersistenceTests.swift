@@ -156,4 +156,34 @@ final class PersonalDictionaryPersistenceTests: XCTestCase {
         let onDisk = try readEntries(at: url)
         XCTAssertEqual(Set(onDisk.map(\.right)), ["Alpha", "Beta"])
     }
+
+    func testGlossarySeesRowsRestoredWhileTheAppWasRunning() throws {
+        let url = dir.appendingPathComponent("dictionary.json")
+        let app = PersonalDictionary(fileURL: url)
+        app.addTerm("Alpha")
+
+        var disk = try readEntries(at: url)
+        disk.append(DictionaryEntry(right: "Kyma", kind: .term))
+        try writeEntries(disk, to: url)
+
+        XCTAssertTrue(app.enabledEntries(kinds: [.term]).contains { $0.right == "Kyma" },
+                      "a restore must reach the glossary at the next dictation, not at the next save")
+        XCTAssertTrue(app.all.contains { $0.right == "Kyma" })
+    }
+
+    func testReadDoesNotResurrectADeletedRow() throws {
+        let url = dir.appendingPathComponent("dictionary.json")
+        let app = PersonalDictionary(fileURL: url)
+        let alpha = app.addTerm("Alpha")!
+        app.addTerm("Beta")
+        app.delete(id: alpha.id)
+
+        // Something else writes a file that still carries the deleted row.
+        try writeEntries([
+            DictionaryEntry(id: alpha.id, right: "Alpha", kind: .term),
+            DictionaryEntry(right: "Beta", kind: .term),
+        ], to: url)
+
+        XCTAssertFalse(app.all.contains { $0.id == alpha.id }, "a deleted row stays deleted")
+    }
 }
