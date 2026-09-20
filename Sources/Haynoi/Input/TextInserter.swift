@@ -113,6 +113,11 @@ enum TextInserter {
             let axSpan = tryAXInsertionReturningSpan(text, targetApp: targetApp)
             if let span = axSpan {
                 NSLog("[Haynoi] Insert via AX")
+                // The sentence is in the field, so the clipboard no longer has to
+                // carry it: give the user back whatever they had copied.
+                if case .notTakenTextKept(let restoreUserClipboard) = pasteAttempt {
+                    restoreUserClipboard()
+                }
                 // span may be NSRange(location: NSNotFound, ...) when AX inserted
                 // but the location was unknown (selectedText path). Normalize.
                 let usable = span.location == NSNotFound ? nil : span
@@ -599,15 +604,18 @@ enum TextInserter {
         }
     }
 
-    /// Holds the provider alive while its item sits on the pasteboard. Measured:
-    /// releasing the provider makes macOS fulfil the promise on the spot, which both
-    /// hands out the text early and marks the receipt read — a paste nobody made.
-    /// Only the paste that owns a receipt may drop it (see `releaseReceipt`), or a
-    /// second dictation's receipt would be killed by the first one's restore.
-    private static var liveReceipt: PasteReceipt?
+    /// One attempt, one keystroke. A timeout proves nobody has read the clipboard
+    /// *yet*, never that the first ⌘V was discarded, so a second one can paste the
+    /// same sentence twice when both were merely queued behind a busy app. The
+    /// budget makes that second post impossible rather than merely unwritten.
+    struct KeystrokeBudget {
+        private var spent = false
 
-    private static func releaseReceipt(_ receipt: PasteReceipt) {
-        if liveReceipt === receipt { liveReceipt = nil }
+        mutating func take() -> Bool {
+            if spent { return false }
+            spent = true
+            return true
+        }
     }
 
     /// How long to wait for someone to read the clipboard before giving up on the
@@ -626,7 +634,9 @@ enum TextInserter {
         /// Someone read the clipboard after ⌘V.
         case taken
         /// Nobody read it; the sentence is on the clipboard for a manual ⌘V.
-        case notTakenTextKept
+        /// `restoreUserClipboard` puts the user's own clipboard back, for the caller
+        /// that manages to insert the sentence another way.
+        case notTakenTextKept(restoreUserClipboard: () -> Void)
         /// Nobody read it, and the user copied something while we waited — their
         /// copy stays, the sentence stays in the history.
         case notTakenClipboardIsTheirs
@@ -652,8 +662,11 @@ enum TextInserter {
         let preWriteChangeCount = pb.changeCount
 
         // Write our text lazily (see PasteReceipt) so we learn when the target takes it.
+        // The receipt must outlive its item on the pasteboard: releasing the provider
+        // makes macOS fulfil the promise on the spot (measured), which hands out the
+        // text early and marks the receipt read. Every path below either keeps it
+        // alive or has already replaced the item.
         let receipt = PasteReceipt(text)
-        liveReceipt = receipt
         pb.clearContents()
         let item = NSPasteboardItem()
         item.setDataProvider(receipt, forTypes: [.string])
@@ -667,9 +680,9 @@ enum TextInserter {
         // Small delay to let pasteboard sync.
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
-        guard await postCommandV() else {
+        var budget = KeystrokeBudget()
+        guard budget.take(), await postCommandV() else {
             restorePasteboard(pb, items: savedItems, writtenChangeCount: postWriteChangeCount)
-            releaseReceipt(receipt)
             return .notTakenNothingLeft
         }
 
@@ -679,19 +692,25 @@ enum TextInserter {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: restoreGraceNs)
                 restorePasteboard(NSPasteboard.general, items: savedItems, writtenChangeCount: restoreChangeCount)
-                releaseReceipt(receipt)
+                withExtendedLifetime(receipt) {}
             }
             return .taken
         }
 
-        // Nobody read the clipboard, so the keystroke never became a paste. Leave the
-        // sentence there for a manual ⌘V instead of restoring over it — restoring
-        // 400ms after every ⌘V, read or not, is what used to make a failed paste
-        // unrecoverable.
+        // Nobody asked for the text inside the window, so as far as anything here can
+        // tell, the paste never happened. Leave the sentence on the clipboard for a
+        // manual ⌘V instead of restoring over it — restoring 400ms after every ⌘V,
+        // read or not, is what used to make a failed paste unrecoverable.
         NSLog("[Haynoi] Clipboard never read — leaving text for a manual paste")
-        let held = leaveTextForManualPaste(text, on: pb, ourChangeCount: postWriteChangeCount)
-        releaseReceipt(receipt)
-        return held ? .notTakenTextKept : .notTakenClipboardIsTheirs
+        guard leaveTextForManualPaste(text, on: pb, ourChangeCount: postWriteChangeCount) else {
+            return .notTakenClipboardIsTheirs
+        }
+        let ourChangeCount = pb.changeCount
+        return .notTakenTextKept(restoreUserClipboard: {
+            // Called only if another path puts the sentence in for us after all, so
+            // the clipboard does not have to carry it any more.
+            restorePasteboard(NSPasteboard.general, items: savedItems, writtenChangeCount: ourChangeCount)
+        })
     }
 
     /// Materialises the dictated sentence on the clipboard so ⌘V works, and works
@@ -793,7 +812,7 @@ enum TextInserter {
 
     /// Restores the previously snapshotted pasteboard, but only if nobody else
     /// has written to it in the meantime (changeCount guard).
-    private static func restorePasteboard(_ pb: NSPasteboard, items: [NSPasteboardItem], writtenChangeCount: Int) {
+    static func restorePasteboard(_ pb: NSPasteboard, items: [NSPasteboardItem], writtenChangeCount: Int) {
         // If changeCount advanced beyond what we wrote, another app wrote — don't clobber.
         guard pb.changeCount == writtenChangeCount else {
             NSLog("[Haynoi] Pasteboard changed externally (count %d vs %d), skipping restore",

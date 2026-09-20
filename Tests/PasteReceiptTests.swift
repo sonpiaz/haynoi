@@ -94,6 +94,32 @@ final class PasteReceiptTests: XCTestCase {
         XCTAssertEqual(TextInserter.pasteGate(targetPID: nil, frontmostPID: 42, frontmostIsHaynoi: false), .go)
     }
 
+    // MARK: - Round 2 review: the clipboard goes back when something else inserts
+
+    func testRestoringOnlyHappensWhileTheClipboardIsStillOurs() {
+        pb.clearContents()
+        pb.setString("người dùng đã copy trước đó", forType: .string)
+        let saved = pb.pasteboardItems?.compactMap { original -> NSPasteboardItem? in
+            let copy = NSPasteboardItem()
+            guard let data = original.data(forType: .string) else { return nil }
+            copy.setData(data, forType: .string)
+            return copy
+        } ?? []
+
+        pb.clearContents()
+        pb.setString("câu đọc chính tả", forType: .string)
+        let ours = pb.changeCount
+
+        TextInserter.restorePasteboard(pb, items: saved, writtenChangeCount: ours)
+        XCTAssertEqual(pb.string(forType: .string), "người dùng đã copy trước đó")
+
+        // Someone else wrote after us: their content is never clobbered.
+        pb.clearContents()
+        pb.setString("copy mới của người dùng", forType: .string)
+        TextInserter.restorePasteboard(pb, items: saved, writtenChangeCount: ours)
+        XCTAssertEqual(pb.string(forType: .string), "copy mới của người dùng")
+    }
+
     // MARK: - PR51-R1-DUPLICATE
 
     /// A timeout proves nobody has read the clipboard *yet* — never that the first
@@ -101,6 +127,13 @@ final class PasteReceiptTests: XCTestCase {
     /// twice whenever both events were merely queued behind a busy app, so the paste
     /// path posts exactly once. Re-adding a retry has to come with proof that the
     /// first event is dead.
+    func testOneAttemptGetsOneKeystroke() {
+        var budget = TextInserter.KeystrokeBudget()
+        XCTAssertTrue(budget.take(), "the attempt posts ⌘V once")
+        XCTAssertFalse(budget.take(), "a timeout never proves the first ⌘V died, so there is no second")
+        XCTAssertFalse(budget.take())
+    }
+
     func testThePastePathPostsCommandVExactlyOnce() throws {
         let source = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
