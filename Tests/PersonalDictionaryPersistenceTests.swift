@@ -93,4 +93,67 @@ final class PersonalDictionaryPersistenceTests: XCTestCase {
         XCTAssertFalse(PersonalDictionary.isProductionBundle(bundleIdentifier: "com.sonpiaz.haynoi.dev"))
         XCTAssertFalse(PersonalDictionary.isProductionBundle(bundleIdentifier: "com.sonpiaz.haynoiTests"))
     }
+
+    // MARK: - A running app must not overwrite a file that changed under it
+    //
+    // 2026-09-17 18:29: the live dictionary went 30 entries → empty while an
+    // app that had loaded the empty file kept running; its next persist() wrote
+    // its own stale memory over the restored file.
+
+    private func writeEntries(_ entries: [DictionaryEntry], to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(entries).write(to: url, options: .atomic)
+    }
+
+    private func readEntries(at url: URL) throws -> [DictionaryEntry] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([DictionaryEntry].self, from: Data(contentsOf: url))
+    }
+
+    func testPersistKeepsEntriesRestoredWhileTheAppWasRunning() throws {
+        let url = dir.appendingPathComponent("dictionary.json")
+        let app = PersonalDictionary(fileURL: url)
+        app.addTerm("Mandeck")
+
+        // A backup is restored (or another build writes) while this app runs.
+        let restored = (1...30).map { DictionaryEntry(right: "word\($0)", kind: .term) }
+        try writeEntries(restored, to: url)
+
+        app.addTerm("Pheme") // persists
+
+        let onDisk = try readEntries(at: url)
+        XCTAssertEqual(onDisk.count, 32, "the 30 restored rows must survive a stale app's save")
+        XCTAssertTrue(onDisk.contains { $0.right == "word30" })
+        XCTAssertTrue(onDisk.contains { $0.right == "Mandeck" })
+        XCTAssertTrue(onDisk.contains { $0.right == "Pheme" })
+        XCTAssertEqual(app.all.count, 32, "memory takes the rows back too, so the next save keeps them")
+    }
+
+    func testDeleteStillDeletesWhenTheFileChangedUnderUs() throws {
+        let url = dir.appendingPathComponent("dictionary.json")
+        let app = PersonalDictionary(fileURL: url)
+        let alpha = app.addTerm("Alpha")!
+        app.addTerm("Beta")
+
+        var disk = try readEntries(at: url)
+        disk.append(DictionaryEntry(right: "Gamma", kind: .term)) // added by something else
+        try writeEntries(disk, to: url)
+
+        app.delete(id: alpha.id)
+
+        let onDisk = try readEntries(at: url)
+        XCTAssertEqual(Set(onDisk.map(\.right)), ["Beta", "Gamma"],
+                       "the deleted row stays deleted, the external row stays")
+    }
+
+    func testUntouchedFileIsWrittenWithoutMerging() throws {
+        let url = dir.appendingPathComponent("dictionary.json")
+        let app = PersonalDictionary(fileURL: url)
+        app.addTerm("Alpha")
+        app.addTerm("Beta")
+        let onDisk = try readEntries(at: url)
+        XCTAssertEqual(Set(onDisk.map(\.right)), ["Alpha", "Beta"])
+    }
 }

@@ -169,7 +169,34 @@ final class PersonalDictionary {
     init(fileURL: URL = PersonalDictionary.defaultFileURL()) {
         self.fileURL = fileURL
         self.entries = PersonalDictionary.load(from: fileURL)
+        self.seenIDs = Set(self.entries.map(\.id))
+        self.fileStamp = PersonalDictionary.stamp(of: fileURL)
         PersonalDictionary.clearUserImmutable(at: fileURL)
+    }
+
+    /// How the file looked when this store last read or wrote it. A different
+    /// stamp means something else changed the file — a restore, a second build,
+    /// or a hand edit — so its rows must not be written over.
+    private struct FileStamp: Equatable {
+        let modified: Date
+        let size: Int
+    }
+
+    private var fileStamp: FileStamp?
+
+    /// Every id this store has held, deleted ones included, so a merge brings
+    /// back only rows it has never seen and a delete stays deleted.
+    private var seenIDs: Set<UUID>
+
+    /// Read through FileManager, not `URL.resourceValues`: Foundation caches
+    /// resource values on the URL, so the same URL kept reporting the size and
+    /// date from the first read and every later change looked like no change.
+    private static func stamp(of url: URL) -> FileStamp? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let modified = attributes[.modificationDate] as? Date,
+              let size = attributes[.size] as? Int
+        else { return nil }
+        return FileStamp(modified: modified, size: size)
     }
 
     // MARK: Persistence
@@ -272,8 +299,21 @@ final class PersonalDictionary {
                   Bundle.main.bundleIdentifier ?? "?")
             return
         }
+        // The file changed under us: keep the rows it has and we never had.
+        // 2026-09-17 a still-running app with an empty dictionary wrote over a
+        // restore of 30 entries. A stamp is a guard, not a lock — two writes in
+        // the same second with the same size still look unchanged.
+        if let onDisk = Self.stamp(of: fileURL), onDisk != fileStamp {
+            let theirs = Self.load(from: fileURL).filter { !seenIDs.contains($0.id) }
+            if !theirs.isEmpty {
+                entries.append(contentsOf: theirs)
+                NSLog("[Haynoi] dictionary.json changed under us — kept %ld row(s) of it", theirs.count)
+            }
+        }
+        seenIDs.formUnion(entries.map(\.id))
         if let data = try? Self.makeEncoder().encode(entries) {
             try? data.write(to: fileURL, options: .atomic)
+            fileStamp = Self.stamp(of: fileURL)
         }
     }
 
