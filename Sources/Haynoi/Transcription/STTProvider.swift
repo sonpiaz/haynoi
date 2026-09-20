@@ -100,8 +100,11 @@ enum STTProvider {
             // "afider" → possibly "Affitor" — instead of hoping it connects
             // the glossary to the right span on its own.
             let doubtful = Self.doubtfulWords(from: transcribed.logprobs ?? [])
+            // One snapshot for the whole dictation: the lookup reads the store
+            // (and stats the dictionary file) on every call.
+            let terms = doubtful.isEmpty ? [] : PersonalDictionary.shared.phoneticCandidateTerms()
             let hints = doubtful.compactMap { word -> (heard: String, candidates: [String])? in
-                let candidates = PersonalDictionary.shared.phoneticCandidates(for: word)
+                let candidates = PersonalDictionary.shared.phoneticCandidates(for: word, in: terms)
                 return candidates.isEmpty ? nil : (heard: word, candidates: candidates)
             }
             text = (try? await rewriteWithKyma(
