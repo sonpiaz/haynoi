@@ -51,6 +51,23 @@ final class PhoneticsTests: XCTestCase {
                        "multi-token words reassemble, punctuation trims, confident words stay out")
     }
 
+    func testDoubtfulWordsDropRepeatsAndStopAtTheCap() {
+        // The same shaky name three times, once with different case.
+        var tokens: [STTProvider.TokenLogprob] = []
+        for word in [" Afiter", " afiter", " Afiter"] {
+            tokens.append(.init(token: word, logprob: -0.9))
+        }
+        XCTAssertEqual(STTProvider.doubtfulWords(from: tokens), ["Afiter"],
+                       "one shaky word asked about once, whatever its case")
+
+        tokens = (1...(STTProvider.maxDoubtfulWords + 4)).map {
+            .init(token: " word\($0)", logprob: -0.9)
+        }
+        let capped = STTProvider.doubtfulWords(from: tokens)
+        XCTAssertEqual(capped.count, STTProvider.maxDoubtfulWords)
+        XCTAssertEqual(capped.first, "word1", "the first doubtful words are the ones asked about")
+    }
+
     func testDoubtfulWordsEmptyWhenAllConfident() {
         let tokens: [STTProvider.TokenLogprob] = [
             .init(token: "This", logprob: -0.0002),
