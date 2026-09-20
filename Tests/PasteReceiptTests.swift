@@ -1,0 +1,162 @@
+import XCTest
+import AppKit
+@testable import Haynoi
+
+/// Auto-paste used to report success without any evidence: in a terminal AX exposes
+/// no focused text element, so the old check compared a nil value to a nil value and
+/// called every paste a success — including the ones that never arrived, whose text
+/// the restore timer then wiped off the clipboard.
+///
+/// These cover the evidence that replaced that check — a reader asking for the text —
+/// and the three ways the first round of the fix could still have hurt the user
+/// (cases PR51-R1-DUPLICATE, PR51-R1-NIL-TARGET, PR51-R1-CLIPBOARD-OWNERSHIP).
+/// Everything runs on a private pasteboard; the user's clipboard is never touched.
+final class PasteReceiptTests: XCTestCase {
+
+    private var pb: NSPasteboard!
+
+    override func setUp() {
+        super.setUp()
+        pb = NSPasteboard(name: NSPasteboard.Name("com.haynoi.tests.receipt-\(UUID().uuidString)"))
+    }
+
+    override func tearDown() {
+        pb.releaseGlobally()
+        pb = nil
+        super.tearDown()
+    }
+
+    @discardableResult
+    private func put(_ receipt: TextInserter.PasteReceipt) -> Int {
+        pb.clearContents()
+        let item = NSPasteboardItem()
+        item.setDataProvider(receipt, forTypes: [.string])
+        pb.writeObjects([item])
+        return pb.changeCount
+    }
+
+    // MARK: - The evidence
+
+    func testNothingIsServedUntilSomethingReadsTheClipboard() {
+        let receipt = TextInserter.PasteReceipt("chào buổi sáng")
+        put(receipt)
+        XCTAssertFalse(receipt.wasServed, "writing to the clipboard is not a read")
+    }
+
+    func testAReadServesTheSentenceAndCountsAsEvidence() {
+        let receipt = TextInserter.PasteReceipt("chào buổi sáng")
+        put(receipt)
+        XCTAssertEqual(pb.string(forType: .string), "chào buổi sáng")
+        XCTAssertTrue(receipt.wasServed, "a reader taking the text is the evidence the app asked for it")
+    }
+
+    /// One ⌘V can read the clipboard more than once — Mandeck asks for file URLs
+    /// before the terminal asks for the string. Both reads must see the sentence.
+    func testSecondReadWithinTheSamePasteStillGetsTheText() {
+        let receipt = TextInserter.PasteReceipt("hai lần đọc")
+        put(receipt)
+        XCTAssertEqual(pb.string(forType: .string), "hai lần đọc")
+        XCTAssertEqual(pb.string(forType: .string), "hai lần đọc")
+    }
+
+    // MARK: - PR51-R1-CLIPBOARD-OWNERSHIP
+
+    func testUnreadPasteLeavesTheSentenceForAManualPaste() {
+        let receipt = TextInserter.PasteReceipt("không ai dán")
+        let ours = put(receipt)
+        XCTAssertTrue(TextInserter.leaveTextForManualPaste("không ai dán", on: pb, ourChangeCount: ours))
+        XCTAssertEqual(pb.string(forType: .string), "không ai dán")
+        // And it survives a second manual paste, unlike a one-shot promise.
+        XCTAssertEqual(pb.string(forType: .string), "không ai dán")
+    }
+
+    /// The user copying something while a paste is pending owns the clipboard: their
+    /// copy must survive, and the sentence stays in the history instead.
+    func testACopyMadeWhileWaitingIsNeverOverwritten() {
+        let receipt = TextInserter.PasteReceipt("câu đọc chính tả")
+        let ours = put(receipt)
+        pb.clearContents()
+        pb.setString("người dùng vừa copy cái này", forType: .string)
+        XCTAssertFalse(TextInserter.leaveTextForManualPaste("câu đọc chính tả", on: pb, ourChangeCount: ours))
+        XCTAssertEqual(pb.string(forType: .string), "người dùng vừa copy cái này")
+    }
+
+    // MARK: - PR51-R1-NIL-TARGET
+
+    func testPasteGateBlocksAnAppThatIsNoLongerTheOneWeRecordedAgainst() {
+        XCTAssertEqual(TextInserter.pasteGate(targetPID: 501, frontmostPID: 501, frontmostIsHaynoi: false), .go)
+        XCTAssertEqual(TextInserter.pasteGate(targetPID: 501, frontmostPID: 777, frontmostIsHaynoi: false), .blockWrongApp)
+        XCTAssertEqual(TextInserter.pasteGate(targetPID: 501, frontmostPID: nil, frontmostIsHaynoi: false), .blockWrongApp)
+    }
+
+    func testPasteGateRefusesToPasteIntoHaynoiWhenNoTargetWasCaptured() {
+        XCTAssertEqual(TextInserter.pasteGate(targetPID: nil, frontmostPID: 42, frontmostIsHaynoi: true), .blockUnknownTarget)
+        XCTAssertEqual(TextInserter.pasteGate(targetPID: nil, frontmostPID: 42, frontmostIsHaynoi: false), .go)
+    }
+
+    // MARK: - Round 2 review: the clipboard goes back when something else inserts
+
+    func testRestoringOnlyHappensWhileTheClipboardIsStillOurs() {
+        pb.clearContents()
+        pb.setString("người dùng đã copy trước đó", forType: .string)
+        let saved = pb.pasteboardItems?.compactMap { original -> NSPasteboardItem? in
+            let copy = NSPasteboardItem()
+            guard let data = original.data(forType: .string) else { return nil }
+            copy.setData(data, forType: .string)
+            return copy
+        } ?? []
+
+        pb.clearContents()
+        pb.setString("câu đọc chính tả", forType: .string)
+        let ours = pb.changeCount
+
+        TextInserter.restorePasteboard(pb, items: saved, writtenChangeCount: ours)
+        XCTAssertEqual(pb.string(forType: .string), "người dùng đã copy trước đó")
+
+        // Someone else wrote after us: their content is never clobbered.
+        pb.clearContents()
+        pb.setString("copy mới của người dùng", forType: .string)
+        TextInserter.restorePasteboard(pb, items: saved, writtenChangeCount: ours)
+        XCTAssertEqual(pb.string(forType: .string), "copy mới của người dùng")
+    }
+
+    // MARK: - PR51-R3-AX-UNVERIFIED
+
+    /// An AX write returning `.success` is not evidence: on Electron apps the write
+    /// succeeds and the text is dropped, and terminals expose no value to read. The
+    /// sentence may only be taken off the clipboard when the field really changed.
+    func testAXCountsAsLandedOnlyWhenTheFieldActuallyChanged() {
+        XCTAssertTrue(TextInserter.axInsertionLanded(before: "xin chào ", after: "xin chào bạn"))
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: "xin chào ", after: "xin chào "),
+                       "the write claimed success and nothing changed — the app swallowed it")
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: nil, after: nil),
+                       "a terminal exposes no value, so there is nothing to call proof")
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: "xin chào ", after: nil))
+        XCTAssertFalse(TextInserter.axInsertionLanded(before: nil, after: "xin chào bạn"))
+    }
+
+    // MARK: - PR51-R1-DUPLICATE
+
+    /// A timeout proves nobody has read the clipboard *yet* — never that the first
+    /// keystroke was discarded. Posting a second ⌘V on a timeout pastes the sentence
+    /// twice whenever both events were merely queued behind a busy app, so the paste
+    /// path posts exactly once. Re-adding a retry has to come with proof that the
+    /// first event is dead.
+    func testOneAttemptGetsOneKeystroke() {
+        var budget = TextInserter.KeystrokeBudget()
+        XCTAssertTrue(budget.take(), "the attempt posts ⌘V once")
+        XCTAssertFalse(budget.take(), "a timeout never proves the first ⌘V died, so there is no second")
+        XCTAssertFalse(budget.take())
+    }
+
+    func testThePastePathPostsCommandVExactlyOnce() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/Haynoi/Input/TextInserter.swift")
+        let text = try String(contentsOf: source, encoding: .utf8)
+        let body = try XCTUnwrap(text.components(separatedBy: "private static func pasteViaClipboard").last)
+            .components(separatedBy: "\n    static func leaveTextForManualPaste").first
+        let posts = try XCTUnwrap(body).components(separatedBy: "postCommandV(").count - 1
+        XCTAssertEqual(posts, 1, "one paste attempt posts ⌘V once; a retry can duplicate the sentence")
+    }
+}
