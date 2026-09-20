@@ -3,6 +3,14 @@ import AppKit
 import Combine
 
 struct Transcription: Identifiable, Codable {
+    /// A dictionary rule that actually changed this dictation, kept as the two
+    /// words rather than the rule id so the row still reads right after the
+    /// rule is edited or deleted.
+    struct Fix: Codable, Hashable {
+        let wrong: String
+        let right: String
+    }
+
     let id: UUID
     let text: String
     let timestamp: Date
@@ -11,16 +19,20 @@ struct Transcription: Identifiable, Codable {
     let appBundleId: String?
     /// Localized display name of the destination app (latest wins on re-read).
     let appName: String?
+    /// What Haynoi corrected on its own in this dictation. Nil for older
+    /// entries and for dictations where no rule fired.
+    let fixes: [Fix]?
 
-    init(text: String, appBundleId: String? = nil, appName: String? = nil) {
+    init(text: String, appBundleId: String? = nil, appName: String? = nil, fixes: [Fix]? = nil) {
         self.id = UUID()
         self.text = text
         self.timestamp = Date()
         self.appBundleId = appBundleId
         self.appName = appName
+        self.fixes = (fixes?.isEmpty ?? true) ? nil : fixes
     }
 
-    // Decode tolerantly — older entries lack attribution fields.
+    // Decode tolerantly — older entries lack attribution fields and fixes.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -28,6 +40,7 @@ struct Transcription: Identifiable, Codable {
         timestamp = try c.decode(Date.self, forKey: .timestamp)
         appBundleId = try c.decodeIfPresent(String.self, forKey: .appBundleId)
         appName = try c.decodeIfPresent(String.self, forKey: .appName)
+        fixes = try c.decodeIfPresent([Fix].self, forKey: .fixes)
     }
 
     var wordCount: Int { text.split(separator: " ").count }
@@ -134,8 +147,9 @@ final class AppState: ObservableObject {
 
     func addTranscription(_ text: String,
                           appBundleId: String? = nil,
-                          appName: String? = nil) {
-        let entry = Transcription(text: text, appBundleId: appBundleId, appName: appName)
+                          appName: String? = nil,
+                          fixes: [Transcription.Fix]? = nil) {
+        let entry = Transcription(text: text, appBundleId: appBundleId, appName: appName, fixes: fixes)
         transcriptions.insert(entry, at: 0)
         // Cap at 500 entries
         if transcriptions.count > Self.maxHistoryEntries {
@@ -151,7 +165,8 @@ final class AppState: ObservableObject {
         guard let first = transcriptions.first else { return }
         let updated = Transcription(text: text,
                                     appBundleId: first.appBundleId,
-                                    appName: first.appName)
+                                    appName: first.appName,
+                                    fixes: first.fixes)
         transcriptions[0] = updated
         saveSubject.send()
     }
