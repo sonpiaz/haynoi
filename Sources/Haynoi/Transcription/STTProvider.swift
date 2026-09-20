@@ -176,8 +176,23 @@ enum STTProvider {
             currentMin = min(currentMin, t.logprob)
         }
         flush()
-        return words.filter { $0.minLogprob < lowConfidenceLogprob }.map(\.text)
+        // De-duplicate case-insensitively and cap: the same shaky word often
+        // repeats in one dictation, and each one costs a hint in the correction
+        // prompt. Order is kept, so the first doubtful words are the ones asked
+        // about.
+        var seen = Set<String>()
+        var doubtful: [String] = []
+        for word in words where word.minLogprob < lowConfidenceLogprob {
+            guard seen.insert(word.text.lowercased()).inserted else { continue }
+            doubtful.append(word.text)
+            if doubtful.count >= maxDoubtfulWords { break }
+        }
+        return doubtful
     }
+
+    /// Enough for one dictation: past this many the correction prompt is mostly
+    /// hints, and a transcript that shaky needs a re-dictation, not a longer list.
+    static let maxDoubtfulWords = 8
 
     /// The correction pass runs only when ALL hold: the mode has no rewrite
     /// (rewrite modes already carry the glossary + pairs), the model flagged a
