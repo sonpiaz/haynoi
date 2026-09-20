@@ -113,6 +113,12 @@ enum TextInserter {
             let app = targetApp ?? NSWorkspace.shared.frontmostApplication
             let beforeAX = focusedElementValue(in: app)
             let axSpan = tryAXInsertionReturningSpan(text, targetApp: targetApp)
+            if axSpan != nil {
+                // Read the field back only after it has had a moment to update, or a
+                // real insertion looks like a failed one and the user is told to
+                // press ⌘V over text that is already there.
+                try? await Task.sleep(nanoseconds: axSettleNs)
+            }
             if let span = axSpan, axInsertionLanded(before: beforeAX, after: focusedElementValue(in: app)) {
                 NSLog("[Haynoi] Insert via AX")
                 // The field really changed, so the clipboard does not have to carry
@@ -135,7 +141,9 @@ enum TextInserter {
         switch pasteAttempt {
         case .notTakenTextKept:
             // The paste path already left the sentence on the clipboard.
-            notifyFallback(text, reason: "Auto-paste failed. Press ⌘V to paste.")
+            // AX may have inserted after all — we could not read the field to know —
+            // so this must not claim the text is missing, or ⌘V pastes it twice.
+            notifyFallback(text, reason: "Press ⌘V if the text did not land.")
         case .notTakenClipboardIsTheirs:
             // The user copied something while we were pasting — never clobber it.
             notifyFallback(text,
@@ -264,15 +272,6 @@ enum TextInserter {
 
     // MARK: - AX Direct Insert (Fix #4)
 
-    @discardableResult
-    private static func tryAXInsertion(_ text: String, targetApp: NSRunningApplication?) -> Bool {
-        tryAXInsertionReturningSpan(text, targetApp: targetApp) != nil
-    }
-
-    /// AX direct insert. Returns the UTF-16 span the inserted text now occupies,
-    /// or nil if all AX paths failed. When the selectedText path succeeds but the
-    /// pre-insert caret was unknown, the returned span has `location == NSNotFound`
-    /// (length set), signalling "inserted, location unknown" to the caller.
     private static func tryAXInsertionReturningSpan(_ text: String, targetApp: NSRunningApplication?) -> NSRange? {
         guard let app = targetApp ?? NSWorkspace.shared.frontmostApplication else { return nil }
         let element = AXUIElementCreateApplication(app.processIdentifier)
@@ -649,6 +648,9 @@ enum TextInserter {
     /// *yet*, never that the first keystroke was discarded, so a retry could paste
     /// the same sentence twice when both events were merely queued.
     private static let receiptWaitNs: UInt64 = 1_500_000_000
+    /// How long the field gets to update before we read it back to see whether an
+    /// AX insertion really landed.
+    private static let axSettleNs: UInt64 = 80_000_000
     /// Grace before the user's clipboard goes back. A read proves the app asked for
     /// the text, not that the text is in the box, so the sentence stays available to
     /// a manual ⌘V for a couple of seconds either way.
