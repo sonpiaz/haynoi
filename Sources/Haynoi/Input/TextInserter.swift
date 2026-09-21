@@ -43,6 +43,7 @@ enum TextInserter {
         let modifiersCleared = await waitForModifierRelease()
         if !modifiersCleared {
             NSLog("[Haynoi] ⚠️ Modifiers still held after ceiling — clipboard fallback")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
@@ -54,6 +55,7 @@ enum TextInserter {
 
         if !focusOK {
             NSLog("[Haynoi] ⚠️ Focus restore failed — clipboard fallback to avoid wrong-app paste")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
@@ -75,10 +77,12 @@ enum TextInserter {
             NSLog("[Haynoi] ⚠️ Frontmost mismatch after settle (%@ vs %@) — clipboard fallback",
                   frontmost?.bundleIdentifier ?? "?",
                   targetApp?.bundleIdentifier ?? "?")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         case .blockUnknownTarget:
             NSLog("[Haynoi] ⚠️ No target app and Haynoi is frontmost — clipboard fallback")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
@@ -96,6 +100,7 @@ enum TextInserter {
             switch await pasteViaClipboard(text, targetApp: targetApp) {
             case .taken:
                 NSLog("[Haynoi] Insert via Cmd+V")
+                PasteStats.record(.taken, app: targetApp?.bundleIdentifier)
                 // The paste now returns as soon as the app takes the text, which can
                 // be before it has drawn it. Keep the caret on the same budget it had
                 // before (300ms after ⌘V) or the derived span used by "fix that"
@@ -123,6 +128,7 @@ enum TextInserter {
             }
             if let span = axSpan, axInsertionLanded(before: beforeAX, after: focusedElementValue(in: app)) {
                 NSLog("[Haynoi] Insert via AX")
+                PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
                 // The field really changed, so the clipboard does not have to carry
                 // the sentence any more: give the user back whatever they copied.
                 if case .notTakenTextKept(let restoreUserClipboard) = pasteAttempt {
@@ -142,16 +148,20 @@ enum TextInserter {
         NSLog("[Haynoi] All insert methods failed, clipboard fallback")
         switch pasteAttempt {
         case .notTakenTextKept:
+            PasteStats.record(.keptForManualPaste, app: targetApp?.bundleIdentifier)
             // The paste path already left the sentence on the clipboard.
             // AX may have inserted after all — we could not read the field to know —
             // so this must not claim the text is missing, or ⌘V pastes it twice.
             notifyFallback(text, reason: "Press ⌘V if the text did not land.")
         case .notTakenClipboardIsTheirs:
+            PasteStats.record(.keptUserCopy, app: targetApp?.bundleIdentifier)
             // The user copied something while we were pasting — never clobber it.
             notifyFallback(text,
                            reason: "Your copy was kept — the sentence is in Haynoi's history.",
                            banner: "Kept your copy — sentence in History")
         default:
+            let outcome: PasteStats.Outcome = axTrusted ? .axUnconfirmed : .notAttempted
+            PasteStats.record(outcome, app: targetApp?.bundleIdentifier)
             // With accessibility granted this path may have been through the AX
             // write, which can insert without letting us confirm it — so it says
             // "if", the same as the case above. Without it, nothing was tried.
@@ -540,6 +550,14 @@ enum TextInserter {
             let r = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
             if r == .success {
                 NSLog("[Haynoi] replaceSpan: AX selectedText replace OK")
+                // Same rule as insert(), including its settle: a success code is
+                // not proof on the apps where this matters, and a field read the
+                // instant after the write calls a real edit unconfirmed.
+                try? await Task.sleep(nanoseconds: axSettleNs)
+                PasteStats.record(
+                    axInsertionLanded(before: currentValue, after: focusedElementValue(in: app))
+                        ? .takenViaAX : .axUnconfirmed,
+                    app: targetApp?.bundleIdentifier)
                 return true
             }
             NSLog("[Haynoi] replaceSpan: setSelectedText failed (%d), trying value splice", r.rawValue)
@@ -562,6 +580,11 @@ enum TextInserter {
                     AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, r)
                 }
                 NSLog("[Haynoi] replaceSpan: AX value splice OK")
+                try? await Task.sleep(nanoseconds: axSettleNs)
+                PasteStats.record(
+                    axInsertionLanded(before: value, after: focusedElementValue(in: app))
+                        ? .takenViaAX : .axUnconfirmed,
+                    app: targetApp?.bundleIdentifier)
                 return true
             }
         }
@@ -572,6 +595,7 @@ enum TextInserter {
             switch await pasteViaClipboard(newText, targetApp: targetApp) {
             case .taken:
                 NSLog("[Haynoi] replaceSpan: paste-over-selection OK")
+                PasteStats.record(.taken, app: targetApp?.bundleIdentifier)
                 return true
             case .notTakenTextKept(let restoreUserClipboard):
                 // Whatever happens next inserts the correction another way and takes

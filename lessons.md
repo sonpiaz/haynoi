@@ -65,8 +65,11 @@ launch path still read the function whose `#if DEBUG` had just been moved away,
 so a shipped build could have started invisible.
 
 Before committing a scripted edit: `git show --stat` / `git diff --stat` and read
-the list of files. If the script raised anything, assume nothing landed. And when
-two functions answer the same thing in Debug, no behaviour test can tell which
-one production calls — name them apart and check the source.
+the list of files. If the script raised anything, assume you do not know what
+landed — read the file list, do not re-run blindly, or the parts that did land get
+applied twice. And when two functions answer the same thing in Debug, no behaviour
+test can tell which one production calls — name them apart and check the source.
 
-cơ chế: `Tests/TestHostTests.swift` — `testTheLaunchPathAsksThePolicyAndNeverTheFact`.
+cơ chế: `Tests/TestHostTests.swift` —
+`testOnlyTheDataLayerAsksTheFactAndThePolicyHasFourCallers` (phần đặt tên và chỗ
+gọi); phần đọc `--stat` trước khi commit: **chưa có cơ chế**, mới là thói quen.
