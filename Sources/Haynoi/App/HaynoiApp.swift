@@ -12,14 +12,14 @@ struct HaynoiApp: App {
 
     init() {
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: !RunMode.shouldSkipRuntime(),
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: .constant(!RunMode.shouldSkipRuntime())) {
             MenuBarContent(updater: updaterController.updater)
                 .environmentObject(appState)
                 .environmentObject(authState)
@@ -732,8 +732,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
     }
 
+    /// Set once the launch path is past the test-host gate, before it starts the
+    /// hotkey, the pipeline and the windows. The tests read it: asserting on the
+    /// hotkey alone passes for the wrong reason on a machine where the debug
+    /// bundle id was never granted accessibility.
+    private(set) var didStartRuntime = false
+
+    /// The earliest any of our code runs. `LSUIElement` is false, so the process
+    /// is briefly a foreground app — a Dock icon appearing and going away, once
+    /// per test run. Setting the policy here shortens that window; the check-in
+    /// that opens it happens inside `NSApplication`'s own setup, where nothing of
+    /// ours can run first.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if RunMode.shouldSkipRuntime() {
+            NSApplication.shared.setActivationPolicy(.accessory)
+            NSLog("[Haynoi] XCTest host — menu bar only from willFinishLaunching")
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+
+        // Under XCTest this process is only a host for the test bundle. Booting
+        // the runtime here registers the global push-to-talk chord, opens the
+        // microphone and starts the updater on whatever machine runs the suite —
+        // a debug build competing for ⌥ with the person using the computer, once
+        // per test run. Stay in the menu bar, start nothing.
+        if RunMode.shouldSkipRuntime() {
+            NSApplication.shared.setActivationPolicy(.accessory)
+            NSLog("[Haynoi] Launched as the XCTest host — runtime not started")
+            return
+        }
+        didStartRuntime = true
 
         // Single-instance guard. Two copies of Haynoi (e.g. the installed
         // release + a debug build from Xcode) share one bundle id, so BOTH

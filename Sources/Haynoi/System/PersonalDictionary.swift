@@ -210,7 +210,7 @@ final class PersonalDictionary {
     static func isRunningTests(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
-        environment["XCTestConfigurationFilePath"] != nil
+        RunMode.isHostingXCTestBundle(environment: environment)
     }
 
     static func supportFolderName(
