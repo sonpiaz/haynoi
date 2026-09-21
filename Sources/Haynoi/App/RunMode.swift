@@ -12,7 +12,11 @@ enum RunMode {
     /// Whether XCTest launched this process as the test host. A fact, true in any
     /// configuration — decisions about *the owner's files* must be careful in all
     /// of them, so they read this one.
-    static func isUnderXCTest(
+    ///
+    /// Named apart from `shouldSkipRuntime` on purpose: the launch path read the
+    /// fact by mistake once, which silently dropped the guarantee that a shipped
+    /// build never switches itself off.
+    static func isHostingXCTestBundle(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
         environment["XCTestConfigurationFilePath"] != nil
@@ -27,7 +31,7 @@ enum RunMode {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
         #if DEBUG
-        return isUnderXCTest(environment: environment)
+        return isHostingXCTestBundle(environment: environment)
         #else
         return false
         #endif

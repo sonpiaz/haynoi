@@ -10,8 +10,8 @@ final class TestHostTests: XCTestCase {
     /// The check has to be true in exactly the situation it guards, and this test
     /// runs in that situation.
     func testTheAppKnowsItWasLaunchedByTheTestRunner() {
-        XCTAssertTrue(RunMode.isUnderXCTest(),
-                      "the launch path reads this to decide whether to start the runtime")
+        XCTAssertTrue(RunMode.isHostingXCTestBundle(),
+                      "everything below depends on this being the situation we are in")
     }
 
     /// The runtime — hotkey, pipeline, windows — must not have started. Asserting
@@ -33,8 +33,8 @@ final class TestHostTests: XCTestCase {
     /// start the runtime is a policy, and Release always says no.
     func testTheFactHoldsEverywhereAndThePolicyOnlyInDebug() {
         let asTestHost = ["XCTestConfigurationFilePath": "/tmp/x"]
-        XCTAssertFalse(RunMode.isUnderXCTest(environment: [:]), "no variable, no test run")
-        XCTAssertTrue(RunMode.isUnderXCTest(environment: asTestHost))
+        XCTAssertFalse(RunMode.isHostingXCTestBundle(environment: [:]), "no variable, no test run")
+        XCTAssertTrue(RunMode.isHostingXCTestBundle(environment: asTestHost))
         XCTAssertFalse(RunMode.shouldSkipRuntime(environment: [:]))
         #if DEBUG
         XCTAssertTrue(RunMode.shouldSkipRuntime(environment: asTestHost))
@@ -50,5 +50,19 @@ final class TestHostTests: XCTestCase {
         XCTAssertTrue(PersonalDictionary.isRunningTests(
             environment: ["XCTestConfigurationFilePath": "/tmp/x"]))
         XCTAssertFalse(PersonalDictionary.isRunningTests(environment: [:]))
+    }
+
+    /// Both functions answer the same question in Debug, so no behaviour test can
+    /// tell which one the launch path calls — and it called the wrong one once,
+    /// which quietly removed the promise that a shipped build never switches
+    /// itself off. Read the source instead.
+    func testTheLaunchPathAsksThePolicyAndNeverTheFact() throws {
+        let app = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/Haynoi/App/HaynoiApp.swift")
+        let source = try String(contentsOf: app, encoding: .utf8)
+        XCTAssertFalse(source.contains("isHostingXCTestBundle"),
+                       "the launch path must ask shouldSkipRuntime, which is false in Release")
+        XCTAssertTrue(source.contains("RunMode.shouldSkipRuntime()"))
     }
 }

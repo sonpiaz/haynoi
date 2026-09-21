@@ -12,14 +12,14 @@ struct HaynoiApp: App {
 
     init() {
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: !RunMode.isUnderXCTest(),
+            startingUpdater: !RunMode.shouldSkipRuntime(),
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
     }
 
     var body: some Scene {
-        MenuBarExtra(isInserted: .constant(!RunMode.isUnderXCTest())) {
+        MenuBarExtra(isInserted: .constant(!RunMode.shouldSkipRuntime())) {
             MenuBarContent(updater: updaterController.updater)
                 .environmentObject(appState)
                 .environmentObject(authState)
@@ -732,18 +732,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
     }
 
-    /// Runs before `applicationDidFinishLaunching`. `LSUIElement` is false, so a
-    /// test host spends its first fraction of a second as a foreground app — a
-    /// Dock icon appearing and going away, once per test run.
-    /// Set once the launch path has gone past the test-host gate and started the
+    /// Set once the launch path is past the test-host gate, before it starts the
     /// hotkey, the pipeline and the windows. The tests read it: asserting on the
     /// hotkey alone passes for the wrong reason on a machine where the debug
     /// bundle id was never granted accessibility.
     private(set) var didStartRuntime = false
 
+    /// The earliest any of our code runs. `LSUIElement` is false, so the process
+    /// is briefly a foreground app — a Dock icon appearing and going away, once
+    /// per test run. Setting the policy here shortens that window; the check-in
+    /// that opens it happens inside `NSApplication`'s own setup, where nothing of
+    /// ours can run first.
     func applicationWillFinishLaunching(_ notification: Notification) {
-        if RunMode.isUnderXCTest() {
+        if RunMode.shouldSkipRuntime() {
             NSApplication.shared.setActivationPolicy(.accessory)
+            NSLog("[Haynoi] XCTest host — menu bar only from willFinishLaunching")
         }
     }
 
@@ -755,7 +758,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // microphone and starts the updater on whatever machine runs the suite —
         // a debug build competing for ⌥ with the person using the computer, once
         // per test run. Stay in the menu bar, start nothing.
-        if RunMode.isUnderXCTest() {
+        if RunMode.shouldSkipRuntime() {
             NSApplication.shared.setActivationPolicy(.accessory)
             NSLog("[Haynoi] Launched as the XCTest host — runtime not started")
             return
