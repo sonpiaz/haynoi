@@ -110,9 +110,11 @@ enum TextInserter {
 
         // Step 3: AX insertion fallback (works for native macOS apps)
         if axTrusted {
+            // Resolve the app once and hand it down: checking one app's field while
+            // the write went to another is not a check.
             let app = targetApp ?? frontmost
             let beforeAX = focusedElementValue(in: app)
-            let axSpan = tryAXInsertionReturningSpan(text, targetApp: targetApp)
+            let axSpan = tryAXInsertionReturningSpan(text, targetApp: app)
             if axSpan != nil {
                 // Read the field back only after it has had a moment to update, or a
                 // real insertion looks like a failed one and the user is told to
@@ -150,7 +152,7 @@ enum TextInserter {
                            reason: "Your copy was kept — the sentence is in Haynoi's history.",
                            banner: "Kept your copy — sentence in History")
         default:
-            // With accessibility granted this path has still been through the AX
+            // With accessibility granted this path may have been through the AX
             // write, which can insert without letting us confirm it — so it says
             // "if", the same as the case above. Without it, nothing was tried.
             copyToClipboardWithNotification(text,

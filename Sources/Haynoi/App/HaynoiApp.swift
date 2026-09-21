@@ -12,14 +12,14 @@ struct HaynoiApp: App {
 
     init() {
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: !RunMode.isUnderXCTest,
+            startingUpdater: !RunMode.isUnderXCTest(),
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
     }
 
     var body: some Scene {
-        MenuBarExtra(isInserted: .constant(!RunMode.isUnderXCTest)) {
+        MenuBarExtra(isInserted: .constant(!RunMode.isUnderXCTest())) {
             MenuBarContent(updater: updaterController.updater)
                 .environmentObject(appState)
                 .environmentObject(authState)
@@ -732,6 +732,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
     }
 
+    /// Runs before `applicationDidFinishLaunching`. `LSUIElement` is false, so a
+    /// test host spends its first fraction of a second as a foreground app — a
+    /// Dock icon appearing and going away, once per test run.
+    /// Set once the launch path has gone past the test-host gate and started the
+    /// hotkey, the pipeline and the windows. The tests read it: asserting on the
+    /// hotkey alone passes for the wrong reason on a machine where the debug
+    /// bundle id was never granted accessibility.
+    private(set) var didStartRuntime = false
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if RunMode.isUnderXCTest() {
+            NSApplication.shared.setActivationPolicy(.accessory)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
@@ -740,11 +755,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         // microphone and starts the updater on whatever machine runs the suite —
         // a debug build competing for ⌥ with the person using the computer, once
         // per test run. Stay in the menu bar, start nothing.
-        if RunMode.isUnderXCTest {
+        if RunMode.isUnderXCTest() {
             NSApplication.shared.setActivationPolicy(.accessory)
             NSLog("[Haynoi] Launched as the XCTest host — runtime not started")
             return
         }
+        didStartRuntime = true
 
         // Single-instance guard. Two copies of Haynoi (e.g. the installed
         // release + a debug build from Xcode) share one bundle id, so BOTH
