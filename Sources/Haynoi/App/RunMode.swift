@@ -9,16 +9,25 @@ import Foundation
 /// owner was working on.
 enum RunMode {
 
-    /// True when XCTest launched this process as the test host.
-    ///
-    /// Release always answers false: a Developer ID build cannot host XCTest
-    /// (see the test target in `project.yml`), and the shipped app must never
-    /// switch its own features off because of an inherited environment variable.
+    /// Whether XCTest launched this process as the test host. A fact, true in any
+    /// configuration — decisions about *the owner's files* must be careful in all
+    /// of them, so they read this one.
     static func isUnderXCTest(
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> Bool {
+        environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    /// Whether to skip starting the app's runtime — menu bar item, updater,
+    /// hotkey, pipeline, windows. A policy, and only ever true in Debug: a
+    /// Developer ID build cannot host XCTest (see the test target in
+    /// `project.yml`), and the shipped app must never switch its own features off
+    /// because of an inherited environment variable.
+    static func shouldSkipRuntime(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
         #if DEBUG
-        return environment["XCTestConfigurationFilePath"] != nil
+        return isUnderXCTest(environment: environment)
         #else
         return false
         #endif

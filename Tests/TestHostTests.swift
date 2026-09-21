@@ -2,8 +2,8 @@ import XCTest
 @testable import Haynoi
 
 /// Running the suite used to boot the whole app: 22 launches in one hour showed
-/// up on Son's screen as Hãy Nói blinking on and off, each one registering the
-/// global ⌥ push-to-talk chord while he was working.
+/// up on the owner's screen as Hãy Nói blinking on and off, each one registering
+/// the global ⌥ push-to-talk chord while he was working.
 @MainActor
 final class TestHostTests: XCTestCase {
 
@@ -17,23 +17,38 @@ final class TestHostTests: XCTestCase {
     /// The runtime — hotkey, pipeline, windows — must not have started. Asserting
     /// on the hotkey alone would pass for the wrong reason on a machine where the
     /// debug bundle id was never granted accessibility, so read the flag the
-    /// launch path sets only after it has gone past the gate.
-    func testTheRuntimeIsNotStartedWhileTestsRun() {
-        XCTAssertFalse(AppDelegate.shared?.didStartRuntime ?? false,
+    /// launch path sets only after it is past the gate.
+    func testTheRuntimeIsNotStartedWhileTestsRun() throws {
+        let delegate = try XCTUnwrap(AppDelegate.shared,
+                                     "no delegate means this test checked nothing")
+        XCTAssertFalse(delegate.didStartRuntime,
                        "the test host must not start the app's runtime")
         XCTAssertFalse(HotkeyManager.shared.isMonitoring,
                        "a debug instance holding ⌥ steals push-to-talk from whoever is at the machine")
     }
 
-    /// Release must never switch itself off because of an inherited variable.
-    func testTheFlagIsOnlyEverTrueInADebugTestRun() {
-        XCTAssertFalse(RunMode.isUnderXCTest(environment: [:]),
-                       "no variable, no test run")
+    /// Two questions, deliberately answered differently. Whether a test runner
+    /// started us is a fact, and the code deciding where the owner's files live
+    /// must get the careful answer in every configuration. Whether to refuse to
+    /// start the runtime is a policy, and Release always says no.
+    func testTheFactHoldsEverywhereAndThePolicyOnlyInDebug() {
+        let asTestHost = ["XCTestConfigurationFilePath": "/tmp/x"]
+        XCTAssertFalse(RunMode.isUnderXCTest(environment: [:]), "no variable, no test run")
+        XCTAssertTrue(RunMode.isUnderXCTest(environment: asTestHost))
+        XCTAssertFalse(RunMode.shouldSkipRuntime(environment: [:]))
         #if DEBUG
-        XCTAssertTrue(RunMode.isUnderXCTest(environment: ["XCTestConfigurationFilePath": "/tmp/x"]))
+        XCTAssertTrue(RunMode.shouldSkipRuntime(environment: asTestHost))
         #else
-        XCTAssertFalse(RunMode.isUnderXCTest(environment: ["XCTestConfigurationFilePath": "/tmp/x"]),
-                       "a release build answers false whatever the environment says")
+        XCTAssertFalse(RunMode.shouldSkipRuntime(environment: asTestHost),
+                       "a release build starts its runtime whatever the environment says")
         #endif
+    }
+
+    /// The dictionary decides where the owner's file lives from the fact, so it
+    /// stays careful even in a configuration where the runtime would start.
+    func testTheDictionaryReadsTheFactNotThePolicy() {
+        XCTAssertTrue(PersonalDictionary.isRunningTests(
+            environment: ["XCTestConfigurationFilePath": "/tmp/x"]))
+        XCTAssertFalse(PersonalDictionary.isRunningTests(environment: [:]))
     }
 }

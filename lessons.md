@@ -30,3 +30,27 @@ The 2.5s deadline is “don’t leave him empty-handed,” not “Quality is dea
 the better transcript. Keep the cloud request running; paste Apple at 2.5s;
 `replaceSpan` (no fallback insert) when Quality arrives if the span is still
 intact and the user did not switch apps. On cloud error, keep Apple.
+
+## Running the tests must not run the app on someone's machine (2026-09-20)
+
+The suite uses the app as its test host, so every `xcodebuild test` launched a
+debug Hãy Nói: a second menu bar icon for a few seconds, the updater, and the
+global ⌥ push-to-talk chord — 22 times in one hour, on the machine its owner was
+working on. From the outside it looked like the app switching itself on and off.
+
+Two rules:
+
+- A test run may not start anything that touches the machine. `RunMode` answers
+  it once; the launch path, the menu bar scene and the updater read it.
+- Keep two questions apart. *Was I started by a test runner?* is a fact and has
+  to be answered honestly in every configuration, because the code deciding
+  where the owner's files live reads it. *Should I refuse to start the runtime?*
+  is a policy, and a Release build always answers no — a shipped app must never
+  disable itself over an inherited environment variable.
+
+Still open, same family: `history.json` is a hardcoded path with no bundle-id and
+no test awareness, so a debug build reads and writes the owner's real history —
+exactly the shape of the dictionary loss on 2026-09-17, which `dictionary.json`
+now guards against on both counts.
+
+cơ chế: `Tests/TestHostTests.swift`.
