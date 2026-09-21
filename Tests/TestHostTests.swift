@@ -55,14 +55,30 @@ final class TestHostTests: XCTestCase {
     /// Both functions answer the same question in Debug, so no behaviour test can
     /// tell which one the launch path calls — and it called the wrong one once,
     /// which quietly removed the promise that a shipped build never switches
-    /// itself off. Read the source instead.
-    func testTheLaunchPathAsksThePolicyAndNeverTheFact() throws {
-        let app = URL(fileURLWithPath: #filePath)
+    /// itself off. Read the source instead, across every file: the same mistake
+    /// made anywhere else carries the same bug. Matching is deliberately blunt —
+    /// a comment naming the fact function turns this red, which is the price of a
+    /// check that cannot be talked around.
+    func testOnlyTheDataLayerAsksTheFactAndThePolicyHasFourCallers() throws {
+        let sources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/Haynoi/App/HaynoiApp.swift")
-        let source = try String(contentsOf: app, encoding: .utf8)
-        XCTAssertFalse(source.contains("isHostingXCTestBundle"),
-                       "the launch path must ask shouldSkipRuntime, which is false in Release")
-        XCTAssertTrue(source.contains("RunMode.shouldSkipRuntime()"))
+            .appendingPathComponent("Sources")
+        let mayAskTheFact = ["RunMode.swift", "PersonalDictionary.swift"]
+        var policyCallSites = 0
+
+        let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+        XCTAssertFalse(files.isEmpty, "no sources found at \(sources.path)")
+
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            policyCallSites += source.components(separatedBy: "RunMode.shouldSkipRuntime(").count - 1
+            guard !mayAskTheFact.contains(file.lastPathComponent) else { continue }
+            XCTAssertFalse(source.contains("isHostingXCTestBundle"),
+                           "\(file.lastPathComponent) asks the fact; only the data layer may")
+        }
+
+        XCTAssertEqual(policyCallSites, 4,
+                       "the updater, the menu bar scene and both launch callbacks — four, and no more")
     }
 }

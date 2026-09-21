@@ -43,6 +43,7 @@ enum TextInserter {
         let modifiersCleared = await waitForModifierRelease()
         if !modifiersCleared {
             NSLog("[Haynoi] ⚠️ Modifiers still held after ceiling — clipboard fallback")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
@@ -54,6 +55,7 @@ enum TextInserter {
 
         if !focusOK {
             NSLog("[Haynoi] ⚠️ Focus restore failed — clipboard fallback to avoid wrong-app paste")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
@@ -75,10 +77,12 @@ enum TextInserter {
             NSLog("[Haynoi] ⚠️ Frontmost mismatch after settle (%@ vs %@) — clipboard fallback",
                   frontmost?.bundleIdentifier ?? "?",
                   targetApp?.bundleIdentifier ?? "?")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         case .blockUnknownTarget:
             NSLog("[Haynoi] ⚠️ No target app and Haynoi is frontmost — clipboard fallback")
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             copyToClipboardWithNotification(text, reason: "Press ⌘V to paste.")
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
@@ -96,6 +100,7 @@ enum TextInserter {
             switch await pasteViaClipboard(text, targetApp: targetApp) {
             case .taken:
                 NSLog("[Haynoi] Insert via Cmd+V")
+                PasteStats.record(.taken, app: targetApp?.bundleIdentifier)
                 // The paste now returns as soon as the app takes the text, which can
                 // be before it has drawn it. Keep the caret on the same budget it had
                 // before (300ms after ⌘V) or the derived span used by "fix that"
@@ -123,6 +128,7 @@ enum TextInserter {
             }
             if let span = axSpan, axInsertionLanded(before: beforeAX, after: focusedElementValue(in: app)) {
                 NSLog("[Haynoi] Insert via AX")
+                PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
                 // The field really changed, so the clipboard does not have to carry
                 // the sentence any more: give the user back whatever they copied.
                 if case .notTakenTextKept(let restoreUserClipboard) = pasteAttempt {
@@ -142,16 +148,19 @@ enum TextInserter {
         NSLog("[Haynoi] All insert methods failed, clipboard fallback")
         switch pasteAttempt {
         case .notTakenTextKept:
+            PasteStats.record(.keptForManualPaste, app: targetApp?.bundleIdentifier)
             // The paste path already left the sentence on the clipboard.
             // AX may have inserted after all — we could not read the field to know —
             // so this must not claim the text is missing, or ⌘V pastes it twice.
             notifyFallback(text, reason: "Press ⌘V if the text did not land.")
         case .notTakenClipboardIsTheirs:
+            PasteStats.record(.keptUserCopy, app: targetApp?.bundleIdentifier)
             // The user copied something while we were pasting — never clobber it.
             notifyFallback(text,
                            reason: "Your copy was kept — the sentence is in Haynoi's history.",
                            banner: "Kept your copy — sentence in History")
         default:
+            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
             // With accessibility granted this path may have been through the AX
             // write, which can insert without letting us confirm it — so it says
             // "if", the same as the case above. Without it, nothing was tried.
