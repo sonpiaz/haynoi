@@ -14,11 +14,11 @@ final class RetiredModelTests: XCTestCase {
     /// caught exactly the shape it was written against: a literal on the same
     /// line. A review moved the name into a constant and the check stayed green
     /// while the app still asked for a dead model. It now looks for the name
-    /// anywhere outside a comment, so a constant, a struct field, a two-line call
-    /// or a concatenation all trip it.
+    /// anywhere outside a comment, so a constant, a struct field and a two-line
+    /// call all trip it. Measured by a review: five of the eight shapes it tried.
     ///
-    /// What it still cannot see: a name assembled at runtime, and anything behind
-    /// a server-side alias — `transcribe-quality` is resolved by the server, and
+    /// What it still cannot see: a name split across a concatenation, a name
+    /// assembled at runtime, and anything behind a server-side alias — `transcribe-quality` is resolved by the server, and
     /// the model behind it has its own retirement date. That needs the catalog,
     /// not the source.
     func testNoSourceStillNamesARetiredModel() throws {
@@ -31,9 +31,13 @@ final class RetiredModelTests: XCTestCase {
 
         for file in files {
             for line in try String(contentsOf: file, encoding: .utf8).split(separator: "\n") {
-                // A comment explaining the move is fine; code asking for it is not.
-                let code = line.trimmingCharacters(in: .whitespaces)
-                guard !code.hasPrefix("//"), !code.hasPrefix("///") else { continue }
+                // A comment explaining the move is fine; code asking for it is
+                // not — including the trailing comment on a line of code, which
+                // is the first thing the next person is likely to write.
+                let code = String(line.prefix(while: { _ in true }))
+                    .components(separatedBy: "//").first?
+                    .trimmingCharacters(in: .whitespaces) ?? ""
+                guard !code.isEmpty else { continue }
                 for (name, date) in retired where code.contains(name) {
                     XCTFail("\(file.lastPathComponent) still names \(name), which stops answering \(date): \(code)")
                 }

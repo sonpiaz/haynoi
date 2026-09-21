@@ -567,7 +567,7 @@ enum STTProvider {
             //
             // Measured 2026-09-21 on both prompts this function sends, in
             // Vietnamese, by two people independently: the two models are within
-            // noise of each other on latency — roughly 0.8–1.8s either way, with
+            // noise of each other on latency — roughly 0.8–2.0s either way, with
             // the slowest single call of the day belonging to the old model. Do
             // not read an ordering into those numbers; the runs disagreed.
             // What did separate them: on a long, code-switched email the lite
