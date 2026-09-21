@@ -15,7 +15,8 @@ final class RetiredModelTests: XCTestCase {
     /// line. A review moved the name into a constant and the check stayed green
     /// while the app still asked for a dead model. It now looks for the name
     /// anywhere outside a comment, so a constant, a struct field and a two-line
-    /// call all trip it. Measured by a review: five of the eight shapes it tried.
+    /// call all trip it, as does a name inside a URL string. Measured by a
+    /// review: five of the eight shapes it tried.
     ///
     /// What it still cannot see: a name split across a concatenation, a name
     /// assembled at runtime, and anything behind a server-side alias — `transcribe-quality` is resolved by the server, and
@@ -33,11 +34,12 @@ final class RetiredModelTests: XCTestCase {
             for line in try String(contentsOf: file, encoding: .utf8).split(separator: "\n") {
                 // A comment explaining the move is fine; code asking for it is
                 // not — including the trailing comment on a line of code, which
-                // is the first thing the next person is likely to write.
-                let code = String(line.prefix(while: { _ in true }))
-                    .components(separatedBy: "//").first?
+                // is the first thing the next person is likely to write. Split on
+                // " //" and not "//", or every model name inside a URL string
+                // ("https://…/models/<name>") would be invisible to this check.
+                let code = String(line).components(separatedBy: " //").first?
                     .trimmingCharacters(in: .whitespaces) ?? ""
-                guard !code.isEmpty else { continue }
+                guard !code.isEmpty, !code.hasPrefix("//") else { continue }
                 for (name, date) in retired where code.contains(name) {
                     XCTFail("\(file.lastPathComponent) still names \(name), which stops answering \(date): \(code)")
                 }

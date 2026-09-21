@@ -93,5 +93,6 @@ at runtime, and anything behind a server-side alias — `transcribe-quality` is
 resolved by the server, and the model behind it retires 2027-02-26. Those need
 the catalog, which publishes `retires_on`, not the source.
 
-cơ chế: `Tests/RetiredModelTests.swift`; phần alias: vé riêng cho một job đọc
-`/v1/models`, **chưa có**.
+cơ chế: `Tests/RetiredModelTests.swift`; phần alias: **W37-1672** (job đọc
+`retires_on` từ `/v1/models`), chưa làm. Cùng vòng duyệt còn mở **W37-1673**:
+gợi ý phát âm sửa "Hà Nội" thành "Haynoi" — sửa sai một từ người dùng nói đúng.
