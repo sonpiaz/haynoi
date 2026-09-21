@@ -555,9 +555,15 @@ enum STTProvider {
         )
 
         let body: [String: Any] = [
-            // Benchmarked 2026-06-10: gemini-2.5-flash 1.7s clean output;
-            // qwen-3-32b (alias "fast") leaks <think> tags and takes 8s.
-            "model": "gemini-2.5-flash",
+            // gemini-2.5-flash retires upstream on 2026-10-20 and then 404s.
+            // Measured 2026-09-21 on both prompts this function serves — the
+            // grounded correction pass and the email rewrite — twice each, in
+            // Vietnamese: gemini-3.5-flash-lite 0.88–1.13s, every misheard term
+            // corrected, no preamble and no think tags; gemini-2.5-flash
+            // 0.98–1.34s; claude-haiku-4-5 1.20–2.42s; gemini-3.5-flash 3.2s.
+            // The earlier note stands for the alias called "fast" (qwen-3-32b):
+            // it leaks <think> tags and takes 8s, so it is not a candidate.
+            "model": "gemini-3.5-flash-lite",
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
