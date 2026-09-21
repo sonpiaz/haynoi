@@ -214,8 +214,13 @@ enum STTProvider {
         formatting, no additions or removals. Return only the corrected text.
         """
 
-    /// Resolves the model alias from the user's quality setting. The proxy
-    /// passes these verbatim to Kyma.
+    /// Resolves the model alias from the user's quality setting.
+    ///
+    /// These are aliases the server resolves, not catalog names: "transcribe-quality"
+    /// currently answers as gpt-4o-mini-transcribe-2025-12-15, which the catalog says
+    /// retires 2027-02-26, and "transcribe" as whisper-v3-turbo. The retirement guard
+    /// in the tests cannot see behind an alias — that needs the catalog, which is why
+    /// there is a ticket for a job that reads `retires_on` from /v1/models.
     private static func resolveModel() -> String {
         let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "quality"
         return quality == "quality" ? "transcribe-quality" : "transcribe"
@@ -556,13 +561,22 @@ enum STTProvider {
 
         let body: [String: Any] = [
             // gemini-2.5-flash retires upstream on 2026-10-20 and then 404s.
-            // Measured 2026-09-21 on both prompts this function serves — the
-            // grounded correction pass and the email rewrite — twice each, in
-            // Vietnamese: gemini-3.5-flash-lite 0.88–1.13s, every misheard term
-            // corrected, no preamble and no think tags; gemini-2.5-flash
-            // 0.98–1.34s; claude-haiku-4-5 1.20–2.42s; gemini-3.5-flash 3.2s.
-            // The earlier note stands for the alias called "fast" (qwen-3-32b):
-            // it leaks <think> tags and takes 8s, so it is not a candidate.
+            // gemini-3.5-flash-lite is stable, has no retirement date announced,
+            // and costs the same per token, so moving changes nothing but the
+            // deadline.
+            //
+            // Measured 2026-09-21 on both prompts this function sends, in
+            // Vietnamese, by two people independently: the two models are within
+            // noise of each other on latency — roughly 0.8–1.8s either way, with
+            // the slowest single call of the day belonging to the old model. Do
+            // not read an ordering into those numbers; the runs disagreed.
+            // What did separate them: on a long, code-switched email the lite
+            // model kept the English terms the speaker used, while
+            // gemini-2.5-flash translated them — which the prompt forbids. Both
+            // corrected every glossary term and returned clean text.
+            //
+            // The alias called "fast" (qwen-3-32b) is still not a candidate: it
+            // leaks <think> tags and takes 8s.
             "model": "gemini-3.5-flash-lite",
             "temperature": 0.3,
             "max_tokens": 1024,

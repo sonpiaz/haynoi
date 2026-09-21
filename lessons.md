@@ -73,3 +73,25 @@ test can tell which one production calls — name them apart and check the sourc
 cơ chế: `Tests/TestHostTests.swift` —
 `testOnlyTheDataLayerAsksTheFactAndThePolicyHasFourCallers` (phần đặt tên và chỗ
 gọi); phần đọc `--stat` trước khi commit: **chưa có cơ chế**, mới là thói quen.
+
+## A gate written against one shape only catches that shape (2026-09-21)
+
+gemini-2.5-flash stops answering on 2026-10-20. Nothing here fails loudly when
+it does: the email rewrite keeps the raw transcript and the correction pass is
+wrapped in `try?`, so the deadline would have arrived as a feature going quiet.
+
+The guard added with the fix scanned lines containing `"model"`, and a mutation
+proved it — the author's own mutation used a literal on that same line, which is
+the shape the check was written against. A review moved the name into a private
+constant and the suite stayed green while the app still asked for a dead model.
+**Mutating your own guard with the shape you had in mind proves nothing.** Hand
+it to someone who will try a shape you did not.
+
+The check now looks for the name on any non-comment line. Two things it still
+cannot see, written down so nobody reads it as more than it is: a name assembled
+at runtime, and anything behind a server-side alias — `transcribe-quality` is
+resolved by the server, and the model behind it retires 2027-02-26. Those need
+the catalog, which publishes `retires_on`, not the source.
+
+cơ chế: `Tests/RetiredModelTests.swift`; phần alias: vé riêng cho một job đọc
+`/v1/models`, **chưa có**.
