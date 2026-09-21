@@ -45,7 +45,10 @@ enum PasteStats {
             PersonalDictionary.supportFolderName(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests),
             isDirectory: true
         )
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        // No createDirectory here: `save()` makes it when there is something to
+        // write. A lookup that touches the disk turns "where would this live?"
+        // into "make this", and the test that asserts we stay out of the owner's
+        // folder would be the one creating it on a fresh machine.
         return dir.appendingPathComponent("paste-stats.json")
     }
 
@@ -72,9 +75,16 @@ enum PasteStats {
 
     private static func save(_ counts: [String: [String: Int]]) {
         guard let data = try? JSONEncoder().encode(counts) else { return }
-        try? FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(),
-                                                 withIntermediateDirectories: true)
-        try? data.write(to: storeURL, options: .atomic)
+        do {
+            try FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try data.write(to: storeURL, options: .atomic)
+        } catch {
+            // Never throws into the dictation path — but never silent either: a
+            // file that stops growing reads as "nothing ever failed", which is
+            // the wrong answer these counters exist to prevent.
+            NSLog("[Haynoi] paste stats not written: %@", error.localizedDescription)
+        }
     }
 
     /// Waits for pending writes — tests only.

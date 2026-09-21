@@ -16,6 +16,7 @@ final class PasteStatsTests: XCTestCase {
 
     override func tearDown() {
         try? FileManager.default.removeItem(at: tmp)
+        PasteStats.storeURL = PasteStats.defaultFileURL()
         super.tearDown()
     }
 
@@ -59,7 +60,9 @@ final class PasteStatsTests: XCTestCase {
         let outcomes = Set(PasteStats.Outcome.allCases.map(\.rawValue))
 
         for (app, counts) in decoded {
-            XCTAssertTrue(app == "unknown" || app.contains("."),
+            // "hôm nay trời đẹp." passed the old check: a Vietnamese sentence
+            // ends in a period, and a period was all it asked for.
+            XCTAssertTrue(app == "unknown" || app.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil,
                           "a key that is not a bundle id could be anything: \(app)")
             let perOutcome = try XCTUnwrap(counts as? [String: Int],
                                            "values are counts, nothing else")
@@ -69,23 +72,41 @@ final class PasteStatsTests: XCTestCase {
         }
     }
 
-    /// Every call site has to name the app, or a count lands under "unknown" and
-    /// the numbers stop meaning anything per app.
-    func testEveryCallSitePassesABundleIdentifier() throws {
+    /// Every call site has to pass the target's bundle id. Checking the line for
+    /// an `app:` label was not enough — it says nothing about what is passed, and
+    /// a call that wraps across lines slips a line-based check entirely. Read the
+    /// whole call.
+    func testEveryCallSitePassesTheTargetBundleIdentifier() throws {
         let sources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources")
         let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
         var callSites = 0
+
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
-            for line in source.split(separator: "\n") where line.contains("PasteStats.record(") {
+            var rest = Substring(source)
+            while let hit = rest.range(of: "PasteStats.record(") {
                 callSites += 1
-                XCTAssertTrue(line.contains("app:"), "a record without an app: \(line.trimmingCharacters(in: .whitespaces))")
+                var depth = 0
+                var call = ""
+                for character in rest[hit.lowerBound...] {
+                    call.append(character)
+                    if character == "(" { depth += 1 }
+                    if character == ")" {
+                        depth -= 1
+                        if depth == 0 { break }
+                    }
+                }
+                XCTAssertTrue(call.contains("app: targetApp?.bundleIdentifier"),
+                              "a record must pass the target's bundle id, not something else: "
+                              + call.replacingOccurrences(of: "\n", with: " "))
+                rest = rest[hit.upperBound...]
             }
         }
-        XCTAssertGreaterThan(callSites, 8, "the outcomes of insert() and replaceSpan()")
+
+        XCTAssertEqual(callSites, 12, "every outcome of insert() and replaceSpan(), counted exactly")
     }
 
     /// The counters must never be written next to the owner's real files from a

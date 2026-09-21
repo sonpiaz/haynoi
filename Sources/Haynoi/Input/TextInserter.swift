@@ -550,7 +550,12 @@ enum TextInserter {
             let r = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
             if r == .success {
                 NSLog("[Haynoi] replaceSpan: AX selectedText replace OK")
-                PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
+                // Same rule as insert(): a success code is not proof on the apps
+                // where this matters. Count what the field says, not what AX said.
+                PasteStats.record(
+                    axInsertionLanded(before: currentValue, after: focusedElementValue(in: app))
+                        ? .takenViaAX : .axUnconfirmed,
+                    app: targetApp?.bundleIdentifier)
                 return true
             }
             NSLog("[Haynoi] replaceSpan: setSelectedText failed (%d), trying value splice", r.rawValue)
@@ -573,7 +578,10 @@ enum TextInserter {
                     AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, r)
                 }
                 NSLog("[Haynoi] replaceSpan: AX value splice OK")
-                PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
+                PasteStats.record(
+                    axInsertionLanded(before: value, after: focusedElementValue(in: app))
+                        ? .takenViaAX : .axUnconfirmed,
+                    app: targetApp?.bundleIdentifier)
                 return true
             }
         }
