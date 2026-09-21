@@ -63,7 +63,7 @@ final class TestHostTests: XCTestCase {
         let sources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources")
-        let mayAskTheFact = ["RunMode.swift", "PersonalDictionary.swift"]
+        let mayAskTheFact = ["RunMode.swift", "PersonalDictionary.swift", "PasteStats.swift"]
         var policyCallSites = 0
 
         let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?
@@ -80,5 +80,12 @@ final class TestHostTests: XCTestCase {
 
         XCTAssertEqual(policyCallSites, 4,
                        "the updater, the menu bar scene and both launch callbacks — four, and no more")
+
+        // Counting anywhere is not enough: all four belong to the launch path,
+        // and moving them out of it would otherwise keep this green.
+        let launchPath = try String(contentsOf: sources.appendingPathComponent("Haynoi/App/HaynoiApp.swift"),
+                                    encoding: .utf8)
+        XCTAssertEqual(launchPath.components(separatedBy: "RunMode.shouldSkipRuntime(").count - 1, 4,
+                       "the four call sites live in the launch path itself")
     }
 }

@@ -160,7 +160,8 @@ enum TextInserter {
                            reason: "Your copy was kept — the sentence is in Haynoi's history.",
                            banner: "Kept your copy — sentence in History")
         default:
-            PasteStats.record(.notAttempted, app: targetApp?.bundleIdentifier)
+            let outcome: PasteStats.Outcome = axTrusted ? .axUnconfirmed : .notAttempted
+            PasteStats.record(outcome, app: targetApp?.bundleIdentifier)
             // With accessibility granted this path may have been through the AX
             // write, which can insert without letting us confirm it — so it says
             // "if", the same as the case above. Without it, nothing was tried.
@@ -549,6 +550,7 @@ enum TextInserter {
             let r = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
             if r == .success {
                 NSLog("[Haynoi] replaceSpan: AX selectedText replace OK")
+                PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
                 return true
             }
             NSLog("[Haynoi] replaceSpan: setSelectedText failed (%d), trying value splice", r.rawValue)
@@ -571,6 +573,7 @@ enum TextInserter {
                     AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, r)
                 }
                 NSLog("[Haynoi] replaceSpan: AX value splice OK")
+                PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
                 return true
             }
         }
@@ -581,6 +584,7 @@ enum TextInserter {
             switch await pasteViaClipboard(newText, targetApp: targetApp) {
             case .taken:
                 NSLog("[Haynoi] replaceSpan: paste-over-selection OK")
+                PasteStats.record(.taken, app: targetApp?.bundleIdentifier)
                 return true
             case .notTakenTextKept(let restoreUserClipboard):
                 // Whatever happens next inserts the correction another way and takes

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// "About one in ten does not paste" is not a number anyone can act on, and the
 /// app had no way to tell a paste that landed from one that vanished. This keeps
-/// four counters per app id — never a word of what was said, never a timestamp of
+/// a counter per outcome per app id — never a word of what was said, never a timestamp of
 /// it — so the next question about auto-paste can be answered with a measurement.
 enum PasteStats {
 
@@ -17,17 +17,40 @@ enum PasteStats {
         case keptForManualPaste
         /// Nobody read it, and the user's own copy was kept instead.
         case keptUserCopy
-        /// The paste was never attempted: wrong app up front, modifiers held,
-        /// no accessibility permission.
+        /// No ⌘V was posted at all: wrong app up front, modifiers held, or no
+        /// accessibility permission.
         case notAttempted
+        /// ⌘V was not taken and the AX write reported success without the field
+        /// changing — so the sentence may or may not be in the box. Counted
+        /// apart, because calling it a failure would overstate what we saw.
+        case axUnconfirmed
     }
 
-    /// Overridable so tests never touch the real file.
-    static var storeURL: URL = {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Haynoi", isDirectory: true)
+    /// Where the counters live. Same isolation as the dictionary: a debug build
+    /// writes to its own folder, and a test run writes to a temp directory —
+    /// without it, an ordinary ⌘R run would mix its numbers into the ones these
+    /// counters exist to measure, and the guarantee written after the dictionary
+    /// was wiped on 2026-09-17 would have a hole in it.
+    static func defaultFileURL(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = RunMode.isHostingXCTestBundle()
+    ) -> URL {
+        let fm = FileManager.default
+        var base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
+        if isRunningTests {
+            base = fm.temporaryDirectory
+                .appendingPathComponent("HaynoiTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+        }
+        let dir = base.appendingPathComponent(
+            PersonalDictionary.supportFolderName(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests),
+            isDirectory: true
+        )
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("paste-stats.json")
-    }()
+    }
+
+    /// Overridable so a test can point at a file of its own.
+    static var storeURL: URL = defaultFileURL()
 
     private static let queue = DispatchQueue(label: "com.sonpiaz.haynoi.paste-stats")
 
