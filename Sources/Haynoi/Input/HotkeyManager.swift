@@ -91,6 +91,10 @@ final class HotkeyManager {
 
     // NSEvent monitor handles (global = other apps, local = Haynoi frontmost)
     private var globalMonitor: Any?
+
+    /// Whether the global push-to-talk monitor is installed. Read by the tests:
+    /// a debug instance holding ⌥ takes the chord from whoever is at the machine.
+    var isMonitoring: Bool { globalMonitor != nil }
     private var localMonitor: Any?
     private var secureInputTimer: Timer?
 

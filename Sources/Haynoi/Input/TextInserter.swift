@@ -110,7 +110,7 @@ enum TextInserter {
 
         // Step 3: AX insertion fallback (works for native macOS apps)
         if axTrusted {
-            let app = targetApp ?? NSWorkspace.shared.frontmostApplication
+            let app = targetApp ?? frontmost
             let beforeAX = focusedElementValue(in: app)
             let axSpan = tryAXInsertionReturningSpan(text, targetApp: targetApp)
             if axSpan != nil {
@@ -132,7 +132,7 @@ enum TextInserter {
                 return InsertionResult(inserted: text, span: usable, targetApp: targetApp)
             }
             if axSpan != nil {
-                NSLog("[Haynoi] AX reported success but the field did not change — not trusting it")
+                NSLog("[Haynoi] AX reported success but the field change could not be confirmed — not trusting it")
             }
         }
 
@@ -150,9 +150,12 @@ enum TextInserter {
                            reason: "Your copy was kept — the sentence is in Haynoi's history.",
                            banner: "Kept your copy — sentence in History")
         default:
+            // With accessibility granted this path has still been through the AX
+            // write, which can insert without letting us confirm it — so it says
+            // "if", the same as the case above. Without it, nothing was tried.
             copyToClipboardWithNotification(text,
                 reason: axTrusted
-                    ? "Auto-paste failed. Press ⌘V to paste."
+                    ? "Press ⌘V if the text did not land."
                     : "Grant Accessibility in System Settings."
             )
         }
@@ -272,6 +275,13 @@ enum TextInserter {
 
     // MARK: - AX Direct Insert (Fix #4)
 
+    /// AX direct insert. Returns the UTF-16 span the inserted text now occupies,
+    /// or nil if all AX paths failed. When the selectedText path succeeds but the
+    /// pre-insert caret was unknown, the returned span has `location == NSNotFound`
+    /// (length set), signalling "inserted, location unknown" to the caller.
+    ///
+    /// A span is not proof the text arrived: the write succeeds on apps that drop
+    /// it. Callers check `axInsertionLanded` before believing it.
     private static func tryAXInsertionReturningSpan(_ text: String, targetApp: NSRunningApplication?) -> NSRange? {
         guard let app = targetApp ?? NSWorkspace.shared.frontmostApplication else { return nil }
         let element = AXUIElementCreateApplication(app.processIdentifier)
