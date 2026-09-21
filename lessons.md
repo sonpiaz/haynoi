@@ -54,3 +54,19 @@ exactly the shape of the dictionary loss on 2026-09-17, which `dictionary.json`
 now guards against on both counts.
 
 cơ chế: `Tests/TestHostTests.swift`.
+
+## A scripted multi-file edit that throws leaves half the change (2026-09-20)
+
+A patch script wrote `RunMode.swift` and the tests, then hit an assertion before
+it reached `HaynoiApp.swift`. `git add -A` staged what had changed, the suite
+went green — it only exercised `RunMode` on its own — and the commit message,
+`lessons.md` and a test all announced a guarantee the code did not have: the
+launch path still read the function whose `#if DEBUG` had just been moved away,
+so a shipped build could have started invisible.
+
+Before committing a scripted edit: `git show --stat` / `git diff --stat` and read
+the list of files. If the script raised anything, assume nothing landed. And when
+two functions answer the same thing in Debug, no behaviour test can tell which
+one production calls — name them apart and check the source.
+
+cơ chế: `Tests/TestHostTests.swift` — `testTheLaunchPathAsksThePolicyAndNeverTheFact`.
