@@ -96,3 +96,24 @@ the catalog, which publishes `retires_on`, not the source.
 cơ chế: `Tests/RetiredModelTests.swift`; phần alias: **W37-1672** (job đọc
 `retires_on` từ `/v1/models`), chưa làm. Cùng vòng duyệt còn mở **W37-1673**:
 gợi ý phát âm sửa "Hà Nội" thành "Haynoi" — sửa sai một từ người dùng nói đúng.
+
+## A silence gate must look for a voice, not at the average (2026-09-22)
+
+The gate before transcription compared the RMS of the whole recording with a
+fixed 0.005. On 2026-09-22 23:00–23:41 it dropped seven real dictations as
+"No speech detected": a quiet voice at night with pauses between sentences
+averages under that, even when every spoken frame is well above the room. The
+audio was discarded before the network, so there was no request, no saved
+recording to retry, and the only trace was the error tone.
+
+Judge 30 ms frames against the recording's own noise floor, and keep the old
+average as a pass so nothing that used to go through stops going through. The
+start tone reaches the mic, so the minimum stretch of voice must be longer
+than the tone (0.42 s → 0.6 s).
+
+How it was found without reading a word: the error tone has its own length in
+the unified log (0.75 s vs 0.66 start / 0.66 stop), no request followed, the
+engine stayed warm (rules out the mic watchdog), and `failed/` got nothing
+(rules out a transcription failure).
+
+cơ chế: `Tests/SpeechGateTests.swift`.

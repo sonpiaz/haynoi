@@ -24,10 +24,6 @@ final class PipelineController {
     // will reject the audio and the buffer can become very large.
     private let maxRecordingDuration: TimeInterval = 300
 
-    // Fix #3: silence gate threshold extracted to a named constant.
-    // Future work: replace with adaptive per-session calibration.
-    private let silenceRMSThreshold: Float = 0.005
-
     // Retained for legacy call-sites; actual clear is now in AppState.setTransientError
     private var errorClearTimer: Timer?
 
@@ -274,9 +270,7 @@ final class PipelineController {
         }
 
         // Fix #3: silence detection gives visible feedback
-        let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
-        NSLog("[Haynoi] Audio RMS: %.5f (threshold %.5f)", rms, silenceRMSThreshold)
-        guard rms > silenceRMSThreshold else {
+        guard Self.hasSpeech(samples) else {
             NSLog("[Haynoi] Too quiet, skipping transcription")
             FloatingBarController.shared.transition(to: .error)
             setTransientError("No speech detected")
@@ -497,6 +491,41 @@ final class PipelineController {
                 )
             }
         }
+    }
+
+    /// Is there a voice in this recording? Judged on 30 ms frames against the
+    /// room's own noise floor, not on the average of the whole buffer.
+    ///
+    /// The average used to be compared with a fixed 0.005. A quiet voice with
+    /// pauses — dictating at night, thinking between sentences — averages under
+    /// that, so real speech was thrown away as "No speech detected" before it
+    /// reached the server (W37-1389, seven times on 2026-09-22 23:00–23:41).
+    /// Now: the floor is the 10th-percentile frame; a frame is voiced when it is
+    /// four times the floor and above an absolute minimum; 0.6 s of voiced
+    /// frames is speech — longer than the 0.42 s start tone the mic can pick up.
+    /// Steady noise (a fan) lifts the floor with it, so it still reads as
+    /// silence. Anything the old average let through still passes.
+    nonisolated static func hasSpeech(_ samples: [Float], sampleRate: Int = 16000) -> Bool {
+        let frameLength = sampleRate * 30 / 1000
+        guard frameLength > 0, samples.count >= frameLength else { return false }
+        let average = (samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
+        if average > 0.005 { return true }
+        var frames: [Float] = []
+        frames.reserveCapacity(samples.count / frameLength)
+        var start = 0
+        while start + frameLength <= samples.count {
+            var sum: Float = 0
+            for i in start..<(start + frameLength) { sum += samples[i] * samples[i] }
+            frames.append((sum / Float(frameLength)).squareRoot())
+            start += frameLength
+        }
+        let floor = frames.sorted()[frames.count / 10]
+        let voicedThreshold = max(0.003, floor * 4)
+        let voiced = frames.filter { $0 > voicedThreshold }.count
+        let minVoiced = 20  // 0.6 s of 30 ms frames
+        NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames (need %d)",
+              average, floor, voiced, frames.count, minVoiced)
+        return voiced >= minVoiced
     }
 
     nonisolated static func resolveTranscript(
