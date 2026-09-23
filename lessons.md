@@ -109,7 +109,8 @@ recording to retry, and the only trace was the error tone.
 Judge 30 ms frames against the recording's own noise floor, and keep the old
 average as a pass so nothing that used to go through stops going through. The
 start tone reaches the mic, so the minimum stretch of voice must be longer
-than the tone (0.42 s → 0.6 s).
+than the tone (0.42 s → 0.6 s), and only unbroken 150 ms stretches count, so
+the tone plus a few clicks does not add up to a voice.
 
 How it was found without reading a word: the error tone has its own length in
 the unified log (0.75 s vs 0.66 start / 0.66 stop), no request followed, the

@@ -502,7 +502,8 @@ final class PipelineController {
     /// reached the server (W37-1389, seven times on 2026-09-22 23:00–23:41).
     /// Now: the floor is the 10th-percentile frame; a frame is voiced when it is
     /// four times the floor and above an absolute minimum; 0.6 s of voiced
-    /// frames is speech — longer than the 0.42 s start tone the mic can pick up.
+    /// frames, counted only in unbroken 150 ms stretches, is speech — longer
+    /// than the 0.42 s start tone the mic can pick up, and clicks don't add up.
     /// Steady noise (a fan) lifts the floor with it, so it still reads as
     /// silence. Anything the old average let through still passes.
     nonisolated static func hasSpeech(_ samples: [Float], sampleRate: Int = 16000) -> Bool {
@@ -521,11 +522,20 @@ final class PipelineController {
         }
         let floor = frames.sorted()[frames.count / 10]
         let voicedThreshold = max(0.003, floor * 4)
-        let voiced = frames.filter { $0 > voicedThreshold }.count
-        let minVoiced = 20  // 0.6 s of 30 ms frames
-        NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames (need %d)",
-              average, floor, voiced, frames.count, minVoiced)
-        return voiced >= minVoiced
+        // Only unbroken 150 ms stretches count — syllables, not clicks. 0.6 s
+        // of them is speech; the start tone alone is one 0.42 s stretch.
+        var voiced = 0, run = 0
+        for frame in frames + [0] {
+            if frame > voicedThreshold {
+                run += 1
+            } else {
+                if run >= 5 { voiced += run }
+                run = 0
+            }
+        }
+        NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames",
+              average, floor, voiced, frames.count)
+        return voiced >= 20
     }
 
     nonisolated static func resolveTranscript(

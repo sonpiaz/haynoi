@@ -23,7 +23,7 @@ final class SpeechGateTests: XCTestCase {
         let start = Int(at * Double(rate))
         for i in 0..<Int(seconds * Double(rate)) where start + i < buffer.count {
             let t = Float(i) / Float(rate)
-            buffer[start + i] += amplitude * sin(2 * .pi * 180 * t) * (0.6 + 0.4 * sin(2 * .pi * 4 * t))
+            buffer[start + i] += amplitude * sin(2 * .pi * 180 * t) * (0.85 + 0.15 * sin(2 * .pi * 4 * t))
         }
     }
 
@@ -60,6 +60,15 @@ final class SpeechGateTests: XCTestCase {
         // The mic can hear the 0.42 s start tone; a silent hold must still fail.
         var buffer = noise(seconds: 30, rms: 0.0015)
         addVoice(&buffer, at: 0.3, seconds: 0.42, amplitude: 0.05)
+        XCTAssertLessThan(average(buffer), 0.005)
+        XCTAssertFalse(PipelineController.hasSpeech(buffer))
+    }
+
+    func testScatteredClicksAreNotSpeech() {
+        // Start tone plus short clicks: enough frames in total, none of them a syllable.
+        var buffer = noise(seconds: 30, rms: 0.0015)
+        addVoice(&buffer, at: 0.3, seconds: 0.42, amplitude: 0.05)
+        for k in 0..<10 { addVoice(&buffer, at: 5 + Double(k) * 2, seconds: 0.09, amplitude: 0.02) }
         XCTAssertLessThan(average(buffer), 0.005)
         XCTAssertFalse(PipelineController.hasSpeech(buffer))
     }
