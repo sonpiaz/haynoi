@@ -33,9 +33,13 @@ var doNotTrack =
   navigator.msDoNotTrack === "1" ||
   navigator.globalPrivacyControl === true;
 
-if (!doNotTrack && stored(OPT_OUT_KEY) !== "1") {
-  posthog.init("phc_mKoPQ7nM2SFCam2vDQSuMBH3hw3wYKZdkdCa2YugJ8pw", {
-    api_host: "https://us.i.posthog.com",
+// Filled in by scripts/deploy-site.sh from HAYNOI_POSTHOG_KEY. A copy that
+// was never filled (local preview, a deploy without the key) sends nothing.
+var POSTHOG_KEY = "__HAYNOI_POSTHOG_KEY__";
+
+if (POSTHOG_KEY.indexOf("phc_") === 0 && !doNotTrack && stored(OPT_OUT_KEY) !== "1") {
+  posthog.init(POSTHOG_KEY, {
+    api_host: "/_ph",                // same-origin proxy (site/functions/_ph), survives ad blockers
     ui_host: "https://us.posthog.com",
     defaults: "2025-05-24",          // history-based pageview + pageleave
     person_profiles: "identified_only",
@@ -44,6 +48,7 @@ if (!doNotTrack && stored(OPT_OUT_KEY) !== "1") {
     autocapture: true,
     capture_pageview: true,
     capture_pageleave: true,
+    capture_exceptions: true,
   });
 
   // Verification event — confirms the install is live in PostHog Activity.
