@@ -549,6 +549,13 @@ final class PersonalDictionary {
     /// Dictionary `right` forms that sound like `word` (v2 Phase 4) — named
     /// candidates for a low-confidence span, fed to the correction pass as a
     /// targeted hint. Sound-alike only; never applied as a replacement.
+    ///
+    /// A candidate that drops diacritics the heard form carries is never offered
+    /// (W37-1673): "Hà Nội" said correctly came back as "Haynoi" 3/3 times once
+    /// the hint named it. Tones are what the transcriber committed to; the
+    /// ASCII misrecognitions ("Hanoi", "Hai Noi") still get the hint. Same
+    /// direction rule as `CorrectionDetector`, diacritic half only — the
+    /// capitalization half would block "Hai Noi" → "Haynoi".
     func phoneticCandidates(for word: String, max limit: Int = 3, in terms: [String]? = nil) -> [String] {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -556,7 +563,8 @@ final class PersonalDictionary {
         var result: [String] = []
         for right in terms ?? phoneticCandidateTerms() {
             guard seen.insert(right.lowercased()).inserted else { continue }
-            if Phonetics.close(trimmed, right) {
+            if Phonetics.close(trimmed, right),
+               CorrectionDetector.combiningMarkCount(right) >= CorrectionDetector.combiningMarkCount(trimmed) {
                 result.append(right)
                 if result.count >= limit { break }
             }

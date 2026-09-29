@@ -89,6 +89,22 @@ final class PhoneticsTests: XCTestCase {
         XCTAssertTrue(dict.phoneticCandidates(for: "zzqqxx").isEmpty)
     }
 
+    /// W37-1673: with "Haynoi" in the dictionary, a correctly said "Hà Nội" was
+    /// handed "possibly Haynoi" and rewritten 3/3 times. A hint may add
+    /// diacritics, never strip ones the transcriber heard.
+    func testHintNeverStripsDiacriticsTheTranscriberHeard() {
+        let dict = PersonalDictionary.shared
+        let terms = ["Haynoi", "Sơn", "Affitor"]
+
+        XCTAssertEqual(dict.phoneticCandidates(for: "Hà Nội", in: terms), [],
+                       "a toned Vietnamese word is not offered its ASCII sound-alike")
+        XCTAssertEqual(dict.phoneticCandidates(for: "Hanoi", in: terms), ["Haynoi"])
+        XCTAssertEqual(dict.phoneticCandidates(for: "Hai Noi", in: terms), ["Haynoi"])
+        XCTAssertEqual(dict.phoneticCandidates(for: "Son", in: terms), ["Sơn"],
+                       "adding diacritics is still the direction a hint may go")
+        XCTAssertEqual(dict.phoneticCandidates(for: "afider", in: terms), ["Affitor"])
+    }
+
     // MARK: - Hint section in the correction prompt
 
     func testHintsRenderIntoSystemPrompt() {

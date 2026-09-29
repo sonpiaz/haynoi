@@ -200,7 +200,7 @@ final class CorrectionDetector {
     }
 
     /// Count of combining (diacritic) marks after NFD decomposition.
-    private static func combiningMarkCount(_ s: String) -> Int {
+    nonisolated static func combiningMarkCount(_ s: String) -> Int {
         s.decomposedStringWithCanonicalMapping.unicodeScalars.reduce(0) {
             $0 + ($1.properties.canonicalCombiningClass != .notReordered ? 1 : 0)
         }
