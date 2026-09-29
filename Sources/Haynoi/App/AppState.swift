@@ -97,12 +97,21 @@ final class AppState: ObservableObject {
     private var statusClearTimer: AnyCancellable?
     private var errorClearTimer: AnyCancellable?
 
-    // History persistence — JSON file in Application Support
+    // History persistence — JSON file in Application Support. Same folder policy
+    // as the dictionary: a Debug build or a test run must not read or write the
+    // owner's real history, the shape of the dictionary wipe on 2026-09-17.
+    static func defaultHistoryFileURL(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = PersonalDictionary.isRunningTests()
+    ) -> URL {
+        PersonalDictionary.supportDirectory(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests)
+            .appendingPathComponent("history.json")
+    }
+
     private static let historyFileURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = appSupport.appendingPathComponent("Haynoi", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("history.json")
+        let url = defaultHistoryFileURL()
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        return url
     }()
 
     private static let maxHistoryEntries = 500

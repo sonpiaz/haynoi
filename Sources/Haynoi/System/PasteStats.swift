@@ -35,16 +35,7 @@ enum PasteStats {
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
         isRunningTests: Bool = RunMode.isHostingXCTestBundle()
     ) -> URL {
-        let fm = FileManager.default
-        var base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
-        if isRunningTests {
-            base = fm.temporaryDirectory
-                .appendingPathComponent("HaynoiTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
-        }
-        let dir = base.appendingPathComponent(
-            PersonalDictionary.supportFolderName(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests),
-            isDirectory: true
-        )
+        let dir = PersonalDictionary.supportDirectory(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests)
         // No createDirectory here: `save()` makes it when there is something to
         // write. A lookup that touches the disk turns "where would this live?"
         // into "make this", and the test that asserts we stay out of the owner's

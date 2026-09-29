@@ -224,7 +224,11 @@ final class PersonalDictionary {
         return productionFolderName
     }
 
-    static func defaultFileURL(
+    /// The folder every file of the owner's lives in: dictionary, history,
+    /// insights, paste counters. Release → `Haynoi`, Debug → `Haynoi-Dev`, a test
+    /// run → a per-PID temp folder. Does not create it — a lookup that touches the
+    /// disk would make the owner's folder on a machine that only ran the tests.
+    static func supportDirectory(
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
         isRunningTests: Bool = PersonalDictionary.isRunningTests()
     ) -> URL {
@@ -236,11 +240,18 @@ final class PersonalDictionary {
             base = fm.temporaryDirectory
                 .appendingPathComponent("HaynoiTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
         }
-        let dir = base.appendingPathComponent(
+        return base.appendingPathComponent(
             supportFolderName(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests),
             isDirectory: true
         )
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    static func defaultFileURL(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = PersonalDictionary.isRunningTests()
+    ) -> URL {
+        let dir = supportDirectory(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("dictionary.json")
     }
 

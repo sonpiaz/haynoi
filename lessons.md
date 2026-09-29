@@ -48,12 +48,14 @@ Two rules:
   is a policy, and a Release build always answers no — a shipped app must never
   disable itself over an inherited environment variable.
 
-Still open, same family: `history.json` is a hardcoded path with no bundle-id and
-no test awareness, so a debug build reads and writes the owner's real history —
-exactly the shape of the dictionary loss on 2026-09-17, which `dictionary.json`
-now guards against on both counts.
+Closed 2026-09-29 (W37-1406): `history.json`, `insights.json`, `failed/` and the
+paste counters now resolve their folder through `PersonalDictionary.supportDirectory()`,
+the one place that knows Release → `Haynoi`, Debug → `Haynoi-Dev`, tests → temp.
+Before, a debug build read and wrote the owner's real history, and a test run
+created `Haynoi` and `Haynoi-Dev` in the Application Support of whatever machine
+ran it (measured on the Mac mini). A lookup must not create the folder it names.
 
-cơ chế: `Tests/TestHostTests.swift`.
+cơ chế: `Tests/TestHostTests.swift`, `Tests/OwnerFilesIsolationTests.swift` (no source but `PersonalDictionary.swift` may resolve Application Support).
 
 ## A scripted multi-file edit that throws leaves half the change (2026-09-20)
 

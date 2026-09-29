@@ -62,14 +62,16 @@ final class PersonalDictionaryPersistenceTests: XCTestCase {
             PersonalDictionary.supportFolderName(bundleIdentifier: "com.sonpiaz.haynoi.dev", isRunningTests: false),
             "Haynoi-Dev"
         )
-        let prod = PersonalDictionary.defaultFileURL(
+        // supportDirectory, not defaultFileURL: the latter creates the folder, and
+        // this test would make the owner's folders on whatever machine runs it.
+        let prod = PersonalDictionary.supportDirectory(
             bundleIdentifier: "com.sonpiaz.haynoi",
             isRunningTests: false
-        )
-        let dev = PersonalDictionary.defaultFileURL(
+        ).appendingPathComponent("dictionary.json")
+        let dev = PersonalDictionary.supportDirectory(
             bundleIdentifier: "com.sonpiaz.haynoi.dev",
             isRunningTests: false
-        )
+        ).appendingPathComponent("dictionary.json")
         XCTAssertTrue(PersonalDictionary.isProductionDictionaryURL(prod))
         XCTAssertFalse(PersonalDictionary.isProductionDictionaryURL(dev))
         XCTAssertTrue(dev.path.contains("Haynoi-Dev"))
