@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Signed out no longer means silently worse text.** When Haynoi is signed
+  out it pastes what the Mac's offline recognizer heard — fast, but weak on
+  English terms. It now tells you, and that recognizer also leans on your
+  dictionary.
 - **The last word is no longer cut off.** Recording stopped the instant the key
   came up, and most people let go while the last word is still coming out, so it
   never reached the transcriber. Haynoi now keeps listening for half a second
