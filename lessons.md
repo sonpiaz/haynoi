@@ -138,3 +138,9 @@ differently looks exactly like signed out. Measure a guess against the code
 before changing the code; never degrade silently.
 
 cơ chế: `Tests/SignedOutFallbackTests.swift`, `Tests/MisheardPairsTests.swift`; keychain failures now log their OSStatus.
+
+## Retro before away-plan wave 2 (2026-09-30)
+
+- Khác dự tính: lỗi "0.3.12 sai chính tả" bị đoán là do commit mới nhất (8c64eb2); đo bằng chính Phonetics của app thì 0/7 cặp từng qua bộ gợi ý — gốc nghi là app mất token rồi lặng lẽ dùng nhận giọng offline.
+- Học được: kiểm giả thuyết bằng code thật (harness `swiftc` vài phút) trước khi sửa code; và mọi đường "giảm chất lượng" phải lên tiếng, không được im.
+- Áp ngay: audit và dọn AX hôm nay đều đo trước/sau bằng số, và mỗi fallback mới phải có log hoặc thông báo.
