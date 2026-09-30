@@ -1,4 +1,5 @@
 import AppKit
+import Accelerate
 import AVFoundation
 import Combine
 
@@ -627,15 +628,19 @@ final class PipelineController {
         if x.count < n { x += [Float](repeating: 0, count: n - x.count) }
         var best: Float = 0
         var offset = 0
-        while offset + n <= x.count {
-            var dot: Float = 0, sum: Float = 0, sumSq: Float = 0
-            for i in 0..<n {
-                let v = x[offset + i]
-                dot += v * t[i]; sum += v; sumSq += v * v
+        x.withUnsafeBufferPointer { xp in
+            t.withUnsafeBufferPointer { tp in
+                while offset + n <= xp.count {
+                    let window = xp.baseAddress! + offset
+                    var dot: Float = 0, sum: Float = 0, sumSq: Float = 0
+                    vDSP_dotpr(window, 1, tp.baseAddress!, 1, &dot, vDSP_Length(n))
+                    vDSP_sve(window, 1, &sum, vDSP_Length(n))
+                    vDSP_svesq(window, 1, &sumSq, vDSP_Length(n))
+                    let variance = sumSq - sum * sum / Float(n)
+                    if variance > 0 { best = max(best, abs(dot) / (variance.squareRoot() * tNorm)) }
+                    offset += 8
+                }
             }
-            let variance = sumSq - sum * sum / Float(n)
-            if variance > 0 { best = max(best, abs(dot) / (variance.squareRoot() * tNorm)) }
-            offset += 8
         }
         return best
     }

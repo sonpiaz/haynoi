@@ -8,7 +8,7 @@ if [ -f "$src" ]; then cp "$src" pc.swift; tag=wt; else git -C ~/haynoi show "$s
 awk '/static func (hasSpeech|toneMatch)\(/{on=1} on{print} on && /^    }$/{on=0}' pc.swift \
   | sed 's/nonisolated //' | awk '/NSLog\(/{skip=1} skip{ if (/\)$/) {skip=0}; next } {print}' > fn.body
 grep -q 'tone: \[Float\]?' fn.body && call='Gate.hasSpeech(s, tone: tone)' || call='Gate.hasSpeech(s)'
-{ echo 'import Foundation'; echo 'enum Gate {'; cat fn.body; echo '}'
+{ echo 'import Foundation'; echo 'import Accelerate'; echo 'enum Gate {'; cat fn.body; echo '}'
   cat <<SW
 func readWav(_ p: String) -> [Float] {
     let d = FileManager.default.contents(atPath: p)!; let pcm = d.subdata(in: 44..<d.count)
