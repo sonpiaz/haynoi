@@ -219,8 +219,9 @@ enum STTProvider {
     /// These are aliases the server resolves, not catalog names: "transcribe-quality"
     /// currently answers as gpt-4o-mini-transcribe-2025-12-15, which the catalog says
     /// retires 2027-02-26, and "transcribe" as whisper-v3-turbo. The retirement guard
-    /// in the tests cannot see behind an alias — that needs the catalog, which is why
-    /// there is a ticket for a job that reads `retires_on` from /v1/models.
+    /// in the tests cannot see behind an alias — that needs the catalog:
+    /// `scripts/check-model-retirements.py` resolves both through /v1/models and a
+    /// weekly job on the Mac mini reports anything retiring within 120 days.
     private static func resolveModel() -> String {
         let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "quality"
         return quality == "quality" ? "transcribe-quality" : "transcribe"

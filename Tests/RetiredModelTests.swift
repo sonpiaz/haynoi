@@ -21,7 +21,7 @@ final class RetiredModelTests: XCTestCase {
     /// What it still cannot see: a name split across a concatenation, a name
     /// assembled at runtime, and anything behind a server-side alias — `transcribe-quality` is resolved by the server, and
     /// the model behind it has its own retirement date. That needs the catalog,
-    /// not the source.
+    /// not the source: `scripts/check-model-retirements.py` (weekly on the mini).
     func testNoSourceStillNamesARetiredModel() throws {
         let sources = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
