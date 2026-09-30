@@ -185,11 +185,6 @@ final class AppState: ObservableObject {
         saveSubject.send()
     }
 
-    func clearAllTranscriptions() {
-        transcriptions.removeAll()
-        saveSubject.send()
-    }
-
     /// Sets `status` and auto-clears after 5 seconds.
     func setTransientStatus(_ message: String) {
         status = message

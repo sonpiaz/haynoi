@@ -397,13 +397,6 @@ struct HistoryRow: View {
         let f = DateFormatter(); f.dateFormat = "MMM d"; return f
     }()
 
-    private func detectLanguage(_ text: String) -> String {
-        let viChars = CharacterSet(charactersIn: "àáảãạăắặằẵẳâấậầẫẩđèéẹẻẽêếệềễểìíịỉĩòóọỏõôốộồỗổơớợờỡởùúụủũưứựừữửỳýỵỷỹÀÁẢÃẠĂẮẶẰẴẲÂẤẬẦẪẨĐÈÉẸẺẼÊẾỆỀỄỂÌÍỊỈĨÒÓỌỎÕÔỐỘỒỖỔƠỚỢỜỠỞÙÚỤỦŨƯỨỰỪỮỬỲÝỴỶỸ")
-        for char in text.unicodeScalars {
-            if viChars.contains(char) { return "vi" }
-        }
-        return "en"
-    }
 }
 
 // MARK: - Calm Level Bars (recording indicator — shared)

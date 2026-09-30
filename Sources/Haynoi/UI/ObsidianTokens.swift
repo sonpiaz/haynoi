@@ -496,19 +496,6 @@ extension View {
     func haynoiTheme() -> some View {
         modifier(HaynoiThemeModifier())
     }
-
-    // MARK: - View modifier helpers
-
-    /// Obsidian card style: white surface + hairline border, md corner radius.
-    func obsidianCard() -> some View {
-        self
-            .background(Color.obsidianSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: ObsidianRadius.md.rawValue)
-                    .stroke(Color.hairlineSolid, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: ObsidianRadius.md.rawValue))
-    }
 }
 
 // MARK: - Status Dot (shared menubar / popover / orb)

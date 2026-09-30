@@ -289,19 +289,6 @@ struct OnboardingView: View {
         }
     }
 
-    /// App icon badge (used only in the drag chip and accessibility teaching panel).
-    private func appIconBadge(size: CGFloat) -> some View {
-        Image(nsImage: NSApp.applicationIconImage)
-            .resizable()
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-                    .stroke(Color.obsidianHairline(for: scheme), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 5, y: 2)
-    }
-
     private var headerTitle: String {
         switch step {
         case .welcome:         return "haynoi"        // welcome uses wordmark, not this
