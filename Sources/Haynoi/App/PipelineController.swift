@@ -313,7 +313,11 @@ final class PipelineController {
         }
 
         // Fix #3: silence detection gives visible feedback
-        guard Self.hasSpeech(samples) else {
+        // nil: no tone was played. Empty: a tone was played but its samples
+        // could not be read, so only the 0.6 s rule can tell it from speech.
+        let tone: [Float]? = UserDefaults.standard.bool(forKey: "soundEnabled")
+            ? (SoundFeedback.shared.startToneSamples16k ?? []) : nil
+        guard Self.hasSpeech(samples, tone: tone) else {
             NSLog("[Haynoi] Too quiet, skipping transcription")
             FloatingBarController.shared.transition(to: .error)
             setTransientError("No speech detected")
@@ -548,10 +552,13 @@ final class PipelineController {
     /// frames, counted only in unbroken 150 ms stretches, is speech — longer
     /// than the 0.42 s start tone the mic can pick up, and clicks don't add up.
     /// 2026-09-29: that 0.6 s dropped short soft replies ("có", "ok") whenever
-    /// the mic did not also hear the tone; see the loop below.
+    /// the mic did not also hear the tone. Now 3× the floor, and 0.24 s of voice
+    /// outside anything that matches the start tone's waveform is speech too.
     /// Steady noise (a fan) lifts the floor with it, so it still reads as
     /// silence. Anything the old average let through still passes.
-    nonisolated static func hasSpeech(_ samples: [Float], sampleRate: Int = 16000) -> Bool {
+    /// `tone`: the start tone's samples when one was played this dictation,
+    /// nil when sound is off, empty when it played but could not be loaded.
+    nonisolated static func hasSpeech(_ samples: [Float], tone: [Float]? = nil, sampleRate: Int = 16000) -> Bool {
         let frameLength = sampleRate * 30 / 1000
         guard frameLength > 0, samples.count >= frameLength else { return false }
         let average = (samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
@@ -571,31 +578,66 @@ final class PipelineController {
         // count. Steady noise still sits near 1× (evals/short-speech).
         let voicedThreshold = max(0.003, floor * 3)
         // Only unbroken 150 ms stretches count — syllables, not clicks.
-        //
-        // The start tone is one stretch of about 0.42 s beginning right after
-        // the pre-roll, so the first stretch of that shape is not counted.
-        // Requiring 0.6 s in total (the rule before 2026-09-29) kept the tone
-        // out, but only by also dropping every short reply said softly: "có",
-        // "được", "ok" are 0.25–0.45 s. With the tone set aside, 0.24 s of
-        // voice is speech. Measured in evals/short-speech.
-        let toneStart = 0.2 * Double(sampleRate) / Double(frameLength)
-        let toneEnd = 0.7 * Double(sampleRate) / Double(frameLength)
-        var voiced = 0, run = 0, toneSkipped = false
+        var runs: [(start: Int, length: Int)] = []
+        var run = 0
         for (index, frame) in (frames + [0]).enumerated() {
-            if frame > voicedThreshold {
-                run += 1
-                continue
-            }
-            let start = Double(index - run)
-            let toneShaped = run <= 17 && start >= toneStart && start <= toneEnd
-            if run >= 5 {
-                if toneShaped && !toneSkipped { toneSkipped = true } else { voiced += run }
-            }
+            if frame > voicedThreshold { run += 1; continue }
+            if run >= 5 { runs.append((index - run, run)) }
             run = 0
         }
-        NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames",
-              average, floor, voiced, frames.count)
-        return voiced >= 8
+        let voiced = runs.reduce(0) { $0 + $1.length }
+        // 0.6 s of voice was the rule in 0.3.11 and still passes.
+        if voiced >= 20 {
+            NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames", average, floor, voiced, frames.count)
+            return true
+        }
+        // Short replies ("có", "được", "ok" are 0.25–0.45 s) need less, but the
+        // start tone the mic can pick up is itself a 0.42 s stretch. A stretch is
+        // the tone only if it matches the tone's own waveform — not where it
+        // sits, since a reply can start as early as the tone does and Bluetooth
+        // can delay the tone (review 2026-09-29). 0.24 s of voice outside the
+        // tone is speech. Measured in evals/short-speech.
+        if let tone, tone.isEmpty { return false }
+        let notTone = runs.filter { r in
+            guard let tone else { return true }
+            // Only the loud head of a decaying tone may clear the threshold, so
+            // search from 0.2 s before the stretch to a whole tone after it.
+            let from = max(0, r.start * frameLength - sampleRate / 5)
+            let to = min(samples.count, (r.start + r.length) * frameLength + tone.count)
+            return toneMatch(samples[from..<to], tone: tone) < 0.5
+        }.reduce(0) { $0 + $1.length }
+        NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d (%d not tone)/%d frames",
+              average, floor, voiced, notTone, frames.count)
+        return notTone >= 8
+    }
+
+    /// Best normalized cross-correlation of `tone` slid across `segment`
+    /// (0…1). The tone as heard through a room still scores ~0.8; speech
+    /// scores under ~0.35 against the chime and deep tones (evals/short-speech).
+    nonisolated static func toneMatch(_ segment: ArraySlice<Float>, tone: [Float]) -> Float {
+        let n = tone.count
+        guard n > 0 else { return 0 }
+        let mean = tone.reduce(0, +) / Float(n)
+        let t = tone.map { $0 - mean }
+        let tNorm = t.reduce(0) { $0 + $1 * $1 }.squareRoot()
+        guard tNorm > 0 else { return 0 }
+        // A stretch shorter than the tone is compared against the tone's
+        // loudest part: pad the segment with zeros to the tone's length.
+        var x = Array(segment)
+        if x.count < n { x += [Float](repeating: 0, count: n - x.count) }
+        var best: Float = 0
+        var offset = 0
+        while offset + n <= x.count {
+            var dot: Float = 0, sum: Float = 0, sumSq: Float = 0
+            for i in 0..<n {
+                let v = x[offset + i]
+                dot += v * t[i]; sum += v; sumSq += v * v
+            }
+            let variance = sumSq - sum * sum / Float(n)
+            if variance > 0 { best = max(best, abs(dot) / (variance.squareRoot() * tNorm)) }
+            offset += 8
+        }
+        return best
     }
 
     nonisolated static func resolveTranscript(

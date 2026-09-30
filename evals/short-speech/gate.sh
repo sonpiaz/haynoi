@@ -1,23 +1,28 @@
 #!/bin/bash
-# gate.sh <git-rev> : compile that revision's PipelineController.hasSpeech and run it on every *.f32 buffer here.
+# gate.sh <git-rev | path/to/PipelineController.swift>
+# Compiles that revision's PipelineController.hasSpeech (+ toneMatch when present) and runs it on every
+# *.f32 here, passing the chime start tone as the template when the function takes one (sound on).
 set -e
-rev=$1; dir=$(dirname "$0"); cd "$dir"
-if [ -f "$rev" ]; then cp "$rev" pc.swift; rev=wt; else git -C ~/haynoi show "$rev:Sources/Haynoi/App/PipelineController.swift" > pc.swift; fi
-awk '/static func hasSpeech\(/{on=1} on{print} on && /^    }$/{exit}' pc.swift | sed 's/nonisolated //; s/NSLog(.*$/_ = 0/' > fn.body
-# NSLog spans 2 lines in the source; drop its continuation line.
-grep -v '^ *average, floor, voiced' fn.body > fn2.body
-{ echo 'import Foundation'; echo 'enum Gate {'; cat fn2.body; echo '}';
-  cat <<'SW'
-let fm = FileManager.default
+src=$1; cd "$(dirname "$0")"
+if [ -f "$src" ]; then cp "$src" pc.swift; tag=wt; else git -C ~/haynoi show "$src:Sources/Haynoi/App/PipelineController.swift" > pc.swift; tag=$src; fi
+awk '/static func (hasSpeech|toneMatch)\(/{on=1} on{print} on && /^    }$/{on=0}' pc.swift \
+  | sed 's/nonisolated //' | awk '/NSLog\(/{skip=1} skip{ if (/\)$/) {skip=0}; next } {print}' > fn.body
+grep -q 'tone: \[Float\]?' fn.body && call='Gate.hasSpeech(s, tone: tone)' || call='Gate.hasSpeech(s)'
+{ echo 'import Foundation'; echo 'enum Gate {'; cat fn.body; echo '}'
+  cat <<SW
+func readWav(_ p: String) -> [Float] {
+    let d = FileManager.default.contents(atPath: p)!; let pcm = d.subdata(in: 44..<d.count)
+    return pcm.withUnsafeBytes { Array(\$0.bindMemory(to: Int16.self)) }.map { Float(\$0) / 32768 }
+}
+let tone = readWav("tone.wav")
 var pass = 0, total = 0
-for f in (try! fm.contentsOfDirectory(atPath: ".")).filter({ $0.hasSuffix(".f32") }).sorted() {
-    let d = fm.contents(atPath: f)!
-    let s: [Float] = d.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
-    let ok = Gate.hasSpeech(s); total += 1; if ok { pass += 1 }
+for f in (try! FileManager.default.contentsOfDirectory(atPath: ".")).filter({ \$0.hasSuffix(".f32") }).sorted() {
+    let s: [Float] = FileManager.default.contents(atPath: f)!.withUnsafeBytes { Array(\$0.bindMemory(to: Float.self)) }
+    let ok = $call; total += 1; if ok { pass += 1 }
     print(ok ? "PASS" : "DROP", f)
 }
 print("\(pass)/\(total) passed")
 SW
 } > harness.swift
-swiftc -O -o gate-$rev harness.swift 2>&1 | grep -v warning || true
-./gate-$rev
+swiftc -O -o gate-bin harness.swift 2>&1 | grep -E "error" || true
+./gate-bin
