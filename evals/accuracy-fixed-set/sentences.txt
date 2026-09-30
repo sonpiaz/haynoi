@@ -1,0 +1,12 @@
+Mở cái deck lên rồi gửi cho agent kiểm tra giúp anh
+Bản Mandeck mới chạy ổn trên Mac mini rồi
+Em commit xong thì merge vào main luôn nhé
+Gửi file Markdown cho Pidot đọc lại giúp
+Kyma trả lỗi rồi, anh xem log giúp em
+Affitor cần thêm một trang HTML cho đối tác
+Mình deploy bản này lên Vercel chiều nay
+Hãy Nói đang bắt chữ khá chuẩn rồi đấy
+Chiều nay họp với khách lúc ba giờ
+Nhắc anh gửi báo cáo tuần cho cả nhóm
+Cái output của agent này hơi dài quá
+Tạo một pane mới trong Mandeck cho Pheme

@@ -7,26 +7,30 @@ import XCTest
 final class SignedOutFallbackTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_000_000)
+    private func notice(_ source: PipelineController.Source, _ error: Error, _ last: Date? = nil) -> PipelineController.OfflineNotice? {
+        PipelineController.offlineNotice(source: source, error: error, lastWarned: last, now: now)
+    }
 
-    func testWarnsWhenSignedOutTextCameFromOffline() {
-        XCTAssertTrue(PipelineController.shouldWarnSignedOut(source: .onDevice, error: STTError.notSignedIn,
-                                                             lastWarned: nil, now: now))
+    func testSignedOutSaysSignedOut() {
+        XCTAssertEqual(notice(.onDevice, STTError.notSignedIn), .signedOut)
+    }
+
+    /// W37-1574: any cloud failure that ends in offline text is said, not only sign-out.
+    func testEveryOtherCloudFailureSaysOffline() {
+        for error: Error in [STTError.serverError("x"), STTError.rateLimited, STTError.noConnection,
+                             STTError.outOfCredits, URLError(.timedOut)] {
+            XCTAssertEqual(notice(.onDevice, error), .cloudFailed, "\(error)")
+        }
     }
 
     func testAtMostOnceEveryTenMinutes() {
-        XCTAssertFalse(PipelineController.shouldWarnSignedOut(source: .onDevice, error: STTError.notSignedIn,
-                                                              lastWarned: now.addingTimeInterval(-599), now: now))
-        XCTAssertTrue(PipelineController.shouldWarnSignedOut(source: .onDevice, error: STTError.notSignedIn,
-                                                             lastWarned: now.addingTimeInterval(-600), now: now))
+        XCTAssertNil(notice(.onDevice, STTError.noConnection, now.addingTimeInterval(-599)))
+        XCTAssertEqual(notice(.onDevice, STTError.noConnection, now.addingTimeInterval(-600)), .cloudFailed)
     }
 
-    func testNoWarningForOtherFailuresOrCloudText() {
-        XCTAssertFalse(PipelineController.shouldWarnSignedOut(source: .cloud, error: STTError.notSignedIn,
-                                                              lastWarned: nil, now: now))
-        XCTAssertFalse(PipelineController.shouldWarnSignedOut(source: .onDevice, error: STTError.sessionExpired,
-                                                              lastWarned: nil, now: now), "has its own notice")
-        XCTAssertFalse(PipelineController.shouldWarnSignedOut(source: .onDevice, error: URLError(.notConnectedToInternet),
-                                                              lastWarned: nil, now: now))
+    func testNoNoticeForCloudTextOrExpiredSession() {
+        XCTAssertNil(notice(.cloud, STTError.notSignedIn))
+        XCTAssertNil(notice(.onDevice, STTError.sessionExpired), "has its own notice")
     }
 }
 

@@ -414,10 +414,11 @@ final class PipelineController {
 
             NSLog("[Haynoi] Transcribed (%@): %ld chars", winner.source == .cloud ? "cloud" : "on-device", finalText.count)
             if case .failure(let error)? = cloudResult,
-               Self.shouldWarnSignedOut(source: winner.source, error: error,
-                                        lastWarned: Self.lastSignedOutWarning, now: Date()) {
-                Self.lastSignedOutWarning = Date()
-                NotificationHelper.postSignedOutUsingOffline()
+               let notice = Self.offlineNotice(source: winner.source, error: error,
+                                               lastWarned: Self.lastOfflineWarning, now: Date()) {
+                Self.lastOfflineWarning = Date()
+                NotificationHelper.postOfflineFallback(signedOut: notice == .signedOut,
+                                                       reason: (error as? LocalizedError)?.errorDescription)
             }
             // Capture attribution from the dictation target app (F2.3 / D17).
             let attrBundleId = dictationTargetApp?.bundleIdentifier
@@ -681,22 +682,23 @@ final class PipelineController {
         return nil
     }
 
-    /// Signed out, the cloud is never asked and the fast offline recognizer's
-    /// text is pasted instead — quick, wrong on English terms, and without the
-    /// user's dictionary. 30/09: 0.3.12 did exactly that for a whole morning
-    /// ("deck" → "đếch", "agent" → "Asian") and nothing said why. Say it, at
-    /// most once every 10 minutes.
-    nonisolated(unsafe) static var lastSignedOutWarning: Date?
+    /// When the cloud fails — signed out, server error, rate limit, no network,
+    /// timeout — the fast offline recognizer's text is pasted instead: quick,
+    /// wrong on English terms, no dictionary. That happened silently twice:
+    /// 18/09 (W37-1574, "bắt chữ cực kỳ sai", first build with the fallback) and
+    /// 30/09 (signed out: "deck" → "đếch"). Say it, at most once every 10 minutes.
+    /// sessionExpired is left out: the 401 path already posts its own notice.
+    enum OfflineNotice: Equatable { case signedOut, cloudFailed }
 
-    nonisolated static func shouldWarnSignedOut(source: Source, error: Error,
-                                                lastWarned: Date?, now: Date) -> Bool {
-        guard source == .onDevice, let stt = error as? STTError else { return false }
-        switch stt {
-        case .notSignedIn: break
-        default: return false   // sessionExpired already posts its own notice
-        }
-        guard let lastWarned else { return true }
-        return now.timeIntervalSince(lastWarned) >= 600
+    nonisolated(unsafe) static var lastOfflineWarning: Date?
+
+    nonisolated static func offlineNotice(source: Source, error: Error,
+                                          lastWarned: Date?, now: Date) -> OfflineNotice? {
+        guard source == .onDevice else { return nil }
+        if let stt = error as? STTError, case .sessionExpired = stt { return nil }
+        if let lastWarned, now.timeIntervalSince(lastWarned) < 600 { return nil }
+        if let stt = error as? STTError, case .notSignedIn = stt { return .signedOut }
+        return .cloudFailed
     }
 
     nonisolated static func shouldUseOnDeviceFallback(for error: Error) -> Bool {

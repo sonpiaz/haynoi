@@ -52,17 +52,21 @@ enum NotificationHelper {
 
     /// Posts a notification telling the user their session has expired and they
     /// must sign in again.  Tapping the notification opens Haynoi Settings.
-    /// The dictation was pasted from the offline recognizer because Haynoi is
-    /// not signed in — so it is fast but misses English terms and the dictionary.
-    static func postSignedOutUsingOffline() {
+    /// The dictation was pasted from the offline recognizer because the cloud
+    /// could not be used — fast, but it misses English terms and dictionary terms.
+    /// `reason`: the failure's own description ("You've used your free words…",
+    /// "No connection…"), which otherwise never reaches the user when the
+    /// offline text is pasted.
+    static func postOfflineFallback(signedOut: Bool, reason: String? = nil) {
         let content = UNMutableNotificationContent()
-        content.title = "Haynoi is signed out"
-        content.subtitle = "Using offline recognition — English terms and your dictionary are skipped."
-        content.body = "Open Settings (⌘,) to sign in again."
-        content.userInfo = ["action": "openSettings"]
-        let request = UNNotificationRequest(identifier: "haynoi-signed-out-offline", content: content, trigger: nil)
+        content.title = signedOut ? "Haynoi is signed out" : "Haynoi used offline recognition"
+        content.subtitle = "English terms and your dictionary terms may be wrong in that text."
+        content.body = signedOut ? "Open Settings (⌘,) to sign in again."
+                                 : (reason ?? "The transcription service did not answer. The next dictation tries it again.")
+        content.userInfo = signedOut ? ["action": "openSettings"] : [:]
+        let request = UNNotificationRequest(identifier: "haynoi-offline-fallback", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { err in
-            if let err = err { NSLog("[Haynoi] Failed to post signed-out notice: %@", err.localizedDescription) }
+            if let err = err { NSLog("[Haynoi] Failed to post offline notice: %@", err.localizedDescription) }
         }
     }
 
