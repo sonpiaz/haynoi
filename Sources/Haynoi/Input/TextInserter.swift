@@ -87,6 +87,12 @@ enum TextInserter {
             return InsertionResult(inserted: text, span: nil, targetApp: targetApp)
         }
 
+        // The app every step below reads and writes, resolved once: the gate just
+        // checked it is the one up front. Re-reading frontmostApplication in each
+        // step could point the caret read, the paste and the AX write at
+        // different apps if focus moved in between (W37-1391).
+        let app = targetApp ?? frontmost
+
         // What the paste attempt left on the clipboard, read by the fallback below.
         var pasteAttempt: PasteAttempt = .notTakenNothingLeft
 
@@ -96,8 +102,8 @@ enum TextInserter {
         if axTrusted {
             // Snapshot the caret position BEFORE paste so we can derive the span
             // it occupied (caret-after − text length) for an in-place "fix that".
-            let preCaret = focusedSelectionRange(in: targetApp ?? NSWorkspace.shared.frontmostApplication)
-            switch await pasteViaClipboard(text, targetApp: targetApp) {
+            let preCaret = focusedSelectionRange(in: app)
+            switch await pasteViaClipboard(text, targetApp: app) {
             case .taken:
                 NSLog("[Haynoi] Insert via Cmd+V")
                 PasteStats.record(.taken, app: targetApp?.bundleIdentifier)
@@ -106,7 +112,7 @@ enum TextInserter {
                 // before (300ms after ⌘V) or the derived span used by "fix that"
                 // would be read too early.
                 try? await Task.sleep(nanoseconds: 300_000_000)
-                let span = pasteSpan(preCaret: preCaret, text: text, targetApp: targetApp)
+                let span = pasteSpan(preCaret: preCaret, text: text, targetApp: app)
                 return InsertionResult(inserted: text, span: span, targetApp: targetApp)
             case let outcome:
                 pasteAttempt = outcome
@@ -115,9 +121,8 @@ enum TextInserter {
 
         // Step 3: AX insertion fallback (works for native macOS apps)
         if axTrusted {
-            // Resolve the app once and hand it down: checking one app's field while
-            // the write went to another is not a check.
-            let app = targetApp ?? frontmost
+            // Checking one app's field while the write went to another is not a
+            // check, so the AX write and the read-back use the same `app`.
             let beforeAX = focusedElementValue(in: app)
             let axSpan = tryAXInsertionReturningSpan(text, targetApp: app)
             if axSpan != nil {
@@ -204,7 +209,7 @@ enum TextInserter {
     /// post-paste caret (sits at end-of-paste); `span = (caret − len, len)`.
     /// Returns nil when AX caret read is unavailable (Electron) — span unknown.
     private static func pasteSpan(preCaret: CFRange?, text: String, targetApp: NSRunningApplication?) -> NSRange? {
-        guard let post = focusedSelectionRange(in: targetApp ?? NSWorkspace.shared.frontmostApplication) else {
+        guard let post = focusedSelectionRange(in: targetApp) else {
             return nil
         }
         let len = text.utf16.count
