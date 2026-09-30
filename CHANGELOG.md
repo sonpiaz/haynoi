@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Any fallback to offline recognition is announced, with the reason** —
+  not only sign-out: a busy server, no connection or a used-up weekly limit
+  now say so instead of leaving you with worse text and no explanation.
+- The paste reads, writes and checks one app from start to finish, even if
+  focus moves while the text is being inserted.
 - **Signed out no longer means silently worse text.** When Haynoi is signed
   out it pastes what the Mac's offline recognizer heard — fast, but weak on
   English terms. It now tells you, and that recognizer also leans on your
