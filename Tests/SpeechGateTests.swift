@@ -73,6 +73,41 @@ final class SpeechGateTests: XCTestCase {
         XCTAssertFalse(PipelineController.hasSpeech(buffer))
     }
 
+    /// 29/09: "Nói ngắn ra thì nó không nghe". A one-word reply, said softly,
+    /// with no start tone in the mic (headphones, sound off): 0.3.11 required
+    /// 0.6 s of voice and dropped it.
+    func testShortSoftReplyWithoutToneIsSpeech() {
+        var buffer = noise(seconds: 1.6, rms: 0.0015)          // pre-roll + reply + 0.5 s tail
+        addVoice(&buffer, at: 0.75, seconds: 0.3, amplitude: 0.012)
+        XCTAssertLessThan(average(buffer), 0.005)
+        XCTAssertTrue(PipelineController.hasSpeech(buffer))
+    }
+
+    func testShortReplyAfterTheToneIsSpeech() {
+        var buffer = noise(seconds: 1.8, rms: 0.0015)
+        addVoice(&buffer, at: 0.3, seconds: 0.42, amplitude: 0.008)  // tone heard by the mic
+        addVoice(&buffer, at: 0.95, seconds: 0.3, amplitude: 0.012)  // "có"
+        XCTAssertLessThan(average(buffer), 0.005)
+        XCTAssertTrue(PipelineController.hasSpeech(buffer))
+    }
+
+    /// The tone alone, on time or 200 ms late (Bluetooth), in a short hold.
+    func testShortHoldWithOnlyTheToneIsNotSpeech() {
+        for at in [0.3, 0.5] {
+            var buffer = noise(seconds: 1.5, rms: 0.0015)
+            addVoice(&buffer, at: at, seconds: 0.42, amplitude: 0.01)
+            XCTAssertLessThan(average(buffer), 0.005)
+            XCTAssertFalse(PipelineController.hasSpeech(buffer), "tone at \(at) s")
+        }
+    }
+
+    func testAShortThumpIsNotSpeech() {
+        var buffer = noise(seconds: 2, rms: 0.0015, seed: 3)
+        let thump = noise(seconds: 0.12, rms: 0.01, seed: 4)
+        for (i, v) in thump.enumerated() { buffer[16000 + i] += v }
+        XCTAssertFalse(PipelineController.hasSpeech(buffer))
+    }
+
     func testEmptyAndTinyBuffersAreNotSpeech() {
         XCTAssertFalse(PipelineController.hasSpeech([]))
         XCTAssertFalse(PipelineController.hasSpeech([Float](repeating: 0.5, count: 100)))

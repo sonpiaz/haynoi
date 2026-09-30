@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The last word is no longer cut off.** Recording stopped the instant the key
+  came up, and most people let go while the last word is still coming out, so it
+  never reached the transcriber. Haynoi now keeps listening for half a second
+  after you release.
+- **Short replies are heard.** A one- or two-word answer said softly ("có",
+  "ok") was treated as silence unless the microphone also caught the start tone.
 - **Speaking quietly no longer ends in "No speech detected."** Haynoi judged a
   recording by its average loudness, so a soft voice with pauses — dictating
   late at night, or thinking between sentences — was thrown away before it was

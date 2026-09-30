@@ -547,6 +547,8 @@ final class PipelineController {
     /// four times the floor and above an absolute minimum; 0.6 s of voiced
     /// frames, counted only in unbroken 150 ms stretches, is speech — longer
     /// than the 0.42 s start tone the mic can pick up, and clicks don't add up.
+    /// 2026-09-29: that 0.6 s dropped short soft replies ("có", "ok") whenever
+    /// the mic did not also hear the tone; see the loop below.
     /// Steady noise (a fan) lifts the floor with it, so it still reads as
     /// silence. Anything the old average let through still passes.
     nonisolated static func hasSpeech(_ samples: [Float], sampleRate: Int = 16000) -> Bool {
@@ -564,21 +566,36 @@ final class PipelineController {
             start += frameLength
         }
         let floor = frames.sorted()[frames.count / 10]
-        let voicedThreshold = max(0.003, floor * 4)
-        // Only unbroken 150 ms stretches count — syllables, not clicks. 0.6 s
-        // of them is speech; the start tone alone is one 0.42 s stretch.
-        var voiced = 0, run = 0
-        for frame in frames + [0] {
+        // 3× the floor (was 4×): a soft short reply peaks at about 6× the floor
+        // and dips between syllables; at 4× it broke into pieces too short to
+        // count. Steady noise still sits near 1× (evals/short-speech).
+        let voicedThreshold = max(0.003, floor * 3)
+        // Only unbroken 150 ms stretches count — syllables, not clicks.
+        //
+        // The start tone is one stretch of about 0.42 s beginning right after
+        // the pre-roll, so the first stretch of that shape is not counted.
+        // Requiring 0.6 s in total (the rule before 2026-09-29) kept the tone
+        // out, but only by also dropping every short reply said softly: "có",
+        // "được", "ok" are 0.25–0.45 s. With the tone set aside, 0.24 s of
+        // voice is speech. Measured in evals/short-speech.
+        let toneStart = 0.2 * Double(sampleRate) / Double(frameLength)
+        let toneEnd = 0.7 * Double(sampleRate) / Double(frameLength)
+        var voiced = 0, run = 0, toneSkipped = false
+        for (index, frame) in (frames + [0]).enumerated() {
             if frame > voicedThreshold {
                 run += 1
-            } else {
-                if run >= 5 { voiced += run }
-                run = 0
+                continue
             }
+            let start = Double(index - run)
+            let toneShaped = run <= 17 && start >= toneStart && start <= toneEnd
+            if run >= 5 {
+                if toneShaped && !toneSkipped { toneSkipped = true } else { voiced += run }
+            }
+            run = 0
         }
         NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames",
               average, floor, voiced, frames.count)
-        return voiced >= 20
+        return voiced >= 8
     }
 
     nonisolated static func resolveTranscript(
