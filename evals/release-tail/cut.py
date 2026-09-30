@@ -18,4 +18,8 @@ for f in sorted(glob.glob('s[0-9].wav')):
     out('early', x[:max(0, end - int(.15 * sr))])
     out('cut300', x[:max(0, end - int(.30 * sr))])
     out('cut450', x[:max(0, end - int(.45 * sr))])
+    # After the fix: same release points, capture continues 500 ms past them.
+    padded = list(x) + [0] * sr
+    out('tail300', padded[:end - int(.30 * sr) + sr // 2])
+    out('tail450', padded[:end - int(.45 * sr) + sr // 2])
     print(f, 'speech ends at %.2fs' % (end / sr))

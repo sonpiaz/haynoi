@@ -7,7 +7,7 @@ dictations ended one word short in history ("…vào buổi", "…cho các xe").
 ```
 cd evals/release-tail
 i=0; while IFS= read -r l; do i=$((i+1)); say -v Linh -o s$i.wav --data-format=LEI16@16000 "$l"; done < sentences.txt
-python3 cut.py            # s*-full / -atend / -early(150 ms) and cut300 / cut450 variants
+python3 cut.py            # s*-full / -atend / -early(150 ms) / cut300 / cut450 (before) and tail300 / tail450 (after)
 ~/cos/bin/chay-an ~/kyma-api/.env KYMA_API_KEY -- python3 stt.py transcribe-quality
 ```
 `stt.py` reads `KYMA_API_KEY` from the .env itself (chay-an only masks output). Needs a Kyma key.
@@ -27,8 +27,13 @@ reaching STT ends ≥ 450 ms after the release point; every sentence keeps its l
 
 whisper-v3-turbo kept the last word at 150 ms in 6/6; the default is Quality.
 
-## After the fix (same audio, release point as above, 500 ms recorded after it)
-| release before end of speech | last word kept, before → after |
-|---|---|
-| 300 ms | 2/6 → 6/6 |
-| 450 ms | 0/6 → 5/6 (s5 came back as Chinese, as it also does uncut with no trailing silence — a language-detection miss, not the tail) |
+## After the fix (same release points, 500 ms recorded after them: `tail300`, `tail450`)
+Two runs on 29/09, transcribe-quality. s5 flips to Chinese run to run in both
+the cut and the tail files — a language-detection miss, not the tail — so it is
+counted apart.
+
+| release before end of speech | before (cut) | after (tail) |
+|---|---|---|
+| 300 ms, run 1 / run 2 | 2/6 / 2/6 | 6/6 / 5/6 (s5 Chinese) |
+| 450 ms, run 1 / run 2 | 0/6 / 0/6 | 5/6 / 5/6 (s5 Chinese) |
+| without s5, both runs | 300 ms: 1/5 · 450 ms: 0/5 | 5/5 at both |

@@ -238,13 +238,10 @@ final class AudioRecorder {
         stopWatchdog()
 
         lock.lock()
-        // A capture the device cut short: hand back what it had.
-        if !isCapturing, let aborted = abortedCapture {
-            abortedCapture = nil
-            lock.unlock()
-            NSLog("[Haynoi] endCapture: returning %d samples captured before an abort", aborted.count)
-            return aborted
-        }
+        // A capture the device cut short comes back from here, through the
+        // normal path so the cooldown and the callback cleanup still happen.
+        let aborted = abortedCapture
+        abortedCapture = nil
         let wasCapturing = isCapturing
         isCapturing = false
         // When we were NOT actually capturing (launch warm-up at setup(), or a
@@ -257,7 +254,7 @@ final class AudioRecorder {
             buffer.removeAll(keepingCapacity: true)
             ringBuffer.removeAll(keepingCapacity: true)
         } else {
-            samples = []
+            samples = aborted ?? []
         }
         // Always drop a pending captureLive callback — a chord that never became
         // a hold must not leave a stale tone trigger for the next dictation.
