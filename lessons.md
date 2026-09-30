@@ -126,3 +126,15 @@ cơ chế: `Tests/SpeechGateTests.swift`.
 - Khác dự tính: bản 0.3.11 chỉ nằm trên MacBook nên hai fix (đuôi 500 ms, gate câu ngắn) phải chờ nhánh `macbook-0.3.11`; gate câu ngắn cần 3 vòng Grok vì mỗi cách loại start tone (theo vị trí, cửa sổ đệm) đều nuốt một kiểu câu trả lời thật.
 - Học được: một bộ lọc dựa vào *vị trí* hay *cửa sổ rộng* sẽ gán nhầm thứ nằm cạnh; so khớp trên đúng mẫu của đoạn đó. Và số đo phải chạy lại từ script trong repo (`evals/`), không từ file nháp.
 - Áp ngay: mỗi fix âm thanh có một thư mục `evals/<tên>/` sinh audio + chạy lại được trước/sau; không build Xcode khi máy đang bận — logic thuần kiểm bằng `swiftc` harness, XCTest đầy đủ chạy khi máy rảnh.
+
+## "Fast but wrong" is the offline recognizer, not the hint (2026-09-30)
+
+0.3.12 pasted "đếch" for "deck" and "Asian" for "agent" with both in the
+dictionary. The first guess blamed the newest hint change; the app's own
+Phonetics showed none of the seven words had ever been hinted. Signed out,
+Haynoi skipped the cloud and pasted the offline recognizer's text with no
+notice — and a keychain read that fails because the build is signed
+differently looks exactly like signed out. Measure a guess against the code
+before changing the code; never degrade silently.
+
+cơ chế: `Tests/SignedOutFallbackTests.swift`, `Tests/MisheardPairsTests.swift`; keychain failures now log their OSStatus.
