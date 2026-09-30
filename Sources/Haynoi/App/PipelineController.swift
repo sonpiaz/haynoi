@@ -413,6 +413,12 @@ final class PipelineController {
             }
 
             NSLog("[Haynoi] Transcribed (%@): %ld chars", winner.source == .cloud ? "cloud" : "on-device", finalText.count)
+            if case .failure(let error)? = cloudResult,
+               Self.shouldWarnSignedOut(source: winner.source, error: error,
+                                        lastWarned: Self.lastSignedOutWarning, now: Date()) {
+                Self.lastSignedOutWarning = Date()
+                NotificationHelper.postSignedOutUsingOffline()
+            }
             // Capture attribution from the dictation target app (F2.3 / D17).
             let attrBundleId = dictationTargetApp?.bundleIdentifier
             let attrAppName = dictationTargetApp?.localizedName
@@ -673,6 +679,24 @@ final class PipelineController {
             }
         }
         return nil
+    }
+
+    /// Signed out, the cloud is never asked and the fast offline recognizer's
+    /// text is pasted instead — quick, wrong on English terms, and without the
+    /// user's dictionary. 30/09: 0.3.12 did exactly that for a whole morning
+    /// ("deck" → "đếch", "agent" → "Asian") and nothing said why. Say it, at
+    /// most once every 10 minutes.
+    nonisolated(unsafe) static var lastSignedOutWarning: Date?
+
+    nonisolated static func shouldWarnSignedOut(source: Source, error: Error,
+                                                lastWarned: Date?, now: Date) -> Bool {
+        guard source == .onDevice, let stt = error as? STTError else { return false }
+        switch stt {
+        case .notSignedIn: break
+        default: return false   // sessionExpired already posts its own notice
+        }
+        guard let lastWarned else { return true }
+        return now.timeIntervalSince(lastWarned) >= 600
     }
 
     nonisolated static func shouldUseOnDeviceFallback(for error: Error) -> Bool {

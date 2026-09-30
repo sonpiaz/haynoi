@@ -52,6 +52,20 @@ enum NotificationHelper {
 
     /// Posts a notification telling the user their session has expired and they
     /// must sign in again.  Tapping the notification opens Haynoi Settings.
+    /// The dictation was pasted from the offline recognizer because Haynoi is
+    /// not signed in — so it is fast but misses English terms and the dictionary.
+    static func postSignedOutUsingOffline() {
+        let content = UNMutableNotificationContent()
+        content.title = "Haynoi is signed out"
+        content.subtitle = "Using offline recognition — English terms and your dictionary are skipped."
+        content.body = "Open Settings (⌘,) to sign in again."
+        content.userInfo = ["action": "openSettings"]
+        let request = UNNotificationRequest(identifier: "haynoi-signed-out-offline", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { err in
+            if let err = err { NSLog("[Haynoi] Failed to post signed-out notice: %@", err.localizedDescription) }
+        }
+    }
+
     static func postSessionExpired() {
         let content = UNMutableNotificationContent()
         content.title = "Haynoi"

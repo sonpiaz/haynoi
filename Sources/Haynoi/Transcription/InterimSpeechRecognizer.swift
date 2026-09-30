@@ -93,6 +93,11 @@ final class InterimSpeechRecognizer {
         // orb updates as he talks. Partials stay RAM-only either way.
         let onDevice = rec.supportsOnDeviceRecognition
         request.requiresOnDeviceRecognition = onDevice
+        // This text is what gets pasted when the cloud is unreachable or the
+        // user is signed out — bias it toward their own terms ("deck",
+        // "Mandeck", "agent"), the way the cloud prompt already is. Apple
+        // caps useful contextual strings at about 100.
+        request.contextualStrings = Array(PersonalDictionary.shared.glossaryTerms().prefix(100))
         if #available(macOS 13.0, *) {
             // Sentence-end marks let the HUD drop bold on a finished clause.
             // Display-only — inserted text still comes from the cloud POST.
