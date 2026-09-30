@@ -97,8 +97,7 @@ final class PipelineController {
             queue: .main
         ) { [weak self] note in
             let reason = note.userInfo?["reason"] as? String ?? "Recording error"
-            let samples = note.userInfo?["samples"] as? [Float] ?? []
-            Task { @MainActor in self?.handleRecorderAbort(reason, samples: samples) }
+            Task { @MainActor in self?.handleRecorderAbort(reason) }
         }
 
         // If a previous session died mid-dictation with the output volume
@@ -269,14 +268,14 @@ final class PipelineController {
         finishStop()
     }
 
-    /// `abortedSamples`: the recorder failed during the tail and already shut
-    /// down; this is what it had captured.
-    private func finishStop(abortedSamples: [Float]? = nil) {
+    /// If the device failed during the tail, endCapture() returns what the
+    /// recorder had captured before it shut down.
+    private func finishStop() {
         guard pendingStop != nil else { return }
         pendingStop = nil
 
         stopInterimOverlay()
-        let samples = abortedSamples ?? recorder.endCapture()
+        let samples = recorder.endCapture()
         MediaController.resumeIfPaused()
         // Tail measured in samples actually recorded after release, not wall time.
         let tail = Double(max(0, samples.count - samplesAtRelease)) / 16000.0
@@ -809,16 +808,18 @@ final class PipelineController {
     // MARK: - Device Abort Handler (Fix #5)
 
     /// Called when AudioRecorder posts `didAbortRecording` (device failure mid-recording).
-    private func handleRecorderAbort(_ reason: String, samples: [Float]) {
+    private func handleRecorderAbort(_ reason: String) {
         NSLog("[Haynoi] Recorder aborted: %@", reason)
 
         // The key was already released and only the tail was still recording:
-        // the dictation is complete enough — send what was captured.
-        if let work = pendingStop {
-            work.cancel()
-            finishStop(abortedSamples: samples)
+        // the dictation is complete enough — send what was captured now.
+        if pendingStop != nil {
+            finishPendingStopNow()
             return
         }
+        // Released and already handed on (the tail timer ran first): nothing
+        // of this dictation is lost, so no error for it.
+        if !state.isRecording { return }
 
         // Tear down recording state without calling recorder.stopRecording()
         // (the recorder already cleaned itself up before posting the notification).

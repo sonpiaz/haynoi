@@ -34,6 +34,9 @@ final class AudioRecorder {
 
     /// True between `beginCapture` and `endCapture`.
     private var isCapturing = false
+    /// What an abort (device failure) cut short, until endCapture() takes it
+    /// or the next beginCapture() starts over.
+    private var abortedCapture: [Float]?
 
     /// Guards engine lifecycle, buffers, capture flag, and the live converter/format.
     private let lock = NSLock()
@@ -203,6 +206,7 @@ final class AudioRecorder {
             buffer.removeAll(keepingCapacity: true)
         }
         isCapturing = true
+        abortedCapture = nil
         lock.unlock()
 
         setLastTapFireTime(Date())
@@ -220,10 +224,11 @@ final class AudioRecorder {
         lock.unlock()
     }
 
-    /// Samples captured so far in the current capture (0 when not capturing).
+    /// Samples captured so far in the current capture, including one that an
+    /// abort cut short (0 when there is none).
     func capturedSampleCount() -> Int {
         lock.lock(); defer { lock.unlock() }
-        return isCapturing ? buffer.count : 0
+        return isCapturing ? buffer.count : (abortedCapture?.count ?? 0)
     }
 
     /// Stops accumulating, returns the recorded 16kHz mono samples, and returns
@@ -233,6 +238,13 @@ final class AudioRecorder {
         stopWatchdog()
 
         lock.lock()
+        // A capture the device cut short: hand back what it had.
+        if !isCapturing, let aborted = abortedCapture {
+            abortedCapture = nil
+            lock.unlock()
+            NSLog("[Haynoi] endCapture: returning %d samples captured before an abort", aborted.count)
+            return aborted
+        }
         let wasCapturing = isCapturing
         isCapturing = false
         // When we were NOT actually capturing (launch warm-up at setup(), or a
@@ -454,8 +466,10 @@ final class AudioRecorder {
         // Take what was captured before shutdownEngine clears it: an abort can
         // land in the tail recorded after the key was released, and that
         // dictation is still worth sending.
+        // It is kept here, not handed along with the notification, so the
+        // next endCapture() returns it whichever of the two runs first.
         lock.lock()
-        let captured = isCapturing ? buffer : []
+        if isCapturing { abortedCapture = buffer }
         lock.unlock()
         shutdownEngine()
 
@@ -463,7 +477,7 @@ final class AudioRecorder {
             NotificationCenter.default.post(
                 name: AudioRecorder.didAbortRecording,
                 object: nil,
-                userInfo: ["reason": reason, "samples": captured]
+                userInfo: ["reason": reason]
             )
         }
         NSLog("[Haynoi] Recording aborted: %@", reason)
