@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Speaking quietly no longer ends in "No speech detected."** Haynoi judged a
+  recording by its average loudness, so a soft voice with pauses — dictating
+  late at night, or thinking between sentences — was thrown away before it was
+  transcribed. It now listens for stretches of voice above the room's own
+  background noise.
 - **Words Haynoi learns from your corrections now stick.** Since 0.3.6 the
   personal dictionary was read back in the wrong format, so it quietly came
   back empty every time Haynoi restarted — learned fixes, words you added
