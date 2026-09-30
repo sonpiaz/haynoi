@@ -47,7 +47,8 @@ final class PipelineController {
     static let tailMs = 500
     /// The release that is still recording its tail; nil when none is pending.
     private var pendingStop: DispatchWorkItem?
-    private var releasedAt: Date?
+    /// Samples already captured when the key went up; what comes after is tail.
+    private var samplesAtRelease = 0
     // Keep release latency bounded before falling back to on-device text.
     static let cloudDeadline: TimeInterval = 2.5
 
@@ -96,7 +97,8 @@ final class PipelineController {
             queue: .main
         ) { [weak self] note in
             let reason = note.userInfo?["reason"] as? String ?? "Recording error"
-            Task { @MainActor in self?.handleRecorderAbort(reason) }
+            let samples = note.userInfo?["samples"] as? [Float] ?? []
+            Task { @MainActor in self?.handleRecorderAbort(reason, samples: samples) }
         }
 
         // If a previous session died mid-dictation with the output volume
@@ -248,7 +250,7 @@ final class PipelineController {
         state.isRecording = false
         state.showOverlay = false
 
-        releasedAt = Date()
+        samplesAtRelease = recorder.capturedSampleCount()
         let work = DispatchWorkItem { [weak self] in self?.finishStop() }
         pendingStop = work
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.tailMs), execute: work)
@@ -267,15 +269,18 @@ final class PipelineController {
         finishStop()
     }
 
-    private func finishStop() {
+    /// `abortedSamples`: the recorder failed during the tail and already shut
+    /// down; this is what it had captured.
+    private func finishStop(abortedSamples: [Float]? = nil) {
         guard pendingStop != nil else { return }
         pendingStop = nil
-        let tail = min(Date().timeIntervalSince(releasedAt ?? Date()), Double(Self.tailMs) / 1000.0)
-        releasedAt = nil
 
         stopInterimOverlay()
-        let samples = recorder.endCapture()
+        let samples = abortedSamples ?? recorder.endCapture()
         MediaController.resumeIfPaused()
+        // Tail measured in samples actually recorded after release, not wall time.
+        let tail = Double(max(0, samples.count - samplesAtRelease)) / 16000.0
+        samplesAtRelease = 0
 
         // Measure duration from the actual captured samples (pre-roll included)
         // rather than wall-clock from confirmRecording: this is what the user
@@ -804,8 +809,16 @@ final class PipelineController {
     // MARK: - Device Abort Handler (Fix #5)
 
     /// Called when AudioRecorder posts `didAbortRecording` (device failure mid-recording).
-    private func handleRecorderAbort(_ reason: String) {
+    private func handleRecorderAbort(_ reason: String, samples: [Float]) {
         NSLog("[Haynoi] Recorder aborted: %@", reason)
+
+        // The key was already released and only the tail was still recording:
+        // the dictation is complete enough — send what was captured.
+        if let work = pendingStop {
+            work.cancel()
+            finishStop(abortedSamples: samples)
+            return
+        }
 
         // Tear down recording state without calling recorder.stopRecording()
         // (the recorder already cleaned itself up before posting the notification).

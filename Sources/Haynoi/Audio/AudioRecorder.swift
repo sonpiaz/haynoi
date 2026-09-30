@@ -220,6 +220,12 @@ final class AudioRecorder {
         lock.unlock()
     }
 
+    /// Samples captured so far in the current capture (0 when not capturing).
+    func capturedSampleCount() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return isCapturing ? buffer.count : 0
+    }
+
     /// Stops accumulating, returns the recorded 16kHz mono samples, and returns
     /// the engine to ring-buffer mode (engine stays running). Schedules cooldown.
     @discardableResult
@@ -445,13 +451,19 @@ final class AudioRecorder {
     /// when a device fails mid-capture.
     private func abortRecordingWithError(_ reason: String) {
         stopWatchdog()
+        // Take what was captured before shutdownEngine clears it: an abort can
+        // land in the tail recorded after the key was released, and that
+        // dictation is still worth sending.
+        lock.lock()
+        let captured = isCapturing ? buffer : []
+        lock.unlock()
         shutdownEngine()
 
         DispatchQueue.main.async {
             NotificationCenter.default.post(
                 name: AudioRecorder.didAbortRecording,
                 object: nil,
-                userInfo: ["reason": reason]
+                userInfo: ["reason": reason, "samples": captured]
             )
         }
         NSLog("[Haynoi] Recording aborted: %@", reason)
