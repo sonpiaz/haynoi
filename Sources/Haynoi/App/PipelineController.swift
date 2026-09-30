@@ -39,6 +39,15 @@ final class PipelineController {
     // the 200ms grace period + the user's reaction time so first words are never
     // lost, even on a cold Bluetooth mic.
     private static let preRollMs = 300
+    /// Audio kept after the key is released. People let go while the last word
+    /// is still coming out; capture that ended there lost the whole word — "…vào
+    /// buổi" for "…vào buổi tối" (29/09). Measured on transcribe-quality
+    /// (evals/release-tail): audio ending 300 ms before the speech did kept the
+    /// last word in 2 of 6 sentences, 450 ms in 0 of 6. 500 ms covers that.
+    static let tailMs = 500
+    /// The release that is still recording its tail; nil when none is pending.
+    private var pendingStop: DispatchWorkItem?
+    private var releasedAt: Date?
     // Keep release latency bounded before falling back to on-device text.
     static let cloudDeadline: TimeInterval = 2.5
 
@@ -121,6 +130,9 @@ final class PipelineController {
     private var isPreRecording = false
 
     func preRecording() {
+        // A new press while the last release is still recording its tail: close
+        // that dictation now, or beginCapture would clear its buffer.
+        finishPendingStopNow()
         guard !state.isRecording, !isPreRecording else { return }
 
         // Fix #3: reject recording when mic permission has been revoked.
@@ -220,15 +232,50 @@ final class PipelineController {
         }
     }
 
+    /// Key released: the UI moves on at once, the mic keeps recording for
+    /// `tailMs`, then `finishStop()` hands the audio on.
     func stopRecording() {
-        guard state.isRecording else { return }
+        guard state.isRecording, pendingStop == nil else { return }
 
         recordingStartTime = nil
         durationTimer?.invalidate()
         durationTimer = nil
 
+        // Transition orb to "thinking" state rather than hiding it — the orb
+        // stays visible during the network round-trip so users know work is in
+        // flight.  The orb will auto-hide after success/error transitions.
+        FloatingBarController.shared.transition(to: .transcribing)
+        state.isRecording = false
+        state.showOverlay = false
+
+        releasedAt = Date()
+        let work = DispatchWorkItem { [weak self] in self?.finishStop() }
+        pendingStop = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.tailMs), execute: work)
+    }
+
+    /// How long the key was actually held: captured audio minus the pre-roll
+    /// spliced in front and the tail recorded after release.
+    static func heldSeconds(sampleCount: Int, tail: TimeInterval) -> TimeInterval {
+        max(0, Double(sampleCount) / 16000.0 - Double(preRollMs) / 1000.0 - tail)
+    }
+
+    /// Ends a release that is still recording its tail, with whatever tail it has.
+    private func finishPendingStopNow() {
+        guard let work = pendingStop else { return }
+        work.cancel()
+        finishStop()
+    }
+
+    private func finishStop() {
+        guard pendingStop != nil else { return }
+        pendingStop = nil
+        let tail = min(Date().timeIntervalSince(releasedAt ?? Date()), Double(Self.tailMs) / 1000.0)
+        releasedAt = nil
+
         stopInterimOverlay()
         let samples = recorder.endCapture()
+        MediaController.resumeIfPaused()
 
         // Measure duration from the actual captured samples (pre-roll included)
         // rather than wall-clock from confirmRecording: this is what the user
@@ -239,21 +286,13 @@ final class PipelineController {
         // Fix #5: the pre-roll (preRollMs) is spliced into the buffer at
         // beginCapture, so even a near-instant release yields ~preRollMs of audio.
         // Gate the minimum-duration check on the user's ACTUAL hold time (total
-        // captured minus the pre-roll) so a 0ms hold + 300ms pre-roll does not
-        // sneak past as "speech" and burn an STT API call on non-speech audio.
-        let actualDuration = max(0, duration - Double(PipelineController.preRollMs) / 1000.0)
+        // captured minus the pre-roll and the tail) so a 0ms hold does not sneak
+        // past as "speech" and burn an STT API call on non-speech audio.
+        let actualDuration = Self.heldSeconds(sampleCount: samples.count, tail: tail)
 
         // Capture per-dictation target app before the next preRecording can overwrite it.
         // Fix #9: snapshot and pass through, do not use a shared static.
         let dictationTargetApp = currentDictationTargetApp
-
-        // Transition orb to "thinking" state rather than hiding it — the orb
-        // stays visible during the network round-trip so users know work is in
-        // flight.  The orb will auto-hide after success/error transitions.
-        FloatingBarController.shared.transition(to: .transcribing)
-        state.isRecording = false
-        state.showOverlay = false
-        MediaController.resumeIfPaused()
 
         // Too short — cancel silently, just hide the orb. Gate on actualDuration
         // (pre-roll removed) so a tap that captured only pre-roll is dropped.
@@ -265,8 +304,8 @@ final class PipelineController {
         }
 
         // Secondary guard: need at least 0.5s of REAL speech on top of the
-        // pre-roll. 8000 samples (0.5s) + the pre-roll padding (preRollMs).
-        let minSamples = 8000 + (PipelineController.preRollMs * 16000) / 1000
+        // pre-roll and the tail. 8000 samples (0.5s) + both paddings.
+        let minSamples = 8000 + (PipelineController.preRollMs * 16000) / 1000 + Int(tail * 16000)
         guard samples.count > minSamples else {
             FloatingBarController.shared.transition(to: .error)
             state.setTransientError("Too short to transcribe")
@@ -638,7 +677,7 @@ final class PipelineController {
     func armCorrection() {
         guard let at = state.lastDictationAt, Date().timeIntervalSince(at) < 60,
               state.lastInsertedText != nil,
-              !state.isRecording, !state.isTranscribing else {
+              !state.isRecording, !state.isTranscribing, pendingStop == nil else {
             NSLog("[Haynoi] armCorrection: no recent dictation or busy — ignored")
             return
         }
@@ -819,7 +858,7 @@ final class PipelineController {
     func retryLastFailedDictation() {
         // Fix #3: re-entry guard — retry must not run concurrently with itself
         // or with a live dictation.
-        guard !state.isTranscribing, !state.isRecording else {
+        guard !state.isTranscribing, !state.isRecording, pendingStop == nil else {
             NSLog("[Haynoi] retryLastFailedDictation: skipped (already transcribing or recording)")
             return
         }
