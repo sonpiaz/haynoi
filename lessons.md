@@ -120,3 +120,9 @@ engine stayed warm (rules out the mic watchdog), and `failed/` got nothing
 (rules out a transcription failure).
 
 cơ chế: `Tests/SpeechGateTests.swift`.
+
+## Retro before night wave 3 (2026-09-30)
+
+- Khác dự tính: bản 0.3.11 chỉ nằm trên MacBook nên hai fix (đuôi 500 ms, gate câu ngắn) phải chờ nhánh `macbook-0.3.11`; gate câu ngắn cần 3 vòng Grok vì mỗi cách loại start tone (theo vị trí, cửa sổ đệm) đều nuốt một kiểu câu trả lời thật.
+- Học được: một bộ lọc dựa vào *vị trí* hay *cửa sổ rộng* sẽ gán nhầm thứ nằm cạnh; so khớp trên đúng mẫu của đoạn đó. Và số đo phải chạy lại từ script trong repo (`evals/`), không từ file nháp.
+- Áp ngay: mỗi fix âm thanh có một thư mục `evals/<tên>/` sinh audio + chạy lại được trước/sau; không build Xcode khi máy đang bận — logic thuần kiểm bằng `swiftc` harness, XCTest đầy đủ chạy khi máy rảnh.
