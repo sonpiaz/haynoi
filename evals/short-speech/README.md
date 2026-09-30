@@ -28,6 +28,10 @@ shortcut that predates 0.3.11. Tone alone (3 levels × on time / 200 ms / 450 ms
 tone, a thump, a fan and a quiet room are all rejected.
 Whisper peaks at ~3× the room floor; below that the gate does not hear it, on purpose.
 
+Known limit: a short reply said entirely over the tone (a 0.3 s reply starting 0.30–0.55 s, tone at
+0.30 s, both in the mic) merges with it and is dropped — as in 0.3.11. Before or after the tone passes
+(sweep 0.00–1.00 s in 0.05 steps: drops only at 0.30–0.55).
+
 ## Also seen (not the gate)
 Sent to transcribe-quality, short words often come back in the wrong language ("ok" → "어?",
 "tiếp tục" → "계속", "có" → "거") even with `language=vi`. Tracked separately.

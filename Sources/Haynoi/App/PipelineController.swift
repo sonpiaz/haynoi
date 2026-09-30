@@ -549,7 +549,7 @@ final class PipelineController {
     /// that, so real speech was thrown away as "No speech detected" before it
     /// reached the server (W37-1389, seven times on 2026-09-22 23:00–23:41).
     /// Now: the floor is the 10th-percentile frame; a frame is voiced when it is
-    /// four times the floor and above an absolute minimum; 0.6 s of voiced
+    /// three times the floor (four in 0.3.11) and above an absolute minimum; 0.6 s of voiced
     /// frames, counted only in unbroken 150 ms stretches, is speech — longer
     /// than the 0.42 s start tone the mic can pick up, and clicks don't add up.
     /// 2026-09-29: that 0.6 s dropped short soft replies ("có", "ok") whenever
@@ -601,10 +601,10 @@ final class PipelineController {
         if let tone, tone.isEmpty { return false }
         let notTone = runs.filter { r in
             guard let tone else { return true }
-            // Only the loud head of a decaying tone may clear the threshold, so
-            // search from 0.2 s before the stretch to a whole tone after it.
-            let from = max(0, r.start * frameLength - sampleRate / 5)
-            let to = min(samples.count, (r.start + r.length) * frameLength + tone.count)
+            // The stretch's own samples only: a window padded past it would
+            // score a reply said right next to the tone as the tone (review r2).
+            let from = r.start * frameLength
+            let to = min(samples.count, (r.start + r.length) * frameLength)
             return toneMatch(samples[from..<to], tone: tone) < 0.5
         }.reduce(0) { $0 + $1.length }
         NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d (%d not tone)/%d frames",
@@ -612,32 +612,35 @@ final class PipelineController {
         return notTone >= 8
     }
 
-    /// Best normalized cross-correlation of `tone` slid across `segment`
-    /// (0…1). The tone as heard through a room still scores ~0.8; speech
-    /// scores under ~0.35 against the chime and deep tones (evals/short-speech).
+    /// How much `segment` looks like the tone (0…1): the best normalized
+    /// cross-correlation between the two, sliding the shorter along the longer.
+    /// A stretch shorter than the tone — only the loud head of a decaying tone
+    /// clears the threshold — is compared with every part of the tone. The tone
+    /// as heard through a room scores ~0.8; speech scores under ~0.35 against
+    /// the chime and deep tones (evals/short-speech).
     nonisolated static func toneMatch(_ segment: ArraySlice<Float>, tone: [Float]) -> Float {
-        let n = tone.count
-        guard n > 0 else { return 0 }
-        let mean = tone.reduce(0, +) / Float(n)
-        let t = tone.map { $0 - mean }
-        let tNorm = t.reduce(0) { $0 + $1 * $1 }.squareRoot()
-        guard tNorm > 0 else { return 0 }
-        // A stretch shorter than the tone is compared against the tone's
-        // loudest part: pad the segment with zeros to the tone's length.
-        var x = Array(segment)
-        if x.count < n { x += [Float](repeating: 0, count: n - x.count) }
+        let x = Array(segment)
+        let (short, long) = x.count <= tone.count ? (x, tone) : (tone, x)
+        let n = short.count
+        guard n > 1 else { return 0 }
+        let mean = short.reduce(0, +) / Float(n)
+        let a = short.map { $0 - mean }
+        var aNorm: Float = 0
+        vDSP_svesq(a, 1, &aNorm, vDSP_Length(n))
+        aNorm = aNorm.squareRoot()
+        guard aNorm > 0 else { return 0 }
         var best: Float = 0
         var offset = 0
-        x.withUnsafeBufferPointer { xp in
-            t.withUnsafeBufferPointer { tp in
-                while offset + n <= xp.count {
-                    let window = xp.baseAddress! + offset
+        long.withUnsafeBufferPointer { lp in
+            a.withUnsafeBufferPointer { ap in
+                while offset + n <= lp.count {
+                    let window = lp.baseAddress! + offset
                     var dot: Float = 0, sum: Float = 0, sumSq: Float = 0
-                    vDSP_dotpr(window, 1, tp.baseAddress!, 1, &dot, vDSP_Length(n))
+                    vDSP_dotpr(window, 1, ap.baseAddress!, 1, &dot, vDSP_Length(n))
                     vDSP_sve(window, 1, &sum, vDSP_Length(n))
                     vDSP_svesq(window, 1, &sumSq, vDSP_Length(n))
                     let variance = sumSq - sum * sum / Float(n)
-                    if variance > 0 { best = max(best, abs(dot) / (variance.squareRoot() * tNorm)) }
+                    if variance > 0 { best = max(best, abs(dot) / (variance.squareRoot() * aNorm)) }
                     offset += 8
                 }
             }

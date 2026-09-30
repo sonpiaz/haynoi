@@ -109,6 +109,21 @@ final class SpeechGateTests: XCTestCase {
         XCTAssertTrue(PipelineController.hasSpeech(buffer, tone: chime()))
     }
 
+    /// Review r2: a reply said just before or just after the tone, the tone in
+    /// the mic too — the reply must not inherit the tone's match. A reply said
+    /// entirely over the tone (starting 0.30–0.55 s here) merges with it and is
+    /// still dropped, as it was in 0.3.11; separating the two needs the tone
+    /// subtracted, which is not measured on a real mic yet.
+    func testShortReplyNextToTheToneIsSpeech() {
+        for at in [0.0, 0.2, 0.6, 0.8] {
+            var buffer = noise(seconds: 2.0, rms: 0.0015)
+            addTone(&buffer, at: 0.3, amplitude: 0.02)
+            addVoice(&buffer, at: at, seconds: 0.3, amplitude: 0.012)
+            XCTAssertLessThan(average(buffer), 0.005)
+            XCTAssertTrue(PipelineController.hasSpeech(buffer, tone: chime()), "reply at \(at) s")
+        }
+    }
+
     /// The tone alone in a short hold — on time, 200 ms and 450 ms late
     /// (Bluetooth), and after a short burst that used to use up the one skip.
     func testShortHoldWithOnlyTheToneIsNotSpeech() {
