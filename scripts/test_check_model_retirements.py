@@ -43,5 +43,19 @@ class T(unittest.TestCase):
     def test_a_plain_word_on_a_model_line_counts(self):
         self.assertIn('fast', scan('let body = ["model": "fast"]\n'))
 
+class Vanished(unittest.TestCase):
+    """Review r1: a model dropped from the catalog is invisible to a catalog-driven scan."""
+    def test_a_name_seen_before_and_still_quoted_is_reported(self):
+        root = tempfile.mkdtemp(); os.makedirs(os.path.join(root, 'Sources'))
+        open(os.path.join(root, 'Sources', 'A.swift'), 'w').write('let m = "old-model-1"\n')
+        seen = os.path.join(root, 'seen.txt'); open(seen, 'w').write('old-model-1\ntranscribe\n')
+        self.assertEqual(cmr.vanished(seen, {'transcribe'}, root), ['old-model-1'])
+
+    def test_a_name_removed_from_the_code_too_is_not(self):
+        root = tempfile.mkdtemp(); os.makedirs(os.path.join(root, 'Sources'))
+        open(os.path.join(root, 'Sources', 'A.swift'), 'w').write('let m = "new-model-2"\n')
+        seen = os.path.join(root, 'seen.txt'); open(seen, 'w').write('old-model-1\n')
+        self.assertEqual(cmr.vanished(seen, {'new-model-2'}, root), [])
+
 if __name__ == '__main__':
     unittest.main()

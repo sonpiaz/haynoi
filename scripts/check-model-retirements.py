@@ -37,6 +37,16 @@ def literals(root, names):
                 found.setdefault(lit, f'{os.path.relpath(path, root)}:{n}')
     return found
 
+def vanished(seen_file, names, root):
+    """Names found on a previous run that the catalog no longer lists but Sources still quote."""
+    try:
+        before = [l.strip() for l in open(seen_file) if l.strip()]
+    except FileNotFoundError:
+        return []
+    code = '\n'.join(open(p, encoding='utf-8').read()
+                     for p in glob.glob(os.path.join(root, 'Sources', '**', '*.swift'), recursive=True))
+    return [n for n in before if n not in names and f'"{n}"' in code]
+
 def check(catalog, used, today, days):
     ids = {m['id']: m for m in catalog.get('data', [])}
     aliases = catalog.get('aliases') or {}
@@ -61,6 +71,8 @@ def main():
     ap.add_argument('--days', type=int, default=120)
     ap.add_argument('--catalog', help='read the catalog from a file instead of the network (tests)')
     ap.add_argument('--today', help='YYYY-MM-DD (tests)')
+    ap.add_argument('--seen', help='file of names found last run; a name that has left the catalog '
+                                   'but is still quoted in Sources is reported (the scan alone cannot see it)')
     a = ap.parse_args()
     if a.catalog:
         catalog = json.load(open(a.catalog))
@@ -69,7 +81,14 @@ def main():
             catalog = json.load(r)
     today = datetime.date.fromisoformat(a.today) if a.today else datetime.date.today()
     names = {m['id'] for m in catalog.get('data', [])} | set(catalog.get('aliases') or {})
-    rows, bad = check(catalog, literals(ROOT, names), today, a.days)
+    used = literals(ROOT, names)
+    rows, bad = check(catalog, used, today, a.days)
+    if a.seen:
+        gone = vanished(a.seen, names, ROOT)
+        for name in gone:
+            rows.append((name, name, 'NO LONGER IN CATALOG', 'seen last run, still in Sources')); bad.append(name)
+        with open(a.seen, 'w') as f:
+            f.write('\n'.join(sorted(set(used) | set(gone))) + '\n')
     if not rows:
         print('no catalog model or alias found in Sources — the scan itself is broken'); return 1
     for name, target, retires, where in rows:
