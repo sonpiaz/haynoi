@@ -1,5 +1,5 @@
 """Offline tests for check-model-retirements.py: python3 scripts/test_check_model_retirements.py"""
-import datetime, importlib.util, os, tempfile, unittest
+import datetime, importlib.util, json, os, tempfile, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location('cmr', os.path.join(HERE, 'check-model-retirements.py'))
@@ -43,19 +43,33 @@ class T(unittest.TestCase):
     def test_a_plain_word_on_a_model_line_counts(self):
         self.assertIn('fast', scan('let body = ["model": "fast"]\n'))
 
-class Vanished(unittest.TestCase):
-    """Review r1: a model dropped from the catalog is invisible to a catalog-driven scan."""
-    def test_a_name_seen_before_and_still_quoted_is_reported(self):
-        root = tempfile.mkdtemp(); os.makedirs(os.path.join(root, 'Sources'))
-        open(os.path.join(root, 'Sources', 'A.swift'), 'w').write('let m = "old-model-1"\n')
-        seen = os.path.join(root, 'seen.txt'); open(seen, 'w').write('old-model-1\ntranscribe\n')
-        self.assertEqual(cmr.vanished(seen, {'transcribe'}, root), ['old-model-1'])
+class Seen(unittest.TestCase):
+    """Review r1/r2: a model the catalog drops must stay visible while Sources quote it."""
+    def setUp(self):
+        self.root = tempfile.mkdtemp(); os.makedirs(os.path.join(self.root, 'Sources'))
+        open(os.path.join(self.root, 'Sources', 'A.swift'), 'w').write(
+            'return q ? "transcribe-quality" : "transcribe"\nText("Fast").tag("fast")\n// "gone-model-9" in a comment\n')
+        self.seen = os.path.join(self.root, 'seen.txt')
+        self.day = datetime.date(2026, 9, 30)
 
-    def test_a_name_removed_from_the_code_too_is_not(self):
-        root = tempfile.mkdtemp(); os.makedirs(os.path.join(root, 'Sources'))
-        open(os.path.join(root, 'Sources', 'A.swift'), 'w').write('let m = "new-model-2"\n')
-        seen = os.path.join(root, 'seen.txt'); open(seen, 'w').write('old-model-1\n')
-        self.assertEqual(cmr.vanished(seen, {'new-model-2'}, root), [])
+    def drop(self, *ids):
+        cat = json.loads(json.dumps(CATALOG))
+        cat['aliases'] = {k: v for k, v in cat['aliases'].items() if k not in ids}
+        return cat
+
+    def test_both_aliases_survive_a_drop_of_the_hyphenated_one(self):
+        cmr.run(CATALOG, self.root, self.day, 120, self.seen)
+        rows, bad = cmr.run(self.drop('transcribe-quality'), self.root, self.day, 120, self.seen)
+        self.assertEqual(bad, ['transcribe-quality'])
+        self.assertEqual(open(self.seen).read().split(), ['transcribe', 'transcribe-quality'])
+        _, bad = cmr.run(self.drop('transcribe-quality', 'transcribe'), self.root, self.day, 120, self.seen)
+        self.assertEqual(sorted(bad), ['transcribe', 'transcribe-quality'])
+
+    def test_comments_and_ui_tags_never_enter_the_seen_file(self):
+        open(self.seen, 'w').write('gone-model-9\nfast\n')
+        _, bad = cmr.run(CATALOG, self.root, self.day, 120, self.seen)
+        self.assertEqual(bad, [])
+        self.assertNotIn('gone-model-9', open(self.seen).read())
 
 if __name__ == '__main__':
     unittest.main()

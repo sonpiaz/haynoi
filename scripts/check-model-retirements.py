@@ -37,23 +37,15 @@ def literals(root, names):
                 found.setdefault(lit, f'{os.path.relpath(path, root)}:{n}')
     return found
 
-def vanished(seen_file, names, root):
-    """Names found on a previous run that the catalog no longer lists but Sources still quote."""
-    try:
-        before = [l.strip() for l in open(seen_file) if l.strip()]
-    except FileNotFoundError:
-        return []
-    code = '\n'.join(open(p, encoding='utf-8').read()
-                     for p in glob.glob(os.path.join(root, 'Sources', '**', '*.swift'), recursive=True))
-    return [n for n in before if n not in names and f'"{n}"' in code]
-
 def check(catalog, used, today, days):
     ids = {m['id']: m for m in catalog.get('data', [])}
     aliases = catalog.get('aliases') or {}
     rows, bad = [], []
     for name, where in sorted(used.items()):
         if name not in ids and name not in aliases:
-            continue
+            # Only reachable for a name remembered from an earlier run (--seen):
+            # still quoted in Sources, gone from the catalog.
+            rows.append((name, name, 'NO LONGER IN CATALOG', where)); bad.append(name); continue
         target = aliases.get(name, name)
         model = ids.get(target)
         if model is None:
@@ -64,6 +56,23 @@ def check(catalog, used, today, days):
             left = (datetime.date.fromisoformat(retires[:10]) - today).days
             if left <= days:
                 bad.append(name)
+    return rows, bad
+
+def run(catalog, root, today, days, seen=None):
+    """Scan with the catalog's names plus the names found last run, so a model the
+    catalog drops is still looked for — with the same comment and plain-word rules
+    — and reported while Sources quote it. The seen file becomes this run's hits."""
+    names = {m['id'] for m in catalog.get('data', [])} | set(catalog.get('aliases') or {})
+    before = set()
+    if seen and os.path.exists(seen):
+        before = {l.strip() for l in open(seen) if l.strip()}
+    used = literals(root, names | before)
+    rows, bad = check(catalog, used, today, days)
+    if seen:
+        tmp = seen + '.tmp'
+        with open(tmp, 'w') as f:
+            f.write(''.join(f'{n}\n' for n in sorted(used)))
+        os.replace(tmp, seen)
     return rows, bad
 
 def main():
@@ -80,15 +89,7 @@ def main():
         with urllib.request.urlopen('https://kymaapi.com/v1/models', timeout=20) as r:
             catalog = json.load(r)
     today = datetime.date.fromisoformat(a.today) if a.today else datetime.date.today()
-    names = {m['id'] for m in catalog.get('data', [])} | set(catalog.get('aliases') or {})
-    used = literals(ROOT, names)
-    rows, bad = check(catalog, used, today, a.days)
-    if a.seen:
-        gone = vanished(a.seen, names, ROOT)
-        for name in gone:
-            rows.append((name, name, 'NO LONGER IN CATALOG', 'seen last run, still in Sources')); bad.append(name)
-        with open(a.seen, 'w') as f:
-            f.write('\n'.join(sorted(set(used) | set(gone))) + '\n')
+    rows, bad = run(catalog, ROOT, today, a.days, a.seen)
     if not rows:
         print('no catalog model or alias found in Sources — the scan itself is broken'); return 1
     for name, target, retires, where in rows:
