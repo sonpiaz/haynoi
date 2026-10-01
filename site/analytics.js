@@ -37,7 +37,9 @@ var doNotTrack =
 // was never filled (local preview, a deploy without the key) sends nothing.
 var POSTHOG_KEY = "__HAYNOI_POSTHOG_KEY__";
 
-if (POSTHOG_KEY.indexOf("phc_") === 0 && !doNotTrack && stored(OPT_OUT_KEY) !== "1") {
+var allowed = !doNotTrack && stored(OPT_OUT_KEY) !== "1";
+
+if (allowed && POSTHOG_KEY.indexOf("phc_") === 0) {
   posthog.init(POSTHOG_KEY, {
     api_host: "/_ph",                // same-origin proxy (site/functions/_ph), survives ad blockers
     ui_host: "https://us.posthog.com",
@@ -58,7 +60,25 @@ if (POSTHOG_KEY.indexOf("phc_") === 0 && !doNotTrack && stored(OPT_OUT_KEY) !== 
   });
 }
 
-// Affitor partner tracker (program 1081) loads as a static <script> tag in
-// each page's <head> — captures ?aff= landings into first-party cookies on
-// .haynoi.com. Static tag (not injected here) so it loads early and is
-// visible to Affitor's install crawler.
+// Affitor partner tracker (program 1081): captures ?aff= landings into
+// first-party cookies on .haynoi.com. The page carries it as an inert
+// <script type="text/plain" data-affitor-src=… data-affitor-program-id=…> so
+// Affitor's install check (it looks for "affitor-tracker" /
+// data-affitor-program-id in the HTML) and the tracker's own config lookup
+// (querySelector('script[data-affitor-program-id]')) both find it — but the
+// script itself loads only behind the same Do Not Track / GPC / opt-out gate
+// as PostHog (W37-1390). It loaded unconditionally before.
+function loadAffitor() {
+  var marker = document.querySelector("script[data-affitor-src]");
+  if (!marker || document.querySelector("script[data-affitor-loaded]")) return;
+  var s = document.createElement("script");
+  s.src = marker.getAttribute("data-affitor-src");
+  s.async = true;
+  s.setAttribute("data-affitor-loaded", "");
+  document.head.appendChild(s);
+}
+
+if (allowed) {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadAffitor);
+  else loadAffitor();
+}
