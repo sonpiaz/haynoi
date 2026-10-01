@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Text no longer waits on an optional fix-up pass.** When the transcriber
+  was unsure of a word, Haynoi asked a second model to fix it — and a busy
+  or slow server could hold your finished sentence for several seconds. That
+  pass now gets one try and 2.5 s; past that you get the text as heard.
+- An empty answer from that pass keeps your words instead of failing the
+  dictation.
 - **Any fallback to offline recognition is announced, with the reason** —
   not only sign-out: a busy server, no connection or a used-up weekly limit
   now say so instead of leaving you with worse text and no explanation.
