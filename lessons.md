@@ -144,3 +144,9 @@ cơ chế: `Tests/SignedOutFallbackTests.swift`, `Tests/MisheardPairsTests.swift
 - Khác dự tính: lỗi "0.3.12 sai chính tả" bị đoán là do commit mới nhất (8c64eb2); đo bằng chính Phonetics của app thì 0/7 cặp từng qua bộ gợi ý — gốc nghi là app mất token rồi lặng lẽ dùng nhận giọng offline.
 - Học được: kiểm giả thuyết bằng code thật (harness `swiftc` vài phút) trước khi sửa code; và mọi đường "giảm chất lượng" phải lên tiếng, không được im.
 - Áp ngay: audit và dọn AX hôm nay đều đo trước/sau bằng số, và mỗi fallback mới phải có log hoặc thông báo.
+
+## Retro before day wave 2 (2026-10-01)
+
+- Khác dự tính: brief ngày giao W37-1796 audit + pull list W37-1406/1391/1672/1574, nhưng cả năm vé đã merge local từ 30/09 (Grok ĐẠT đúng head) — plan viết từ board, board chưa thấy main local chưa push.
+- Học được: trước khi nhận vé từ plan, đo `git log --grep` trên main local; vé "xong local, chưa push" nhìn từ board vẫn như còn mở.
+- Áp ngay: chỉ làm phần còn thật (W37-1424 latency, đo từng chặng bằng `say` + script trong `evals/`), báo runner là pull list đã hết.
