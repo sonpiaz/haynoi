@@ -109,7 +109,7 @@ enum STTProvider {
             }
             text = (try? await rewriteWithKyma(
                 token: token, text: text, systemPrompt: Self.correctionPassPrompt,
-                hints: hints
+                hints: hints, session: correctionSession, attempts: 1
             )) ?? text
             // Metadata only: that the pass ran — never the text.
             await MainActor.run {
@@ -542,9 +542,28 @@ enum STTProvider {
         }
     }
 
-    private static func rewriteWithKyma(
+    /// Total time the optional correction pass may add to a dictation that
+    /// already has its text. Measured 2026-10-01 (evals/latency, n=30): the
+    /// pass fired on 15 of 30 synthetic sentences and cost 0.83–1.40 s, so
+    /// 2.5 s lets every measured call through. Before this it shared the
+    /// rewrite's budget — 15 s idle timeout, three attempts, 2 s + 4 s + 8 s
+    /// sleeps on 429 — so a busy upstream held finished text for 2–14 s
+    /// (W37-1424). Past the budget the uncorrected transcript is pasted.
+    static let correctionBudget: TimeInterval = 2.5
+
+    /// The resource timeout bounds the whole call, not just the idle gaps
+    /// that `URLRequest.timeoutInterval` measures.
+    static func correctionSessionConfiguration() -> URLSessionConfiguration {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForResource = correctionBudget
+        return config
+    }
+    static let correctionSession = URLSession(configuration: correctionSessionConfiguration())
+
+    static func rewriteWithKyma(
         token: String, text: String, systemPrompt: String,
-        hints: [(heard: String, candidates: [String])] = []
+        hints: [(heard: String, candidates: [String])] = [],
+        session: URLSession = .shared, attempts: Int = 3
     ) async throws -> String {
         let url = URL(string: rewriteURL)!
         var request = URLRequest(url: url)
@@ -589,8 +608,8 @@ enum STTProvider {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         var rewriteData: Data?
-        for attempt in 0..<3 {
-            let (data, response) = try await URLSession.shared.data(for: request)
+        for attempt in 0..<attempts {
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { return text }
             if http.statusCode == 401 {
                 // Fix #1: rewriteWithKyma was silently returning raw text on 401,
@@ -601,8 +620,13 @@ enum STTProvider {
                 throw STTError.sessionExpired
             }
             if http.statusCode == 429 {
+                // No sleep after the last attempt: nothing follows it.
+                guard attempt + 1 < attempts else {
+                    NSLog("[Haynoi] Rate limited (rewrite), out of attempts — using raw transcription")
+                    break
+                }
                 let delay = pow(2.0, Double(attempt + 1))
-                NSLog("[Haynoi] Rate limited (rewrite), retrying in %.0fs (%d/3)", delay, attempt + 1)
+                NSLog("[Haynoi] Rate limited (rewrite), retrying in %.0fs (%d/%d)", delay, attempt + 1, attempts)
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 continue
             }
