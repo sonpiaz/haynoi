@@ -16,10 +16,13 @@ final class CorrectionBudgetTests: XCTestCase {
 
     private func correct(_ raw: String, _ mode: StubProtocol.Mode) async -> (String, TimeInterval) {
         let start = Date()
-        let text = (try? await STTProvider.rewriteWithKyma(
-            token: "test", text: raw, systemPrompt: STTProvider.correctionPassPrompt,
-            session: session(mode), attempts: 1
-        )) ?? raw
+        // Composed exactly as the call site in transcribeTracked.
+        let text = await STTProvider.keepTranscriptIfRewriteFails(raw) {
+            try await STTProvider.rewriteWithKyma(
+                token: "test", text: raw, systemPrompt: STTProvider.correctionPassPrompt,
+                session: session(mode), attempts: 1
+            )
+        }
         return (text, Date().timeIntervalSince(start))
     }
 
@@ -33,6 +36,11 @@ final class CorrectionBudgetTests: XCTestCase {
         let (text, elapsed) = await correct("raw words", .hang)
         XCTAssertEqual(text, "raw words")
         XCTAssertLessThan(elapsed, STTProvider.correctionBudget + 1.0)
+    }
+
+    func testEmptyCorrectionKeepsTranscript() async {
+        let (text, _) = await correct("raw words", .ok(""))
+        XCTAssertEqual(text, "raw words", "an empty 200 used to replace the transcript with \"\"")
     }
 
     func testAnswerWithinBudgetIsUsed() async {

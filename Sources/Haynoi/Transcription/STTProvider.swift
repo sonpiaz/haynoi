@@ -107,10 +107,14 @@ enum STTProvider {
                 let candidates = PersonalDictionary.shared.phoneticCandidates(for: word, in: terms)
                 return candidates.isEmpty ? nil : (heard: word, candidates: candidates)
             }
-            text = (try? await rewriteWithKyma(
-                token: token, text: text, systemPrompt: Self.correctionPassPrompt,
-                hints: hints, session: correctionSession, attempts: 1
-            )) ?? text
+            // Same rule as Email mode: an error or an empty answer keeps the
+            // transcript — `try? … ?? text` let a 200 with "" replace it.
+            text = await keepTranscriptIfRewriteFails(text) {
+                try await rewriteWithKyma(
+                    token: token, text: text, systemPrompt: Self.correctionPassPrompt,
+                    hints: hints, session: correctionSession, attempts: 1
+                )
+            }
             // Metadata only: that the pass ran — never the text.
             await MainActor.run {
                 Analytics.capture("stt_correction_pass", ["trigger": "logprobs"])
