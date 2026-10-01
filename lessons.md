@@ -150,3 +150,13 @@ cơ chế: `Tests/SignedOutFallbackTests.swift`, `Tests/MisheardPairsTests.swift
 - Khác dự tính: brief ngày giao W37-1796 audit + pull list W37-1406/1391/1672/1574, nhưng cả năm vé đã merge local từ 30/09 (Grok ĐẠT đúng head) — plan viết từ board, board chưa thấy main local chưa push.
 - Học được: trước khi nhận vé từ plan, đo `git log --grep` trên main local; vé "xong local, chưa push" nhìn từ board vẫn như còn mở.
 - Áp ngay: chỉ làm phần còn thật (W37-1424 latency, đo từng chặng bằng `say` + script trong `evals/`), báo runner là pull list đã hết.
+
+## Optional polish must not borrow the required step's budget (2026-10-01)
+
+The logprob correction pass is optional, but it reused the email rewrite's
+policy: 15 s idle timeout, three tries, 2/4/8 s sleeps on 429. A busy upstream
+held text that was already transcribed for 2–17 s (W37-1424). Give every optional
+network step its own total budget (`timeoutIntervalForResource`, not the idle
+`timeoutInterval`) and one try. Never sleep after the last attempt of a retry loop.
+
+cơ chế: `Tests/CorrectionBudgetTests.swift`, `evals/latency/`.
