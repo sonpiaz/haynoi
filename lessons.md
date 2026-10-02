@@ -96,3 +96,8 @@ the catalog, which publishes `retires_on`, not the source.
 cơ chế: `Tests/RetiredModelTests.swift`; phần alias: **W37-1672** (job đọc
 `retires_on` từ `/v1/models`), chưa làm. Cùng vòng duyệt còn mở **W37-1673**:
 gợi ý phát âm sửa "Hà Nội" thành "Haynoi" — sửa sai một từ người dùng nói đúng.
+
+## Retro · 02/10 Pro coming soon (start of batch)
+- Different from plan: START-HERE said 34d5ed5 was waiting to deploy; cos-board says it went live at 08:3x (byte-diffed `/` against 34d5ed5: same).
+- Learned: "waiting to deploy" rows go stale within hours; diff live before choosing a base.
+- Applied now: base = 34d5ed5 (live); every Pro sentence is checked against one fact: Pro is not on sale.

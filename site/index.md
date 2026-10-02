@@ -121,9 +121,9 @@ Every week, resets Monday
 
 Pro — unlimited
 
-$14.99/mo
+Coming soon
 
-Or $125.88/yr — save 30%
+Not on sale yet
 
 Sign in
 

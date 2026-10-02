@@ -147,9 +147,9 @@ Every week, resets Monday
 
 Pro — unlimited
 
-$14.99/mo
+Coming soon
 
-Or $125.88/yr — save 30%
+Not on sale yet
 
 Sign in
 
@@ -261,9 +261,9 @@ Changelog
 
 ## 0.3.7 — July 5, 2026
 
-*Pro is live.*
+*Groundwork for Pro.*
 
-- Haynoi Pro: unlimited dictation, all 4 modes, priority transcription — $14.99/month or $125.88/year. Upgrade in Settings → Plans & Billing; checkout runs through Stripe in your browser and the app unlocks within seconds.
+- Added a Plans & Billing tab in Settings, groundwork for Haynoi Pro (unlimited words). Pro is not on sale yet; it is coming soon.
 - Fixed usage analytics silently not reporting (counts and timings only — never your words).
 
 ## 0.3.6 — July 4, 2026
