@@ -39,6 +39,8 @@ class ToMarkdown(HTMLParser):
         elif tag in BLOCK:
             self.flush()
             self.block = tag
+        elif tag in ("div", "section", "header", "footer", "nav", "article") and not self.block:
+            self.flush()
         elif tag == "span" and self.block == "rel" and "".join(self.buf).strip():
             self.buf.append(" — ")
         elif tag == "br":
@@ -64,6 +66,8 @@ class ToMarkdown(HTMLParser):
             self.flush()
         elif tag in ("ul", "ol", "dl"):
             self.out.append("")
+        elif tag in ("div", "section", "header", "footer", "nav", "article") and not self.block:
+            self.flush()
         elif tag == "a" and self.href is not None:
             self.buf.append(f"]({self.href})")
             self.href = None
@@ -79,7 +83,12 @@ class ToMarkdown(HTMLParser):
     def flush(self):
         text = re.sub(r"\s+", " ", "".join(self.buf)).strip()
         text = re.sub(r"\[\s*\]\([^)]*\)", "", text).replace("****", "").strip()
-        if text and self.block:
+        text = re.sub(r"\[\s+", "[", re.sub(r"\s+\]\(", "](", text))
+        if text and not self.block:
+            # Text outside a block element (a price strip, a label in a div):
+            # still content, written as its own paragraph.
+            self.out += [text, ""]
+        elif text and self.block:
             if self.block == "rel":
                 line = "## " + text
             elif self.block == "tag":

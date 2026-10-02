@@ -2,6 +2,8 @@
 
 Source: https://haynoi.com/changelog/
 
+[Haynoi](https://haynoi.com/)
+
 - [How it works](https://haynoi.com/#how)
 - [Features](https://haynoi.com/#features)
 - [Download](https://haynoi.com/thanks/)
@@ -168,6 +170,8 @@ Changelog
 - The Mercury interface: a private ledger of everything you've said, on paper and ink, with one aurora hairline.
 
 [Download 0.1.0 from GitHub Releases](https://github.com/sonpiaz/haynoi/releases/tag/v0.1.0)
+
+Haynoi MIT
 
 © 2026 Affitor LLC. All rights reserved.
 
