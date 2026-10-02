@@ -15,7 +15,7 @@ macOS · Voice → polished text
 
 Haynoi is push-to-talk dictation for macOS. Hold ⌥, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. **Sub-2-second** transcription with Vietnamese-first accuracy and an orb that disappears when you're finished.
 
-[Download for macOS](https://haynoi.com/thanks/) Free · 5,000 words / week · Apple silicon & Intel
+[Try 5,000 words free](https://haynoi.com/thanks/) Free · 5,000 words / week · Apple silicon & Intel
 
 [Powered by Kyma](https://kymaapi.com)
 
@@ -179,7 +179,7 @@ Your voice is faster than your keyboard
 
 Free 5,000 words every week. Sign in with Google and start dictating in seconds.
 
-[Download for macOS](https://haynoi.com/thanks/)
+[Try 5,000 words free](https://haynoi.com/thanks/)
 
 Transcription powered by [Kyma](https://kymaapi.com). Your voice stays yours — audio is never stored or used for training.
 
