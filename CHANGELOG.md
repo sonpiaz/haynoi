@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **"Fix that" no longer claims a correction it could not see.** In apps that
+  accept an edit and quietly drop it, a correction could vanish without a word.
+  When Haynoi cannot confirm the change, it now leaves the correction on the
+  clipboard and tells you to press ⌘V if it did not land.
 - **Text no longer waits on an optional fix-up pass.** When the transcriber
   was unsure of a word, Haynoi asked a second model to fix it — and a busy
   or slow server could hold your finished sentence for several seconds. That
