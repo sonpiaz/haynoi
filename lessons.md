@@ -177,3 +177,10 @@ cơ chế: `scripts/same-signature.sh` (in INSTALL-MACBOOK.md step 3; the MacBoo
 - Khác dự tính: lỗi "mất đăng nhập sau mỗi lần cài" không sửa được trong app — nó nằm ở chữ ký của bản cài; và hộp thoại keychain bật lên dù đã đặt `kSecUseAuthenticationUIFail` (probe phải bị dừng tay).
 - Học được: thử keychain trên máy không người phải chạy có timeout, vì legacy item không bao giờ trả lỗi thay cho hộp thoại.
 - Áp ngay: lô Kit (W37-940/945/946/948) làm trong bản clone local của `affitor-app-kit` (code không nằm trong `~/haynoi`); đo "đã làm chưa" trên nhánh trước khi viết dòng nào.
+
+## Notify "merged" only after reading the branch back (2026-10-02)
+
+W37-945: `git fetch . 32deadc:feat/…` failed (a short sha is not a ref), the
+chained notify still ran and reported "merged". Corrected minutes later. Merge,
+then `git log -1 <branch>`, then notify — never in one line that keeps going
+past a failed step.
