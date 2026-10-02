@@ -160,3 +160,14 @@ network step its own total budget (`timeoutIntervalForResource`, not the idle
 `timeoutInterval`) and one try. Never sleep after the last attempt of a retry loop.
 
 cơ chế: `Tests/CorrectionBudgetTests.swift`, `evals/latency/`.
+
+## The sign-in token survives an install only if the signature does (2026-10-01)
+
+The token is a legacy keychain item trusted by the saving app's designated
+requirement and partition (`teamid:` for Developer ID, `cdhash:` for ad-hoc).
+An ad-hoc or other-team build does not fail the read — it blocks on a keychain
+password dialog (`kSecUseAuthenticationUIFail` is ignored for legacy items), and
+a cancel looks like "signed out". No app-side change keeps the token without
+opening it to other apps. Every install compares requirements first.
+
+cơ chế: `scripts/same-signature.sh` (in INSTALL-MACBOOK.md step 3; the MacBook job must call it).
