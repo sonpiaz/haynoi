@@ -472,9 +472,11 @@ enum TextInserter {
     /// selected text. Fallbacks A (value splice over span) / B (select + paste
     /// over selection). Fallback C (span unknown): insert at the cursor — never a
     /// synthetic backspace-delete (IME/combining-char unsafe). Returns true when
-    /// the OLD text was actually replaced in place; false means the correction was
-    /// inserted at the cursor and the old text still remains (caller surfaces a
-    /// quiet status). Never crashes, never double-inserts.
+    /// the OLD text was replaced in place and the field read back confirms it;
+    /// false means the correction was inserted at the cursor (old text remains)
+    /// or an AX write could not be confirmed (correction left on the clipboard
+    /// with a notice). The caller surfaces a quiet status. Never crashes, never
+    /// double-inserts.
     @discardableResult
     static func replaceSpan(
         _ span: NSRange?,
@@ -554,16 +556,8 @@ enum TextInserter {
         if selSet == .success {
             let r = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
             if r == .success {
-                NSLog("[Haynoi] replaceSpan: AX selectedText replace OK")
-                // Same rule as insert(), including its settle: a success code is
-                // not proof on the apps where this matters, and a field read the
-                // instant after the write calls a real edit unconfirmed.
-                try? await Task.sleep(nanoseconds: axSettleNs)
-                PasteStats.record(
-                    axInsertionLanded(before: currentValue, after: focusedElementValue(in: app))
-                        ? .takenViaAX : .axUnconfirmed,
-                    app: targetApp?.bundleIdentifier)
-                return true
+                NSLog("[Haynoi] replaceSpan: AX selectedText replace reported success")
+                return await confirmReplace(newText, before: currentValue, app: app, targetApp: targetApp)
             }
             NSLog("[Haynoi] replaceSpan: setSelectedText failed (%d), trying value splice", r.rawValue)
         }
@@ -584,13 +578,8 @@ enum TextInserter {
                 if let r = AXValueCreate(.cfRange, &nr) {
                     AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, r)
                 }
-                NSLog("[Haynoi] replaceSpan: AX value splice OK")
-                try? await Task.sleep(nanoseconds: axSettleNs)
-                PasteStats.record(
-                    axInsertionLanded(before: value, after: focusedElementValue(in: app))
-                        ? .takenViaAX : .axUnconfirmed,
-                    app: targetApp?.bundleIdentifier)
-                return true
+                NSLog("[Haynoi] replaceSpan: AX value splice reported success")
+                return await confirmReplace(newText, before: value, app: app, targetApp: targetApp)
             }
         }
 
@@ -615,6 +604,27 @@ enum TextInserter {
         // Could not replace in place — insert at cursor (old text remains).
         NSLog("[Haynoi] replaceSpan: all in-place paths failed — inserting at cursor")
         return await fallbackOrSkip(newText, targetApp: targetApp, fallbackInsert: fallbackInsert)
+    }
+
+    /// An AX write in replaceSpan reported success. Same rule as insert(): the
+    /// code is not proof (Electron apps accept the write and drop the text), only
+    /// a field that changed is (W37-1391). Unconfirmed → no further in-place try
+    /// (the write may have landed, so another one could edit twice); the
+    /// correction goes on the clipboard with an "if" notice, and the caller is
+    /// told it was not replaced in place.
+    private static func confirmReplace(
+        _ newText: String, before: String?, app: NSRunningApplication, targetApp: NSRunningApplication?
+    ) async -> Bool {
+        // A field read the instant after the write calls a real edit unconfirmed.
+        try? await Task.sleep(nanoseconds: axSettleNs)
+        if axInsertionLanded(before: before, after: focusedElementValue(in: app)) {
+            PasteStats.record(.takenViaAX, app: targetApp?.bundleIdentifier)
+            return true
+        }
+        NSLog("[Haynoi] replaceSpan: AX reported success but the field change could not be confirmed — not trusting it")
+        PasteStats.record(.axUnconfirmed, app: targetApp?.bundleIdentifier)
+        copyToClipboardWithNotification(newText, reason: "Press ⌘V if the correction did not land.")
+        return false
     }
 
     /// Cloud follow-up must never insert a second copy. Correction still may.

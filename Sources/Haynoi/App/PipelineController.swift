@@ -856,7 +856,9 @@ final class PipelineController {
         let replacedInPlace = await TextInserter.replaceSpan(
             span, with: correctedTranscript, oldText: oldInserted, targetApp: targetApp)
         if !replacedInPlace {
-            state.setTransientStatus("Sửa ở vị trí con trỏ — văn bản cũ vẫn còn")
+            // Either inserted at the cursor (old text kept) or unconfirmed (the
+            // correction is on the clipboard with a notice) — never "fixed".
+            state.setTransientStatus("Chưa sửa được tại chỗ — văn bản cũ có thể vẫn còn")
         }
 
         // 3. Diff → wrong→right, then either self-heal a reversed fired rule or
