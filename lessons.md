@@ -196,3 +196,8 @@ past a failed step.
 - Different from plan: 02/10 site work (Pro coming soon, CTA #5) needed two Grok runs on r2 (900s timeout cut the findings).
 - Learned: give Grok ≥2400s and ask for ≤12 lines of findings; PostHog only verifies in full Chromium.
 - Applied now: measure each ticket against the repo before touching it; fix files only, never rewrite history.
+
+## Retro · 03/10 day shift (start)
+- Different from plan: night H1 found most open tickets already done or waiting on Sơn (spec 19/09, Cloudflare); only 2 small fixes were safe.
+- Learned: on the mini, XCTest needs `-scheme HaynoiTests` + ad-hoc flags; the `Haynoi` scheme has no test action.
+- Applied now: before picking tickets, read the last comments first; most "open" haynoi tickets are parked on Sơn.
