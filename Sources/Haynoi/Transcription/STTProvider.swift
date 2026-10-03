@@ -301,7 +301,7 @@ enum STTProvider {
             switch code {
             case 400: result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server (\(ms) ms)")
             case 401: has401 = true; result = RouteResult(name: label, ok: false, latencyMs: ms, detail: "Sign-in expired (401)")
-            case 402: has402 = true; result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of words this month (402)")
+            case 402: has402 = true; result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of words this week (402)")
             case 429: result = RouteResult(name: label, ok: false, latencyMs: ms, detail: "Servers busy (429) — try again")
             default:  result = RouteResult(name: label, ok: code < 500, latencyMs: ms, detail: "HTTP \(code) (\(ms) ms)")
             }
@@ -314,7 +314,7 @@ enum STTProvider {
         if has401 {
             verdict = "Your sign-in expired. Open the Account tab and sign in again."
         } else if has402 {
-            verdict = "You've used your free words for this month. Upgrade to Pro for unlimited dictation."
+            verdict = "You've used your free words for this week (5,000 words). Resets Monday — Pro (unlimited) coming soon."
         } else if anyWorked {
             verdict = "Connection is good. Dictation should work."
         } else {
