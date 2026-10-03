@@ -184,3 +184,10 @@ W37-945: `git fetch . 32deadc:feat/…` failed (a short sha is not a ref), the
 chained notify still ran and reported "merged". Corrected minutes later. Merge,
 then `git log -1 <branch>`, then notify — never in one line that keeps going
 past a failed step.
+## Retro · 02/10 Pro coming soon (start of batch)
+- Different from plan: START-HERE said 34d5ed5 was waiting to deploy; cos-board says it went live at 08:3x (byte-diffed `/` against 34d5ed5: same).
+- Learned: "waiting to deploy" rows go stale within hours; diff live before choosing a base.
+- Applied now: base = 34d5ed5 (live); every Pro sentence is checked against one fact: Pro is not on sale.
+
+## PostHog ignores chrome-headless-shell (2026-10-02)
+`posthog._is_bot()` is true in Playwright's headless shell even with a normal UA, so no event leaves the page. Verify live events with the full Chromium build and `posthog.on('eventCaptured', …)`.

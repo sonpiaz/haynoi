@@ -41,7 +41,7 @@ macOS · Voice → polished text
 
 Haynoi is push-to-talk dictation for macOS. Hold ⌥, say what you mean, release — and polished text appears in any Mac app: email, chat, code editors, anywhere. **Sub-2-second** transcription with Vietnamese-first accuracy and an orb that disappears when you're finished.
 
-[Download for macOS](https://haynoi.com/thanks/) Free · 5,000 words / week · Apple silicon & Intel
+[Try 5,000 words free](https://haynoi.com/thanks/) Free · 5,000 words / week · Apple silicon & Intel
 
 [Powered by Kyma](https://kymaapi.com)
 
@@ -147,9 +147,9 @@ Every week, resets Monday
 
 Pro — unlimited
 
-$14.99/mo
+Coming soon
 
-Or $125.88/yr — save 30%
+Not on sale yet
 
 Sign in
 
@@ -205,7 +205,7 @@ Your voice is faster than your keyboard
 
 Free 5,000 words every week. Sign in with Google and start dictating in seconds.
 
-[Download for macOS](https://haynoi.com/thanks/)
+[Try 5,000 words free](https://haynoi.com/thanks/)
 
 Transcription powered by [Kyma](https://kymaapi.com). Your voice stays yours — audio is never stored or used for training.
 
@@ -261,9 +261,9 @@ Changelog
 
 ## 0.3.7 — July 5, 2026
 
-*Pro is live.*
+*Groundwork for Pro.*
 
-- Haynoi Pro: unlimited dictation, all 4 modes, priority transcription — $14.99/month or $125.88/year. Upgrade in Settings → Plans & Billing; checkout runs through Stripe in your browser and the app unlocks within seconds.
+- Added a Plans & Billing tab in Settings, groundwork for Haynoi Pro (unlimited words). Pro is not on sale yet; it is coming soon.
 - Fixed usage analytics silently not reporting (counts and timings only — never your words).
 
 ## 0.3.6 — July 4, 2026

@@ -53,6 +53,13 @@ if (allowed && POSTHOG_KEY.indexOf("phc_") === 0) {
     capture_exceptions: true,
   });
 
+  // CTA clicks, named by the button's data-cta. sendBeacon so the event
+  // survives the navigation the click starts.
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest("[data-cta]");
+    if (el) posthog.capture(el.getAttribute("data-cta"), { page: location.pathname }, { transport: "sendBeacon" });
+  });
+
   // Verification event — confirms the install is live in PostHog Activity.
   posthog.capture("haynoi_site_view", {
     page: location.pathname,
