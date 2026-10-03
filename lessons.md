@@ -191,3 +191,8 @@ past a failed step.
 
 ## PostHog ignores chrome-headless-shell (2026-10-02)
 `posthog._is_bot()` is true in Playwright's headless shell even with a normal UA, so no event leaves the page. Verify live events with the full Chromium build and `posthog.on('eventCaptured', …)`.
+
+## Retro · 03/10 night wave 3 H1 (start of batch)
+- Different from plan: 02/10 site work (Pro coming soon, CTA #5) needed two Grok runs on r2 (900s timeout cut the findings).
+- Learned: give Grok ≥2400s and ask for ≤12 lines of findings; PostHog only verifies in full Chromium.
+- Applied now: measure each ticket against the repo before touching it; fix files only, never rewrite history.
