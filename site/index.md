@@ -183,7 +183,7 @@ Free 5,000 words every week. Sign in with Google and start dictating in seconds.
 
 Transcription powered by [Kyma](https://kymaapi.com). Your voice stays yours — audio is never stored or used for training.
 
-HaynoiMIT
+Haynoi MIT
 
 © 2026 Affitor LLC. All rights reserved.
 
