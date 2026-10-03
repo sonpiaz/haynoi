@@ -26,8 +26,10 @@ class ToMarkdown(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.url = url
         self.out, self.buf, self.skip, self.block, self.href = [], [], 0, None, None
+        self.after_span = False
 
     def handle_starttag(self, tag, attrs):
+        after_span, self.after_span = self.after_span, False
         if tag in SKIP:
             self.skip += 1
         elif self.skip:
@@ -43,6 +45,8 @@ class ToMarkdown(HTMLParser):
             self.flush()
         elif tag == "span" and self.block == "rel" and "".join(self.buf).strip():
             self.buf.append(" — ")
+        elif tag == "span" and after_span:
+            self.buf.append(" ")                   # sibling spans: "Haynoi" "MIT", not "HaynoiMIT"
         elif tag == "br":
             self.buf.append(" ")
         elif tag == "a":
@@ -58,6 +62,7 @@ class ToMarkdown(HTMLParser):
             self.buf.append("*")
 
     def handle_endtag(self, tag):
+        self.after_span = tag == "span"
         if tag in SKIP:
             self.skip = max(0, self.skip - 1)
         elif self.skip:
@@ -77,6 +82,8 @@ class ToMarkdown(HTMLParser):
             self.buf.append("*")
 
     def handle_data(self, data):
+        if data.strip():
+            self.after_span = False
         if not self.skip:
             self.buf.append(data)
 
