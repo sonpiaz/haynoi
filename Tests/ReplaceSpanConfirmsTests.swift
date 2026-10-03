@@ -37,4 +37,18 @@ final class ReplaceSpanConfirmsTests: XCTestCase {
         XCTAssertFalse(TextInserter.axInsertionLanded(before: nil, after: nil))
         XCTAssertTrue(TextInserter.axInsertionLanded(before: "a", after: "ab"))
     }
+    /// Grok note on 8b71c0a: the success dink played even when the replace was
+    /// not confirmed, telling the user "fixed" while the old text stayed.
+    func testFixThatDinkOnlyWhenReplacedInPlace() throws {
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/Haynoi/App/PipelineController.swift")
+        let src = try String(contentsOf: file, encoding: .utf8)
+        let start = try XCTUnwrap(src.range(of: "let replacedInPlace = await TextInserter.replaceSpan("))
+        let rest = src[start.upperBound...]
+        let body = String(rest[..<(rest.range(of: "// MARK: - Device Abort Handler")?.lowerBound ?? rest.endIndex)])
+        let tone = try XCTUnwrap(body.range(of: "SoundFeedback.shared.playSuccessTone()"))
+        let guardLine = try XCTUnwrap(body[..<tone.lowerBound].range(of: "if replacedInPlace,", options: .backwards))
+        XCTAssertFalse(body[guardLine.upperBound..<tone.lowerBound].contains("}"),
+                       "the success tone sits inside the replacedInPlace guard")
+    }
 }

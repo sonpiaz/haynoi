@@ -882,8 +882,8 @@ final class PipelineController {
                 NSLog("[Haynoi] Self-heal: disabled a reversed rule")
             } else {
                 // Propose learning — suppress the toast in live contexts (§5.1)
-                // and when the learning master switch is off (the replace itself
-                // already happened above; only the capture is gated).
+                // and when the learning master switch is off (the replace was
+                // already attempted above; only the capture is gated).
                 if LearningSettings.isEnabled, !LiveContext.isActive() {
                     let wrong = change.wrong
                     let right = change.right
@@ -933,7 +933,10 @@ final class PipelineController {
             ))
         }
 
-        if UserDefaults.standard.bool(forKey: "soundEnabled"),
+        // The dink means "fixed". An unconfirmed replace left the old text or
+        // put the correction on the clipboard, so stay silent.
+        if replacedInPlace,
+           UserDefaults.standard.bool(forKey: "soundEnabled"),
            UserDefaults.standard.bool(forKey: "successDinkEnabled") {
             SoundFeedback.shared.playSuccessTone()
         }
