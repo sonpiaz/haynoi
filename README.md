@@ -41,7 +41,7 @@ Hold ⌥  →  speak  →  release  →  text appears
 Two steps after you release:
 
 1. **Listen** — Haynoi transcribes what you said (Quality by default, or Fast).
-2. **Rewrite** — only in **Email / Formal** (and Auto when you're in Mail). Your spoken draft is turned into a professional message. If that polish step fails or times out, **the original transcript is still pasted** — you don't lose the words.
+2. **Rewrite** — in **Email / Formal** (and Auto in a mail app: Mail, Gmail, Outlook, Spark, Superhuman). Your spoken draft is turned into a professional message. If that polish step fails or times out, **the original transcript is still pasted** — you don't lose the words.
 
 A floating orb shows the waveform while you hold; a layered chord confirms start and stop. Full notes: [CHANGELOG](CHANGELOG.md).
 
@@ -49,10 +49,10 @@ A floating orb shows the waveform while you hold; a layered chord confirms start
 
 | Mode | What it does |
 |------|--------------|
-| **Normal** | Transcribes exactly what you say (no rewrite) |
+| **Normal** | Transcribes exactly what you say (no rewrite; only the correction pass below, when a word was uncertain) |
 | **Clean** | Drops filler words (ừm, à, uh…) at transcription time |
 | **Email / Formal** | Transcribe, then rewrite into a professional message |
-| **Auto** | Picks a mode from the app you're in — Email in Mail, Clean in chat |
+| **Auto** | Picks a mode from the app you're in — Email in mail apps, Clean in chat |
 
 ## It learns you
 
@@ -60,7 +60,7 @@ Haynoi's dictionary fills itself instead of asking you to maintain it:
 
 - **Fix it once, it sticks.** Say "fix that" (⌃⌥) and re-dictate, edit the inserted text in place, or just repeat yourself — Haynoi notices the correction and suggests remembering it. Confirmed fixes are applied automatically from then on, and they **survive a restart**.
 - **It knows when it wasn't sure.** When the transcriber hesitates on a word that *sounds like* a name you use — "Afider" for "Affitor", "Sun" for "Sơn" — that one dictation gets an extra cleanup pass with your personal terms. Confident dictations skip it, so nothing gets slower.
-- **You can see if a fix is earning its keep.** Each learned word shows how often it was applied and how often you let it stand. The Dictionary header sums that up.
+- **You can see if a fix is earning its keep.** A learned replacement shows how often it was applied once it has fired, and how often you kept it once you have undone it at least once. The Dictionary header sums that up.
 - **You stay in charge.** A master learning switch, a counter of what's been learned, and a one-tap "Forget all" live in Settings → Dictionary. Learning runs on transcript text only — never audio — and your dictionary never leaves your Mac.
 
 ## Features
@@ -71,7 +71,7 @@ Haynoi's dictionary fills itself instead of asking you to maintain it:
 - **Email polish never eats the draft** — if rewrite fails, the raw transcript is still inserted
 - **Honest errors** — a server problem is labeled as ours. It does not tell you that you're out of words, and it does not sign you out
 - **Survives real life** — AirPods disconnecting mid-sentence, permission hiccups, and flaky Wi-Fi all degrade gracefully instead of eating your dictation
-- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers). **In-place replace** (rewriting the same bytes — “fix that”, or swapping a first-pass transcript for a better one) needs the target to expose a text field to macOS Accessibility (`AXValue` and a caret range). GPU/PTY terminals and similar views do not; there Haynoi pastes once and will not try to overwrite what it already inserted.
+- **Auto-paste** into the active app, with clipboard fallback — and your previous clipboard is restored afterwards (dictated text is also hidden from clipboard managers). **In-place replace** (“fix that”) needs the target to expose a text field to macOS Accessibility (`AXValue` and a caret range). GPU/PTY terminals and similar views do not; there “fix that” inserts the corrected text at the cursor and leaves the old text for you to delete.
 - **Other audio gets out of your way** — music and video pause and resume around your dictation; a live call or stream is dipped in volume instead, decided from what your Mac is actually playing
 - **Living status orb** — recording, transcribing, success, and error each have their own state
 - **Snippets** — say a trigger word, get expanded text
@@ -107,13 +107,13 @@ First run, either way:
 
 **Haynoi Pro** (unlimited words) is coming soon.
 
-Two listening tiers, switchable in Settings. Email / Formal adds a rewrite pass after that:
+Two listening tiers, switchable in Settings. A text model handles the Email / Formal rewrite and the correction pass:
 
 | Step | Setting | Model | Best for |
 |------|---------|-------|----------|
 | **Listen** | Quality (default) | [`gpt-4o-mini-transcribe-2025-12-15`](https://kymaapi.com/models/gpt-4o-mini-transcribe-2025-12-15?utm_source=haynoi) | Vietnamese + English, noisy rooms, technical vocabulary |
 | **Listen** | Fast | [`whisper-v3-turbo`](https://kymaapi.com/models/whisper-v3-turbo?utm_source=haynoi) | Clear, simple speech |
-| **Rewrite** | Email / Formal, and the correction pass when the transcriber flags a word | [`gemini-3.5-flash-lite`](https://kymaapi.com/models/gemini-3.5-flash-lite?utm_source=haynoi) | Turn a spoken draft into a message. If this step fails, the original transcript is still pasted. |
+| **Rewrite** | Email / Formal, and the correction pass when the transcriber flags a word | [`gemini-3.5-flash-lite`](https://kymaapi.com/models/gemini-3.5-flash-lite?utm_source=haynoi) | Email: turn a spoken draft into a message. Correction pass: fix flagged words with your terms, no rephrasing. If either step fails, the original transcript is still pasted. |
 
 Haynoi calls these through [Kyma API](https://kymaapi.com?utm_source=haynoi) so the app never holds a model key.
 
