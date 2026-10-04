@@ -201,3 +201,8 @@ past a failed step.
 - Different from plan: night H1 found most open tickets already done or waiting on Sơn (spec 19/09, Cloudflare); only 2 small fixes were safe.
 - Learned: on the mini, XCTest needs `-scheme HaynoiTests` + ad-hoc flags; the `Haynoi` scheme has no test action.
 - Applied now: before picking tickets, read the last comments first; most "open" haynoi tickets are parked on Sơn.
+
+## Retro · 03→04/10 night wave 1 H1 (start)
+- Different from plan: the plan asks to build W37-940 + W37-945, but both are already done and ĐẠT (Grok + Claude) on kit `40c9457`, waiting for deploy since 02/10.
+- Learned: night plans are written from board titles; the board still shows these as backlog because nobody with rights closed them.
+- Applied now: measure first, re-run the kit tests on 40c9457, report "already done" with evidence instead of rebuilding.
