@@ -43,14 +43,14 @@ Two steps after you release:
 1. **Listen** — Haynoi transcribes what you said (Quality by default, or Fast).
 2. **Rewrite** — in **Email / Formal** (and Auto in a mail app: Mail, Gmail, Outlook, Spark, Superhuman). Your spoken draft is turned into a professional message. If that polish step fails or times out, **the original transcript is still pasted** — you don't lose the words.
 
-A floating orb shows the waveform while you hold; a layered chord confirms start and stop. Full notes: [CHANGELOG](CHANGELOG.md).
+While you hold, a small overlay pulses and shows a live caption of what you are saying; a layered chord confirms start and stop. Full notes: [CHANGELOG](CHANGELOG.md).
 
 ## Smart modes
 
 | Mode | What it does |
 |------|--------------|
-| **Normal** | Transcribes exactly what you say (no rewrite; only the correction pass below, when a word was uncertain) |
-| **Clean** | Drops filler words (ừm, à, uh…) at transcription time |
+| **Normal** | Transcribes what you say and applies your dictionary. No rewrite |
+| **Clean** | Like Normal, and drops filler words (ừm, à, uh…) at transcription time |
 | **Email / Formal** | Transcribe, then rewrite into a professional message |
 | **Auto** | Picks a mode from the app you're in — Email in mail apps, Clean in chat |
 
