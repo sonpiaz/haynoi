@@ -206,3 +206,8 @@ past a failed step.
 - Different from plan: the plan asks to build W37-940 + W37-945, but both are already done and ĐẠT (Grok + Claude) on kit `40c9457`, waiting for deploy since 02/10.
 - Learned: night plans are written from board titles; the board still shows these as backlog because nobody with rights closed them.
 - Applied now: measure first, re-run the kit tests on 40c9457, report "already done" with evidence instead of rebuilding.
+
+## Retro · 04/10 day shift (start)
+- Different from plan: the night H1 kit tickets were already done; H2 soak needed a re-signed copy because builds on the mini are ad-hoc and Sparkle carries another Team ID.
+- Learned: to run any `~/haynoi-builds` app on the mini, ad-hoc `--deep` re-sign a copy first; never touch the build folder.
+- Applied now: measure each PR (state, head, base, conflicts) before asking for review.
