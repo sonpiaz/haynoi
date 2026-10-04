@@ -155,7 +155,7 @@ Sources/Haynoi/
 │   ├── STTProvider.swift         — Transcription, Email rewrite, correction pass
 │   └── TranscriptionMode.swift   — Normal / Clean / Email / Auto modes
 ├── Settings/
-│   └── SettingsView.swift        — Account, quality, hotkey, dictionary
+│   └── SettingsView.swift        — Account, plans, quality, hotkey, dictionary
 ├── UI/                           — History list, main window, floating bar
 └── System/                       — Personal dictionary + correction learning,
                                     media control, launch at login, usage stats
