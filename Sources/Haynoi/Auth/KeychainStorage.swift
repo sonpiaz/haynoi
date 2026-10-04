@@ -46,6 +46,13 @@ enum KeychainStorage {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // A read that fails for any reason but "not there" usually means this
+        // build is signed differently from the one that saved the item; the app
+        // then behaves signed out. Log the status (never the value) so that is
+        // visible in the unified log instead of silent (30/09, 0.3.12).
+        if status != errSecSuccess && status != errSecItemNotFound {
+            NSLog("[Haynoi] Keychain read failed for %@: OSStatus %d", key, Int(status))
+        }
         guard status == errSecSuccess,
               let data = result as? Data,
               let value = String(data: data, encoding: .utf8) else {

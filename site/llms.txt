@@ -15,3 +15,9 @@ Haynoi runs on macOS 14 or later, on Apple silicon and Intel Macs. Transcription
 - [Download for macOS](https://github.com/sonpiaz/haynoi/releases/latest): signed and notarized DMG that updates itself
 - [Changelog](https://haynoi.com/changelog/): every release, with its date
 - [Source code](https://github.com/sonpiaz/haynoi): MIT license
+
+## For agents
+
+- [llms-full.txt](https://haynoi.com/llms-full.txt): this file plus every page below, in full
+- [Home page in Markdown](https://haynoi.com/index.md): what Haynoi does, features, FAQ (English and Vietnamese)
+- [Changelog in Markdown](https://haynoi.com/changelog.md): every release with its version and date

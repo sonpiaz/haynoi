@@ -105,7 +105,7 @@ First run, either way:
 
 **Free: 5,000 words per week**, resetting every Monday. No card required — just Google sign-in.
 
-**Haynoi Pro** — unlimited dictation: **$14.99 / month** or **$125.88 / year**. Upgrade in Settings → Plans & Billing; the app unlocks after payment. Manage or cancel anytime.
+**Haynoi Pro** (unlimited words) is coming soon.
 
 Two listening tiers, switchable in Settings. Email / Formal adds a rewrite pass after that:
 
@@ -113,7 +113,7 @@ Two listening tiers, switchable in Settings. Email / Formal adds a rewrite pass 
 |------|---------|-------|----------|
 | **Listen** | Quality (default) | [`gpt-4o-mini-transcribe-2025-12-15`](https://kymaapi.com/models/gpt-4o-mini-transcribe-2025-12-15?utm_source=haynoi) | Vietnamese + English, noisy rooms, technical vocabulary |
 | **Listen** | Fast | [`whisper-v3-turbo`](https://kymaapi.com/models/whisper-v3-turbo?utm_source=haynoi) | Clear, simple speech |
-| **Rewrite** | Email / Formal only | [`gemini-2.5-flash`](https://kymaapi.com/models/gemini-2.5-flash?utm_source=haynoi) | Turn a spoken draft into a message. If this step fails, the original transcript is still pasted. |
+| **Rewrite** | Email / Formal, and the correction pass when the transcriber flags a word | [`gemini-3.5-flash-lite`](https://kymaapi.com/models/gemini-3.5-flash-lite?utm_source=haynoi) | Turn a spoken draft into a message. If this step fails, the original transcript is still pasted. |
 
 Haynoi calls these through [Kyma API](https://kymaapi.com?utm_source=haynoi) so the app never holds a model key.
 
@@ -155,7 +155,7 @@ Sources/Haynoi/
 │   ├── STTProvider.swift         — Transcription, Email rewrite, correction pass
 │   └── TranscriptionMode.swift   — Normal / Clean / Email / Auto modes
 ├── Settings/
-│   └── SettingsView.swift        — Account, plans, quality, hotkey, dictionary
+│   └── SettingsView.swift        — Account, quality, hotkey, dictionary
 ├── UI/                           — History list, main window, floating bar
 └── System/                       — Personal dictionary + correction learning,
                                     media control, launch at login, usage stats
@@ -169,7 +169,7 @@ Sources/Haynoi/
 |-----------|---------|
 | Swift 5.9 + SwiftUI | App |
 | AVFoundation | Audio capture & sound synthesis |
-| [Kyma API](https://kymaapi.com) | Speech-to-text and rewrite (Haynoi never holds a model key) |
+| [Kyma API](https://kymaapi.com) | Speech-to-text (`gpt-4o-mini-transcribe-2025-12-15` / `whisper-v3-turbo`) and rewrite (`gemini-3.5-flash-lite`) |
 | Accessibility API + NSEvent | Text insertion + global hotkey (no Input Monitoring needed) |
 | [XcodeGen](https://github.com/yonaskolb/XcodeGen) | Project generation |
 

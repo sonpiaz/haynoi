@@ -39,3 +39,8 @@ redesign/
 site/appcast.xml
 site/.live-*.html
 site/_shots/
+
+# Local-only agent notes and session state (never publish)
+.internal/
+.claude/
+.claude-lock/

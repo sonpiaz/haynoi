@@ -91,6 +91,10 @@ final class HotkeyManager {
 
     // NSEvent monitor handles (global = other apps, local = Haynoi frontmost)
     private var globalMonitor: Any?
+
+    /// Whether the global push-to-talk monitor is installed. Read by the tests:
+    /// a debug instance holding ⌥ takes the chord from whoever is at the machine.
+    var isMonitoring: Bool { globalMonitor != nil }
     private var localMonitor: Any?
     private var secureInputTimer: Timer?
 
@@ -110,6 +114,9 @@ final class HotkeyManager {
     /// LEFT Option key (kVK_Option = 58) from the right one (kVK_RightOption = 61)
     /// when the target modifier is Option — only the left key triggers dictation.
     private var lastFlagKeyCode: UInt16 = 0
+
+    /// Keyboard-only. Scroll must keep going to the front app while PTT is held.
+    static let pttEventMask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown]
 
     // Carbon virtual key codes for the left/right option keys.
     private let kLeftOptionKeyCode: UInt16 = 58   // kVK_Option
@@ -158,8 +165,10 @@ final class HotkeyManager {
 
         // GLOBAL monitor: fires for events in OTHER apps (primary path).
         // Does not return the event — global monitors are observe-only.
+        // Keyboard flags only. Never .scrollWheel — holding PTT must not
+        // swallow scroll in the front app (W37-738).
         globalMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.flagsChanged, .keyDown]
+            matching: Self.pttEventMask
         ) { [weak self] event in
             self?.handle(event)
         }
@@ -167,7 +176,7 @@ final class HotkeyManager {
         // LOCAL monitor: fires when Haynoi itself is frontmost. Must return the
         // event unchanged so it still reaches Haynoi's own UI.
         localMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.flagsChanged, .keyDown]
+            matching: Self.pttEventMask
         ) { [weak self] event in
             self?.handle(event)
             return event

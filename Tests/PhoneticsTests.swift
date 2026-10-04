@@ -51,6 +51,23 @@ final class PhoneticsTests: XCTestCase {
                        "multi-token words reassemble, punctuation trims, confident words stay out")
     }
 
+    func testDoubtfulWordsDropRepeatsAndStopAtTheCap() {
+        // The same shaky name three times, once with different case.
+        var tokens: [STTProvider.TokenLogprob] = []
+        for word in [" Afiter", " afiter", " Afiter"] {
+            tokens.append(.init(token: word, logprob: -0.9))
+        }
+        XCTAssertEqual(STTProvider.doubtfulWords(from: tokens), ["Afiter"],
+                       "one shaky word asked about once, whatever its case")
+
+        tokens = (1...(STTProvider.maxDoubtfulWords + 4)).map {
+            .init(token: " word\($0)", logprob: -0.9)
+        }
+        let capped = STTProvider.doubtfulWords(from: tokens)
+        XCTAssertEqual(capped.count, STTProvider.maxDoubtfulWords)
+        XCTAssertEqual(capped.first, "word1", "the first doubtful words are the ones asked about")
+    }
+
     func testDoubtfulWordsEmptyWhenAllConfident() {
         let tokens: [STTProvider.TokenLogprob] = [
             .init(token: "This", logprob: -0.0002),
@@ -70,6 +87,22 @@ final class PhoneticsTests: XCTestCase {
         XCTAssertTrue(dict.phoneticCandidates(for: "foncandafider").contains("PhonCandAffitor"),
                       "a sound-alike misrecognition finds the dictionary term")
         XCTAssertTrue(dict.phoneticCandidates(for: "zzqqxx").isEmpty)
+    }
+
+    /// W37-1673: with "Haynoi" in the dictionary, a correctly said "Hà Nội" was
+    /// handed "possibly Haynoi" and rewritten 3/3 times. A hint may add
+    /// diacritics, never strip ones the transcriber heard.
+    func testHintNeverStripsDiacriticsTheTranscriberHeard() {
+        let dict = PersonalDictionary.shared
+        let terms = ["Haynoi", "Sơn", "Affitor"]
+
+        XCTAssertEqual(dict.phoneticCandidates(for: "Hà Nội", in: terms), [],
+                       "a toned Vietnamese word is not offered its ASCII sound-alike")
+        XCTAssertEqual(dict.phoneticCandidates(for: "Hanoi", in: terms), ["Haynoi"])
+        XCTAssertEqual(dict.phoneticCandidates(for: "Hai Noi", in: terms), ["Haynoi"])
+        XCTAssertEqual(dict.phoneticCandidates(for: "Son", in: terms), ["Sơn"],
+                       "adding diacritics is still the direction a hint may go")
+        XCTAssertEqual(dict.phoneticCandidates(for: "afider", in: terms), ["Affitor"])
     }
 
     // MARK: - Hint section in the correction prompt

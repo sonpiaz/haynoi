@@ -52,6 +52,24 @@ enum NotificationHelper {
 
     /// Posts a notification telling the user their session has expired and they
     /// must sign in again.  Tapping the notification opens Haynoi Settings.
+    /// The dictation was pasted from the offline recognizer because the cloud
+    /// could not be used — fast, but it misses English terms and dictionary terms.
+    /// `reason`: the failure's own description ("You've used your free words…",
+    /// "No connection…"), which otherwise never reaches the user when the
+    /// offline text is pasted.
+    static func postOfflineFallback(signedOut: Bool, reason: String? = nil) {
+        let content = UNMutableNotificationContent()
+        content.title = signedOut ? "Haynoi is signed out" : "Haynoi used offline recognition"
+        content.subtitle = "English terms and your dictionary terms may be wrong in that text."
+        content.body = signedOut ? "Open Settings (⌘,) to sign in again."
+                                 : (reason ?? "The transcription service did not answer. The next dictation tries it again.")
+        content.userInfo = signedOut ? ["action": "openSettings"] : [:]
+        let request = UNNotificationRequest(identifier: "haynoi-offline-fallback", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { err in
+            if let err = err { NSLog("[Haynoi] Failed to post offline notice: %@", err.localizedDescription) }
+        }
+    }
+
     static func postSessionExpired() {
         let content = UNMutableNotificationContent()
         content.title = "Haynoi"

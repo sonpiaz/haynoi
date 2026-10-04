@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Darwin
 
 /// Records audio from the mic into a Float32 buffer at 16kHz mono (for Whisper).
 ///
@@ -33,6 +34,9 @@ final class AudioRecorder {
 
     /// True between `beginCapture` and `endCapture`.
     private var isCapturing = false
+    /// What an abort (device failure) cut short, until endCapture() takes it
+    /// or the next beginCapture() starts over.
+    private var abortedCapture: [Float]?
 
     /// Guards engine lifecycle, buffers, capture flag, and the live converter/format.
     private let lock = NSLock()
@@ -50,6 +54,11 @@ final class AudioRecorder {
 
     /// Current RMS audio level (0…1), updated from the tap callback.
     @Published var audioLevel: Float = 0
+
+    /// Optional live PCM sink (hardware format) while capturing. The tap is
+    /// already installed for Whisper; SFSpeech reuses these buffers so we
+    /// never install a second tap. Not stored.
+    var liveCaptureBufferHandler: ((AVAudioPCMBuffer) -> Void)?
 
     // Track when the most recent tap callback fired so the watchdog can detect a
     // silent-death (AirPods disconnect, etc.) while capturing. Written from the
@@ -197,6 +206,7 @@ final class AudioRecorder {
             buffer.removeAll(keepingCapacity: true)
         }
         isCapturing = true
+        abortedCapture = nil
         lock.unlock()
 
         setLastTapFireTime(Date())
@@ -214,6 +224,13 @@ final class AudioRecorder {
         lock.unlock()
     }
 
+    /// Samples captured so far in the current capture, including one that an
+    /// abort cut short (0 when there is none).
+    func capturedSampleCount() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return isCapturing ? buffer.count : (abortedCapture?.count ?? 0)
+    }
+
     /// Stops accumulating, returns the recorded 16kHz mono samples, and returns
     /// the engine to ring-buffer mode (engine stays running). Schedules cooldown.
     @discardableResult
@@ -221,6 +238,10 @@ final class AudioRecorder {
         stopWatchdog()
 
         lock.lock()
+        // A capture the device cut short comes back from here, through the
+        // normal path so the cooldown and the callback cleanup still happen.
+        let aborted = abortedCapture
+        abortedCapture = nil
         let wasCapturing = isCapturing
         isCapturing = false
         // When we were NOT actually capturing (launch warm-up at setup(), or a
@@ -233,7 +254,7 @@ final class AudioRecorder {
             buffer.removeAll(keepingCapacity: true)
             ringBuffer.removeAll(keepingCapacity: true)
         } else {
-            samples = []
+            samples = aborted ?? []
         }
         // Always drop a pending captureLive callback — a chord that never became
         // a hold must not leave a stale tone trigger for the next dictation.
@@ -439,6 +460,14 @@ final class AudioRecorder {
     /// when a device fails mid-capture.
     private func abortRecordingWithError(_ reason: String) {
         stopWatchdog()
+        // Take what was captured before shutdownEngine clears it: an abort can
+        // land in the tail recorded after the key was released, and that
+        // dictation is still worth sending.
+        // It is kept here, not handed along with the notification, so the
+        // next endCapture() returns it whichever of the two runs first.
+        lock.lock()
+        if isCapturing { abortedCapture = buffer }
+        lock.unlock()
         shutdownEngine()
 
         DispatchQueue.main.async {
@@ -510,6 +539,11 @@ final class AudioRecorder {
             DispatchQueue.main.async { fire() }
         }
 
+        // Feed the same tap into on-device SFSpeech partials (no second tap).
+        if capturingNow, let handler = liveCaptureBufferHandler, let copy = Self.clonePCM(pcm) {
+            handler(copy)
+        }
+
         // RMS for the level meter — published ONLY while capturing. In warm
         // ring-buffer mode this used to fire ~47×/s (1024-frame buffers) and
         // re-rendered every AppState observer (main window, menubar popover)
@@ -519,6 +553,28 @@ final class AudioRecorder {
         DispatchQueue.main.async { [weak self] in
             self?.audioLevel = min(1.0, rms * 10)
         }
+    }
+
+    /// Copy a tap buffer — the engine reuses the original.
+    private static func clonePCM(_ src: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let dst = AVAudioPCMBuffer(pcmFormat: src.format, frameCapacity: src.frameCapacity) else { return nil }
+        dst.frameLength = src.frameLength
+        let channels = Int(src.format.channelCount)
+        let frames = Int(src.frameLength)
+        if src.format.commonFormat == .pcmFormatFloat32,
+           let from = src.floatChannelData, let to = dst.floatChannelData {
+            for ch in 0..<channels {
+                memcpy(to[ch], from[ch], frames * MemoryLayout<Float>.size)
+            }
+        } else if src.format.commonFormat == .pcmFormatInt16,
+                  let from = src.int16ChannelData, let to = dst.int16ChannelData {
+            for ch in 0..<channels {
+                memcpy(to[ch], from[ch], frames * MemoryLayout<Int16>.size)
+            }
+        } else {
+            return nil
+        }
+        return dst
     }
 }
 

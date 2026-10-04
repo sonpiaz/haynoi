@@ -3,6 +3,14 @@ import AppKit
 import Combine
 
 struct Transcription: Identifiable, Codable {
+    /// A dictionary rule that actually changed this dictation, kept as the two
+    /// words rather than the rule id so the row still reads right after the
+    /// rule is edited or deleted.
+    struct Fix: Codable, Hashable {
+        let wrong: String
+        let right: String
+    }
+
     let id: UUID
     let text: String
     let timestamp: Date
@@ -11,16 +19,20 @@ struct Transcription: Identifiable, Codable {
     let appBundleId: String?
     /// Localized display name of the destination app (latest wins on re-read).
     let appName: String?
+    /// What Haynoi corrected on its own in this dictation. Nil for older
+    /// entries and for dictations where no rule fired.
+    let fixes: [Fix]?
 
-    init(text: String, appBundleId: String? = nil, appName: String? = nil) {
+    init(text: String, appBundleId: String? = nil, appName: String? = nil, fixes: [Fix]? = nil) {
         self.id = UUID()
         self.text = text
         self.timestamp = Date()
         self.appBundleId = appBundleId
         self.appName = appName
+        self.fixes = (fixes?.isEmpty ?? true) ? nil : fixes
     }
 
-    // Decode tolerantly — older entries lack attribution fields.
+    // Decode tolerantly — older entries lack attribution fields and fixes.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -28,6 +40,7 @@ struct Transcription: Identifiable, Codable {
         timestamp = try c.decode(Date.self, forKey: .timestamp)
         appBundleId = try c.decodeIfPresent(String.self, forKey: .appBundleId)
         appName = try c.decodeIfPresent(String.self, forKey: .appName)
+        fixes = try c.decodeIfPresent([Fix].self, forKey: .fixes)
     }
 
     var wordCount: Int { text.split(separator: " ").count }
@@ -50,6 +63,9 @@ final class AppState: ObservableObject {
     /// Word count of the most recent successful dictation — shown by the
     /// floating orb's "N words" success chip.
     @Published var lastDictationWordCount: Int = 0
+    /// Live on-device SFSpeech partial while holding PTT. RAM-only; never
+    /// persisted, never inserted. Cleared on release / cancel.
+    @Published var interimPartial: String = ""
 
     // Fix #1: hotkey tap liveness
     @Published var hotkeyActive: Bool = false
@@ -81,12 +97,21 @@ final class AppState: ObservableObject {
     private var statusClearTimer: AnyCancellable?
     private var errorClearTimer: AnyCancellable?
 
-    // History persistence — JSON file in Application Support
+    // History persistence — JSON file in Application Support. Same folder policy
+    // as the dictionary: a Debug build or a test run must not read or write the
+    // owner's real history, the shape of the dictionary wipe on 2026-09-17.
+    static func defaultHistoryFileURL(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = PersonalDictionary.isRunningTests()
+    ) -> URL {
+        PersonalDictionary.supportDirectory(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests)
+            .appendingPathComponent("history.json")
+    }
+
     private static let historyFileURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = appSupport.appendingPathComponent("Haynoi", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("history.json")
+        let url = defaultHistoryFileURL()
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        return url
     }()
 
     private static let maxHistoryEntries = 500
@@ -131,8 +156,9 @@ final class AppState: ObservableObject {
 
     func addTranscription(_ text: String,
                           appBundleId: String? = nil,
-                          appName: String? = nil) {
-        let entry = Transcription(text: text, appBundleId: appBundleId, appName: appName)
+                          appName: String? = nil,
+                          fixes: [Transcription.Fix]? = nil) {
+        let entry = Transcription(text: text, appBundleId: appBundleId, appName: appName, fixes: fixes)
         transcriptions.insert(entry, at: 0)
         // Cap at 500 entries
         if transcriptions.count > Self.maxHistoryEntries {
@@ -148,18 +174,14 @@ final class AppState: ObservableObject {
         guard let first = transcriptions.first else { return }
         let updated = Transcription(text: text,
                                     appBundleId: first.appBundleId,
-                                    appName: first.appName)
+                                    appName: first.appName,
+                                    fixes: first.fixes)
         transcriptions[0] = updated
         saveSubject.send()
     }
 
     func deleteTranscription(id: UUID) {
         transcriptions.removeAll { $0.id == id }
-        saveSubject.send()
-    }
-
-    func clearAllTranscriptions() {
-        transcriptions.removeAll()
         saveSubject.send()
     }
 

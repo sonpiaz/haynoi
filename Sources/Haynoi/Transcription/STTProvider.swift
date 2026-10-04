@@ -100,14 +100,21 @@ enum STTProvider {
             // "afider" → possibly "Affitor" — instead of hoping it connects
             // the glossary to the right span on its own.
             let doubtful = Self.doubtfulWords(from: transcribed.logprobs ?? [])
+            // One snapshot for the whole dictation: the lookup reads the store
+            // (and stats the dictionary file) on every call.
+            let terms = doubtful.isEmpty ? [] : PersonalDictionary.shared.phoneticCandidateTerms()
             let hints = doubtful.compactMap { word -> (heard: String, candidates: [String])? in
-                let candidates = PersonalDictionary.shared.phoneticCandidates(for: word)
+                let candidates = PersonalDictionary.shared.phoneticCandidates(for: word, in: terms)
                 return candidates.isEmpty ? nil : (heard: word, candidates: candidates)
             }
-            text = (try? await rewriteWithKyma(
-                token: token, text: text, systemPrompt: Self.correctionPassPrompt,
-                hints: hints
-            )) ?? text
+            // Same rule as Email mode: an error or an empty answer keeps the
+            // transcript — `try? … ?? text` let a 200 with "" replace it.
+            text = await keepTranscriptIfRewriteFails(text) {
+                try await rewriteWithKyma(
+                    token: token, text: text, systemPrompt: Self.correctionPassPrompt,
+                    hints: hints, session: correctionSession, attempts: 1
+                )
+            }
             // Metadata only: that the pass ran — never the text.
             await MainActor.run {
                 Analytics.capture("stt_correction_pass", ["trigger": "logprobs"])
@@ -173,8 +180,23 @@ enum STTProvider {
             currentMin = min(currentMin, t.logprob)
         }
         flush()
-        return words.filter { $0.minLogprob < lowConfidenceLogprob }.map(\.text)
+        // De-duplicate case-insensitively and cap: the same shaky word often
+        // repeats in one dictation, and each one costs a hint in the correction
+        // prompt. Order is kept, so the first doubtful words are the ones asked
+        // about.
+        var seen = Set<String>()
+        var doubtful: [String] = []
+        for word in words where word.minLogprob < lowConfidenceLogprob {
+            guard seen.insert(word.text.lowercased()).inserted else { continue }
+            doubtful.append(word.text)
+            if doubtful.count >= maxDoubtfulWords { break }
+        }
+        return doubtful
     }
+
+    /// Enough for one dictation: past this many the correction prompt is mostly
+    /// hints, and a transcript that shaky needs a re-dictation, not a longer list.
+    static let maxDoubtfulWords = 8
 
     /// The correction pass runs only when ALL hold: the mode has no rewrite
     /// (rewrite modes already carry the glossary + pairs), the model flagged a
@@ -196,8 +218,14 @@ enum STTProvider {
         formatting, no additions or removals. Return only the corrected text.
         """
 
-    /// Resolves the model alias from the user's quality setting. The proxy
-    /// passes these verbatim to Kyma.
+    /// Resolves the model alias from the user's quality setting.
+    ///
+    /// These are aliases the server resolves, not catalog names: "transcribe-quality"
+    /// currently answers as gpt-4o-mini-transcribe-2025-12-15, which the catalog says
+    /// retires 2027-02-26, and "transcribe" as whisper-v3-turbo. The retirement guard
+    /// in the tests cannot see behind an alias — that needs the catalog:
+    /// `scripts/check-model-retirements.py` resolves both through /v1/models and a
+    /// weekly job on the Mac mini reports anything retiring within 120 days.
     private static func resolveModel() -> String {
         let quality = UserDefaults.standard.string(forKey: "sttQuality") ?? "quality"
         return quality == "quality" ? "transcribe-quality" : "transcribe"
@@ -273,7 +301,7 @@ enum STTProvider {
             switch code {
             case 400: result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server (\(ms) ms)")
             case 401: has401 = true; result = RouteResult(name: label, ok: false, latencyMs: ms, detail: "Sign-in expired (401)")
-            case 402: has402 = true; result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of words this month (402)")
+            case 402: has402 = true; result = RouteResult(name: label, ok: true, latencyMs: ms, detail: "Reached the server — out of words this week (402)")
             case 429: result = RouteResult(name: label, ok: false, latencyMs: ms, detail: "Servers busy (429) — try again")
             default:  result = RouteResult(name: label, ok: code < 500, latencyMs: ms, detail: "HTTP \(code) (\(ms) ms)")
             }
@@ -286,7 +314,7 @@ enum STTProvider {
         if has401 {
             verdict = "Your sign-in expired. Open the Account tab and sign in again."
         } else if has402 {
-            verdict = "You've used your free words for this month. Upgrade to Pro for unlimited dictation."
+            verdict = "You've used your free words for this week (5,000 words). Resets Monday — Pro (unlimited) coming soon."
         } else if anyWorked {
             verdict = "Connection is good. Dictation should work."
         } else {
@@ -355,6 +383,21 @@ enum STTProvider {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
 
+        #if DEBUG
+        if let f = UserDefaults.standard.string(forKey: "HAYNOI_FORCE_STT_FAILURE") {
+            switch f {
+            case "outOfCredits":
+                throw STTError.outOfCredits
+            case "serverError":
+                throw STTError.serverError("forced upstream failure (test)")
+            case "noConnection":
+                throw STTError.noConnection
+            default:
+                break
+            }
+        }
+        #endif
+
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
@@ -403,8 +446,7 @@ enum STTProvider {
                 NSLog("[Haynoi] Rate limited by proxy")
                 throw STTError.rateLimited
             default:
-                let rawBody = String(data: data, encoding: .utf8) ?? ""
-                NSLog("[Haynoi] Transcription proxy error %d: %@", http.statusCode, rawBody)
+                NSLog("[Haynoi] Transcription proxy error %ld (%ld-byte body)", http.statusCode, data.count)
                 throw STTError.serverError(
                     parseProxyErrorMessage(data: data)
                         ?? "Something went wrong (HTTP \(http.statusCode)) — try again")
@@ -504,9 +546,28 @@ enum STTProvider {
         }
     }
 
-    private static func rewriteWithKyma(
+    /// Total time the optional correction pass may add to a dictation that
+    /// already has its text. Measured 2026-10-01 (evals/latency, n=30): the
+    /// pass fired on 15 of 30 synthetic sentences and cost 0.83–1.40 s, so
+    /// 2.5 s lets every measured call through. Before this it shared the
+    /// rewrite's budget — 15 s idle timeout, three attempts, 2 s + 4 s + 8 s
+    /// sleeps on 429 — so a busy upstream held finished text for 2–14 s
+    /// (W37-1424). Past the budget the uncorrected transcript is pasted.
+    static let correctionBudget: TimeInterval = 2.5
+
+    /// The resource timeout bounds the whole call, not just the idle gaps
+    /// that `URLRequest.timeoutInterval` measures.
+    static func correctionSessionConfiguration() -> URLSessionConfiguration {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForResource = correctionBudget
+        return config
+    }
+    static let correctionSession = URLSession(configuration: correctionSessionConfiguration())
+
+    static func rewriteWithKyma(
         token: String, text: String, systemPrompt: String,
-        hints: [(heard: String, candidates: [String])] = []
+        hints: [(heard: String, candidates: [String])] = [],
+        session: URLSession = .shared, attempts: Int = 3
     ) async throws -> String {
         let url = URL(string: rewriteURL)!
         var request = URLRequest(url: url)
@@ -523,9 +584,24 @@ enum STTProvider {
         )
 
         let body: [String: Any] = [
-            // Benchmarked 2026-06-10: gemini-2.5-flash 1.7s clean output;
-            // qwen-3-32b (alias "fast") leaks <think> tags and takes 8s.
-            "model": "gemini-2.5-flash",
+            // gemini-2.5-flash retires upstream on 2026-10-20 and then 404s.
+            // gemini-3.5-flash-lite is stable, has no retirement date announced,
+            // and costs the same per token, so moving changes nothing but the
+            // deadline.
+            //
+            // Measured 2026-09-21 on both prompts this function sends, in
+            // Vietnamese, by two people independently: the two models are within
+            // noise of each other on latency — roughly 0.8–2.0s either way, with
+            // the slowest single call of the day belonging to the old model. Do
+            // not read an ordering into those numbers; the runs disagreed.
+            // What did separate them: on a long, code-switched email the lite
+            // model kept the English terms the speaker used, while
+            // gemini-2.5-flash translated them — which the prompt forbids. Both
+            // corrected every glossary term and returned clean text.
+            //
+            // The alias called "fast" (qwen-3-32b) is still not a candidate: it
+            // leaks <think> tags and takes 8s.
+            "model": "gemini-3.5-flash-lite",
             "temperature": 0.3,
             "max_tokens": 1024,
             "messages": [
@@ -536,8 +612,8 @@ enum STTProvider {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         var rewriteData: Data?
-        for attempt in 0..<3 {
-            let (data, response) = try await URLSession.shared.data(for: request)
+        for attempt in 0..<attempts {
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { return text }
             if http.statusCode == 401 {
                 // Fix #1: rewriteWithKyma was silently returning raw text on 401,
@@ -548,14 +624,18 @@ enum STTProvider {
                 throw STTError.sessionExpired
             }
             if http.statusCode == 429 {
+                // No sleep after the last attempt: nothing follows it.
+                guard attempt + 1 < attempts else {
+                    NSLog("[Haynoi] Rate limited (rewrite), out of attempts — using raw transcription")
+                    break
+                }
                 let delay = pow(2.0, Double(attempt + 1))
-                NSLog("[Haynoi] Rate limited (rewrite), retrying in %.0fs (%d/3)", delay, attempt + 1)
+                NSLog("[Haynoi] Rate limited (rewrite), retrying in %.0fs (%d/%d)", delay, attempt + 1, attempts)
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 continue
             }
             guard http.statusCode == 200 else {
-                let rawBody = String(data: data, encoding: .utf8) ?? ""
-                NSLog("[Haynoi] Rewrite failed (%d): %@ — using raw transcription", http.statusCode, rawBody)
+                NSLog("[Haynoi] Rewrite failed (%ld, %ld-byte body) — using raw transcription", http.statusCode, data.count)
                 return text
             }
             rewriteData = data

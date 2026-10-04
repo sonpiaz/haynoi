@@ -243,11 +243,6 @@ struct MainView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            if state.isRecording {
-                recordingBanner
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             Group {
                 switch section {
                 case .history:
@@ -265,42 +260,8 @@ struct MainView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.obsidianBackground(for: scheme))
-        .animation(.obsidianFade, value: state.isRecording)
     }
 
-    // MARK: - Recording Banner
-
-    private var recordingBanner: some View {
-        HStack(spacing: 10) {
-            CalmStatusDot(status: .recording)
-
-            RecordingBannerWaveform(audioLevel: CGFloat(state.audioLevel), scheme: scheme)
-                .frame(width: 36, height: 14)
-
-            Text("Recording — release \(HotkeyDisplay.symbol) to transcribe")
-                .font(.obsidianCaption)
-                .foregroundStyle(Color.obsidianLabel3(for: scheme))
-
-            Spacer()
-
-            Text(formatDuration(state.recordingDuration))
-                .font(.obsidianMonoSM)
-                .foregroundStyle(Color.obsidianLabel4(for: scheme))
-                .monospacedDigit()
-        }
-        .padding(.horizontal, C.s6)
-        .padding(.vertical, 9)
-        .background(Color.obsidianAccentWash(for: scheme))
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.obsidianDivider(for: scheme))
-                .frame(height: 1)
-        }
-    }
-
-    private func formatDuration(_ d: TimeInterval) -> String {
-        String(format: "%d:%02d", Int(d) / 60, Int(d) % 60)
-    }
 }
 
 // MARK: - Sidebar row button hover style
@@ -560,37 +521,6 @@ private struct AboutPage: View {
             .fill(Color.obsidianDivider(for: scheme))
             .frame(height: 1)
             .padding(.leading, 14)
-    }
-}
-
-// MARK: - Recording Banner Waveform (Signal Cyan bars)
-
-struct RecordingBannerWaveform: View {
-    let audioLevel: CGFloat
-    let scheme: ColorScheme
-    private let barCount = 8
-
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                let phase = timeline.date.timeIntervalSinceReferenceDate * 2.4
-                let barW: CGFloat = 3
-                let gap: CGFloat = (size.width - CGFloat(barCount) * barW) / CGFloat(barCount - 1)
-                let midY = size.height / 2
-
-                for i in 0..<barCount {
-                    let x = CGFloat(i) * (barW + gap)
-                    let freq1 = sin(phase * 1.1 + Double(i) * 0.65) * 0.5 + 0.5
-                    let freq2 = cos(phase * 0.7 + Double(i) * 0.45) * 0.3 + 0.5
-                    let response = freq1 * 0.6 + freq2 * 0.4
-                    let h = max(3, size.height * max(audioLevel, 0.05) * CGFloat(response))
-                    let rect = CGRect(x: x, y: midY - h / 2, width: barW, height: h)
-                    let path = Path(roundedRect: rect, cornerRadius: 1.5)
-                    // Use accent directly — it's on a cyan-washed bg so decorative use is fine
-                    context.fill(path, with: .color(Color.obsidianAccent(for: scheme).opacity(0.85)))
-                }
-            }
-        }
     }
 }
 

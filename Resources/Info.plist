@@ -35,6 +35,8 @@
 	<string>Haynoi pauses your music apps while you dictate.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Haynoi needs microphone access to transcribe your speech.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Haynoi shows a live preview of what you're saying while you hold the key. The words you insert still come from Haynoi transcription after you release.</string>
 	<key>SUAutomaticallyUpdate</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>
