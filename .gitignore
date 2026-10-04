@@ -44,3 +44,10 @@ site/_shots/
 .internal/
 .claude/
 .claude-lock/
+
+# Local HUD / verify screenshots — not product
+.grok-standard-hud*
+d1.png
+d2.png
+dev-stream.png
+verify-84-*.png
