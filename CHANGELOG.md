@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **"Fix that" no longer claims a correction it could not see.** In apps that
+  accept an edit and quietly drop it, a correction could vanish without a word.
+  When Haynoi cannot confirm the change, it now leaves the correction on the
+  clipboard and tells you to press ⌘V if it did not land.
+- **Text no longer waits on an optional fix-up pass.** When the transcriber
+  was unsure of a word, Haynoi asked a second model to fix it — and a busy
+  or slow server could hold your finished sentence for several seconds. That
+  pass now gets one try and 2.5 s; past that you get the text as heard.
+- An empty answer from that pass keeps your words instead of failing the
+  dictation.
+- **Any fallback to offline recognition is announced, with the reason** —
+  not only sign-out: a busy server, no connection or a used-up weekly limit
+  now say so instead of leaving you with worse text and no explanation.
+- The paste reads, writes and checks one app from start to finish, even if
+  focus moves while the text is being inserted.
+- **Signed out no longer means silently worse text.** When Haynoi is signed
+  out it pastes what the Mac's offline recognizer heard — fast, but weak on
+  English terms. It now tells you, and that recognizer also leans on your
+  dictionary.
+- **The last word is no longer cut off.** Recording stopped the instant the key
+  came up, and most people let go while the last word is still coming out, so it
+  never reached the transcriber. Haynoi now keeps listening for half a second
+  after you release.
+- **Short replies are heard.** A one- or two-word answer said softly ("có",
+  "ok") was treated as silence unless the microphone also caught the start tone.
+- **Speaking quietly no longer ends in "No speech detected."** Haynoi judged a
+  recording by its average loudness, so a soft voice with pauses — dictating
+  late at night, or thinking between sentences — was thrown away before it was
+  transcribed. It now listens for stretches of voice above the room's own
+  background noise.
 - **Words Haynoi learns from your corrections now stick.** Since 0.3.6 the
   personal dictionary was read back in the wrong format, so it quietly came
   back empty every time Haynoi restarted — learned fixes, words you added
@@ -80,10 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.7] - 2026-07-05
 
 ### Added
-- **Haynoi Pro is live.** Unlimited dictation, all 4 modes, priority
-  transcription — $14.99/month or $125.88/year. Upgrade in
-  Settings → Plans & Billing; payment runs through Stripe in your browser
-  and the app unlocks within seconds. Manage or cancel anytime.
+- **Groundwork for Haynoi Pro.** A Plans & Billing tab in Settings.
+  Pro (unlimited words) is not on sale yet; it is coming soon.
 
 ### Fixed
 - Usage analytics events now actually reach our dashboard (a

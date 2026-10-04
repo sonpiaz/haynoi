@@ -43,12 +43,37 @@ final class SoundFeedback {
 
     // MARK: - Preload
 
+    /// The start tone as 16 kHz mono samples, so the speech gate can tell the
+    /// tone the mic picked up from a short spoken reply.
+    private(set) var startToneSamples16k: [Float]?
+
     private func preloadAll() {
+        startToneSamples16k = loadSamples16k("start")
         startPlayer   = makePlayer("start")
         stopPlayer    = makePlayer("stop")
         cancelPlayer  = makePlayer("cancel")
         errorPlayer   = makePlayer("error")
         successPlayer = makePlayer("success")   // optional — graceful no-op if absent
+    }
+
+    private func loadSamples16k(_ name: String) -> [Float]? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds/\(currentTheme)")
+                ?? Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Sounds/deep"),
+              let file = try? AVAudioFile(forReading: url),
+              let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: file.processingFormat, to: target),
+              let input = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
+              (try? file.read(into: input)) != nil else { return nil }
+        let capacity = AVAudioFrameCount(Double(input.frameLength) * 16000 / file.processingFormat.sampleRate) + 16
+        guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return nil }
+        var consumed = false
+        var error: NSError?
+        converter.convert(to: output, error: &error) { _, status in
+            if consumed { status.pointee = .endOfStream; return nil }
+            consumed = true; status.pointee = .haveData; return input
+        }
+        guard error == nil, let data = output.floatChannelData?[0] else { return nil }
+        return Array(UnsafeBufferPointer(start: data, count: Int(output.frameLength)))
     }
 
     private func makePlayer(_ name: String) -> AVAudioPlayer? {

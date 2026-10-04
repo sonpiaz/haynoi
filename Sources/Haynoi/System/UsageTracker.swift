@@ -22,10 +22,9 @@ enum UsageTracker {
     private static let longestStreakKey = "longestStreak"
 
     // F2 / D13 — path to the small JSON beside history.json in Application Support
+    // Same folder policy as history.json, so Debug and tests keep their own.
     static let insightsFileURL: URL = {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = appSupport.appendingPathComponent("Haynoi", isDirectory: true)
+        let dir = PersonalDictionary.supportDirectory()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("insights.json")
     }()

@@ -169,22 +169,101 @@ final class PersonalDictionary {
     init(fileURL: URL = PersonalDictionary.defaultFileURL()) {
         self.fileURL = fileURL
         self.entries = PersonalDictionary.load(from: fileURL)
+        self.seenIDs = Set(self.entries.map(\.id))
+        self.fileStamp = PersonalDictionary.stamp(of: fileURL)
+        PersonalDictionary.clearUserImmutable(at: fileURL)
+    }
+
+    /// How the file looked when this store last read or wrote it. A different
+    /// stamp means something else changed the file — a restore, a second build,
+    /// or a hand edit — so its rows must not be written over.
+    private struct FileStamp: Equatable {
+        let modified: Date
+        let size: Int
+    }
+
+    private var fileStamp: FileStamp?
+
+    /// Every id this store has held, deleted ones included, so a merge brings
+    /// back only rows it has never seen and a delete stays deleted.
+    private var seenIDs: Set<UUID>
+
+    /// Read through FileManager, not `URL.resourceValues`: Foundation caches
+    /// resource values on the URL, so the same URL kept reporting the size and
+    /// date from the first read and every later change looked like no change.
+    private static func stamp(of url: URL) -> FileStamp? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let modified = attributes[.modificationDate] as? Date,
+              let size = attributes[.size] as? Int
+        else { return nil }
+        return FileStamp(modified: modified, size: size)
     }
 
     // MARK: Persistence
 
-    static func defaultFileURL() -> URL {
+    /// Production Release only. Debug (`com.sonpiaz.haynoi.dev`) and tests
+    /// must not share this folder — a Debug persist wiped the live file on
+    /// 2026-09-17 (30 entries → empty at 18:29).
+    static let productionFolderName = "Haynoi"
+    static let developmentFolderName = "Haynoi-Dev"
+
+    static func isRunningTests(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        RunMode.isHostingXCTestBundle(environment: environment)
+    }
+
+    static func supportFolderName(
+        bundleIdentifier: String,
+        isRunningTests: Bool
+    ) -> String {
+        if isRunningTests { return productionFolderName }
+        if bundleIdentifier.hasSuffix(".dev") || bundleIdentifier.lowercased().contains("test") {
+            return developmentFolderName
+        }
+        return productionFolderName
+    }
+
+    /// The folder every file of the owner's lives in: dictionary, history,
+    /// insights, paste counters. Release → `Haynoi`, Debug → `Haynoi-Dev`, a test
+    /// run → a per-PID temp folder. Does not create it — a lookup that touches the
+    /// disk would make the owner's folder on a machine that only ran the tests.
+    static func supportDirectory(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = PersonalDictionary.isRunningTests()
+    ) -> URL {
         let fm = FileManager.default
         var base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
         // A test run hosts the app, so `shared` would otherwise read and write
         // the user's real dictionary — which is how it got wiped on 2026-09-01.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+        if isRunningTests {
             base = fm.temporaryDirectory
                 .appendingPathComponent("HaynoiTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
         }
-        let dir = base.appendingPathComponent("Haynoi", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return base.appendingPathComponent(
+            supportFolderName(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests),
+            isDirectory: true
+        )
+    }
+
+    static func defaultFileURL(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sonpiaz.haynoi",
+        isRunningTests: Bool = PersonalDictionary.isRunningTests()
+    ) -> URL {
+        let dir = supportDirectory(bundleIdentifier: bundleIdentifier, isRunningTests: isRunningTests)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("dictionary.json")
+    }
+
+    static func isProductionDictionaryURL(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        return path.hasSuffix("/Application Support/\(productionFolderName)/dictionary.json")
+    }
+
+    static func isProductionBundle(
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? ""
+    ) -> Bool {
+        bundleIdentifier == "com.sonpiaz.haynoi"
     }
 
     /// The on-disk format lives in one place so the reader can't drift from the
@@ -226,22 +305,63 @@ final class PersonalDictionary {
 
     private func persist() {
         // Called on `queue`.
+        if Self.isProductionDictionaryURL(fileURL), !Self.isProductionBundle() {
+            NSLog("[Haynoi] refused to write the production dictionary from bundle %@",
+                  Bundle.main.bundleIdentifier ?? "?")
+            return
+        }
+        takeRowsThatAppearedOnDisk()
+        seenIDs.formUnion(entries.map(\.id))
         if let data = try? Self.makeEncoder().encode(entries) {
             try? data.write(to: fileURL, options: .atomic)
+            fileStamp = Self.stamp(of: fileURL)
         }
+    }
+
+    /// The file changed under us: keep the rows it has and this store never
+    /// had. 2026-09-17 a still-running app with an empty dictionary wrote over
+    /// a restore of 30 entries. Called before a write and before a read, so a
+    /// restore reaches the glossary at the next dictation, not at the next save.
+    ///
+    /// A stamp is a guard, not a lock: two versions with the same size and the
+    /// same modification date still look unchanged, and a file replaced between
+    /// our write and the stamp that follows it is read as ours.
+    private func takeRowsThatAppearedOnDisk() {
+        // Called on `queue`.
+        guard let onDisk = Self.stamp(of: fileURL), onDisk != fileStamp else { return }
+        let theirs = Self.load(from: fileURL).filter { !seenIDs.contains($0.id) }
+        if !theirs.isEmpty {
+            entries.append(contentsOf: theirs)
+            seenIDs.formUnion(theirs.map(\.id))
+            NSLog("[Haynoi] dictionary.json changed under us — kept %ld row(s) of it", theirs.count)
+        }
+        fileStamp = onDisk
+    }
+
+    /// The restore lock (`uchg`) stops a still-running empty build from
+    /// overwriting the file. The next production launch must be able to save.
+    static func clearUserImmutable(at url: URL) {
+        var mutable = url
+        var values = URLResourceValues()
+        values.isUserImmutable = false
+        try? mutable.setResourceValues(values)
     }
 
     // MARK: Read
 
     /// All entries (any state). Snapshot copy — safe to use off-queue.
     var all: [DictionaryEntry] {
-        queue.sync { entries }
+        queue.sync {
+            takeRowsThatAppearedOnDisk()
+            return entries
+        }
     }
 
     /// Enabled entries of the given kinds, newest-meaningful first by frequency.
     func enabledEntries(kinds: Set<DictionaryEntry.Kind>) -> [DictionaryEntry] {
         queue.sync {
-            entries.filter { $0.enabled && kinds.contains($0.kind) }
+            takeRowsThatAppearedOnDisk()
+            return entries.filter { $0.enabled && kinds.contains($0.kind) }
         }
     }
 
@@ -429,21 +549,39 @@ final class PersonalDictionary {
     /// Dictionary `right` forms that sound like `word` (v2 Phase 4) — named
     /// candidates for a low-confidence span, fed to the correction pass as a
     /// targeted hint. Sound-alike only; never applied as a replacement.
-    func phoneticCandidates(for word: String, max limit: Int = 3) -> [String] {
+    ///
+    /// A candidate that drops diacritics the heard form carries is never offered
+    /// (W37-1673): "Hà Nội" said correctly came back as "Haynoi" 3/3 times once
+    /// the hint named it. Tones are what the transcriber committed to; the
+    /// ASCII misrecognitions ("Hanoi", "Hai Noi") still get the hint. Same
+    /// direction rule as `CorrectionDetector`, diacritic half only — the
+    /// capitalization half would block "Hai Noi" → "Haynoi".
+    func phoneticCandidates(for word: String, max limit: Int = 3, in terms: [String]? = nil) -> [String] {
         let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         var seen = Set<String>()
         var result: [String] = []
-        for entry in enabledEntries(kinds: [.term, .replacement])
-            .sorted(by: { $0.frequency > $1.frequency }) {
-            let right = entry.right.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !right.isEmpty, seen.insert(right.lowercased()).inserted else { continue }
-            if Phonetics.close(trimmed, right) {
+        for right in terms ?? phoneticCandidateTerms() {
+            guard seen.insert(right.lowercased()).inserted else { continue }
+            if Phonetics.close(trimmed, right),
+               CorrectionDetector.combiningMarkCount(right) >= CorrectionDetector.combiningMarkCount(trimmed) {
                 result.append(right)
                 if result.count >= limit { break }
             }
         }
         return result
+    }
+
+    /// The `right` forms a phonetic lookup walks, most used first. Take this
+    /// once before looping over the doubtful words of one dictation: every
+    /// `phoneticCandidates(for:)` call otherwise reads the store again, and a
+    /// read now also stats the file. One dictation then also sees one
+    /// dictionary, even if the file changes while the hints are being built.
+    func phoneticCandidateTerms() -> [String] {
+        enabledEntries(kinds: [.term, .replacement])
+            .sorted(by: { $0.frequency > $1.frequency })
+            .map { $0.right.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     /// Pure filter behind `deleteAllLearned` — split out so the invariant

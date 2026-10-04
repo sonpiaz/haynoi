@@ -83,7 +83,10 @@ if [[ "${1:-}" == "--rollback" ]]; then
   exit 0
 fi
 
-LOCAL_BUILD="$BUILD_NUMBER.$(git rev-list --count "v$MARKETING_VERSION..HEAD")"
+# Before a version is tagged, count from the newest tag instead.
+SINCE="v$MARKETING_VERSION"
+git rev-parse -q --verify "refs/tags/$SINCE" >/dev/null || SINCE=$(git describe --tags --abbrev=0)
+LOCAL_BUILD="$BUILD_NUMBER.$(git rev-list --count "$SINCE..HEAD")"
 LOG="$ROOT/build/install-local.log"
 echo "==> Building Haynoi $MARKETING_VERSION ($LOCAL_BUILD) at $(git rev-parse --short HEAD) — the running copy keeps working meanwhile"
 xcodegen generate --quiet

@@ -556,18 +556,8 @@ private struct AppWordRow: View {
 // MARK: - MilestoneTracker (F2.4f / D15)
 
 enum MilestoneTracker {
-    struct Milestone {
-        let threshold: Int
-    }
-
     private static let thresholds = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
     private static let unseenKey = "insightsUnseenMilestone"
-
-    static func latestMilestone(for total: Int) -> Milestone? {
-        let achieved = thresholds.filter { total >= $0 }
-        guard let highest = achieved.last else { return nil }
-        return Milestone(threshold: highest)
-    }
 
     static var hasUnseenMilestone: Bool {
         UserDefaults.standard.bool(forKey: unseenKey)

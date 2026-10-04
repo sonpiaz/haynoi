@@ -1,4 +1,5 @@
 import AppKit
+import Accelerate
 import AVFoundation
 import Combine
 
@@ -24,10 +25,6 @@ final class PipelineController {
     // will reject the audio and the buffer can become very large.
     private let maxRecordingDuration: TimeInterval = 300
 
-    // Fix #3: silence gate threshold extracted to a named constant.
-    // Future work: replace with adaptive per-session calibration.
-    private let silenceRMSThreshold: Float = 0.005
-
     // Retained for legacy call-sites; actual clear is now in AppState.setTransientError
     private var errorClearTimer: Timer?
 
@@ -39,6 +36,16 @@ final class PipelineController {
     // the 200ms grace period + the user's reaction time so first words are never
     // lost, even on a cold Bluetooth mic.
     private static let preRollMs = 300
+    /// Audio kept after the key is released. People let go while the last word
+    /// is still coming out; capture that ended there lost the whole word — "…vào
+    /// buổi" for "…vào buổi tối" (29/09). Measured on transcribe-quality
+    /// (evals/release-tail): audio ending 300 ms before the speech did kept the
+    /// last word in 2 of 6 sentences, 450 ms in 0 of 6. 500 ms covers that.
+    static let tailMs = 500
+    /// The release that is still recording its tail; nil when none is pending.
+    private var pendingStop: DispatchWorkItem?
+    /// Samples already captured when the key went up; what comes after is tail.
+    private var samplesAtRelease = 0
     // Keep release latency bounded before falling back to on-device text.
     static let cloudDeadline: TimeInterval = 2.5
 
@@ -121,6 +128,9 @@ final class PipelineController {
     private var isPreRecording = false
 
     func preRecording() {
+        // A new press while the last release is still recording its tail: close
+        // that dictation now, or beginCapture would clear its buffer.
+        finishPendingStopNow()
         guard !state.isRecording, !isPreRecording else { return }
 
         // Fix #3: reject recording when mic permission has been revoked.
@@ -210,15 +220,63 @@ final class PipelineController {
         }
     }
 
+    /// The wrong → right pairs History shows, from the rules that actually
+    /// changed the text. One place, so every path that writes a history row
+    /// (first try and retry) says the same thing.
+    static func fixes(forRuleIDs ids: [UUID]) -> [Transcription.Fix] {
+        PersonalDictionary.shared.entries(withIDs: ids).compactMap { entry in
+            guard let wrong = entry.wrong, !wrong.isEmpty else { return nil }
+            return Transcription.Fix(wrong: wrong, right: entry.right)
+        }
+    }
+
+    /// Key released: the UI moves on at once, the mic keeps recording for
+    /// `tailMs`, then `finishStop()` hands the audio on.
     func stopRecording() {
-        guard state.isRecording else { return }
+        guard state.isRecording, pendingStop == nil else { return }
 
         recordingStartTime = nil
         durationTimer?.invalidate()
         durationTimer = nil
 
+        // Transition orb to "thinking" state rather than hiding it — the orb
+        // stays visible during the network round-trip so users know work is in
+        // flight.  The orb will auto-hide after success/error transitions.
+        FloatingBarController.shared.transition(to: .transcribing)
+        state.isRecording = false
+        state.showOverlay = false
+
+        samplesAtRelease = recorder.capturedSampleCount()
+        let work = DispatchWorkItem { [weak self] in self?.finishStop() }
+        pendingStop = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Self.tailMs), execute: work)
+    }
+
+    /// How long the key was actually held: captured audio minus the pre-roll
+    /// spliced in front and the tail recorded after release.
+    static func heldSeconds(sampleCount: Int, tail: TimeInterval) -> TimeInterval {
+        max(0, Double(sampleCount) / 16000.0 - Double(preRollMs) / 1000.0 - tail)
+    }
+
+    /// Ends a release that is still recording its tail, with whatever tail it has.
+    private func finishPendingStopNow() {
+        guard let work = pendingStop else { return }
+        work.cancel()
+        finishStop()
+    }
+
+    /// If the device failed during the tail, endCapture() returns what the
+    /// recorder had captured before it shut down.
+    private func finishStop() {
+        guard pendingStop != nil else { return }
+        pendingStop = nil
+
         stopInterimOverlay()
         let samples = recorder.endCapture()
+        MediaController.resumeIfPaused()
+        // Tail measured in samples actually recorded after release, not wall time.
+        let tail = Double(max(0, samples.count - samplesAtRelease)) / 16000.0
+        samplesAtRelease = 0
 
         // Measure duration from the actual captured samples (pre-roll included)
         // rather than wall-clock from confirmRecording: this is what the user
@@ -229,21 +287,13 @@ final class PipelineController {
         // Fix #5: the pre-roll (preRollMs) is spliced into the buffer at
         // beginCapture, so even a near-instant release yields ~preRollMs of audio.
         // Gate the minimum-duration check on the user's ACTUAL hold time (total
-        // captured minus the pre-roll) so a 0ms hold + 300ms pre-roll does not
-        // sneak past as "speech" and burn an STT API call on non-speech audio.
-        let actualDuration = max(0, duration - Double(PipelineController.preRollMs) / 1000.0)
+        // captured minus the pre-roll and the tail) so a 0ms hold does not sneak
+        // past as "speech" and burn an STT API call on non-speech audio.
+        let actualDuration = Self.heldSeconds(sampleCount: samples.count, tail: tail)
 
         // Capture per-dictation target app before the next preRecording can overwrite it.
         // Fix #9: snapshot and pass through, do not use a shared static.
         let dictationTargetApp = currentDictationTargetApp
-
-        // Transition orb to "thinking" state rather than hiding it — the orb
-        // stays visible during the network round-trip so users know work is in
-        // flight.  The orb will auto-hide after success/error transitions.
-        FloatingBarController.shared.transition(to: .transcribing)
-        state.isRecording = false
-        state.showOverlay = false
-        MediaController.resumeIfPaused()
 
         // Too short — cancel silently, just hide the orb. Gate on actualDuration
         // (pre-roll removed) so a tap that captured only pre-roll is dropped.
@@ -255,8 +305,8 @@ final class PipelineController {
         }
 
         // Secondary guard: need at least 0.5s of REAL speech on top of the
-        // pre-roll. 8000 samples (0.5s) + the pre-roll padding (preRollMs).
-        let minSamples = 8000 + (PipelineController.preRollMs * 16000) / 1000
+        // pre-roll and the tail. 8000 samples (0.5s) + both paddings.
+        let minSamples = 8000 + (PipelineController.preRollMs * 16000) / 1000 + Int(tail * 16000)
         guard samples.count > minSamples else {
             FloatingBarController.shared.transition(to: .error)
             state.setTransientError("Too short to transcribe")
@@ -264,9 +314,11 @@ final class PipelineController {
         }
 
         // Fix #3: silence detection gives visible feedback
-        let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
-        NSLog("[Haynoi] Audio RMS: %.5f (threshold %.5f)", rms, silenceRMSThreshold)
-        guard rms > silenceRMSThreshold else {
+        // nil: no tone was played. Empty: a tone was played but its samples
+        // could not be read, so only the 0.6 s rule can tell it from speech.
+        let tone: [Float]? = UserDefaults.standard.bool(forKey: "soundEnabled")
+            ? (SoundFeedback.shared.startToneSamples16k ?? []) : nil
+        guard Self.hasSpeech(samples, tone: tone) else {
             NSLog("[Haynoi] Too quiet, skipping transcription")
             FloatingBarController.shared.transition(to: .error)
             setTransientError("No speech detected")
@@ -292,51 +344,27 @@ final class PipelineController {
             await previousInsertion?.value
 
             var cloudResult: Result<STTProvider.Result, Error>?
-            var deadlineExceeded = false
-            let cloudTask = Task { try await STTProvider.transcribeTracked(samples) }
-
-            // Race the deadline against cloud, but never cancel the cloud task.
-            // Quality may still arrive and replace the on-device insert in place.
-            enum CloudRace {
-                case cloud(Result<STTProvider.Result, Error>)
-                case deadline
-            }
-            let raced: CloudRace = await withTaskGroup(of: CloudRace.self) { group in
-                group.addTask {
-                    do {
-                        return .cloud(.success(try await cloudTask.value))
-                    } catch {
-                        return .cloud(.failure(error))
-                    }
-                }
-                group.addTask {
-                    try? await Task.sleep(nanoseconds: UInt64(Self.cloudDeadline * 1_000_000_000))
-                    return .deadline
-                }
-                let first = await group.next() ?? .deadline
-                group.cancelAll()
-                return first
-            }
-            switch raced {
-            case .cloud(let result):
-                cloudResult = result
-            case .deadline:
-                deadlineExceeded = true
+            // Wait for Quality. Cancelling the cloud call at 2.5s (32.7–32.9)
+            // dropped the rest of the sentence. On-device is the fallback only
+            // when the cloud actually fails. Do not paste-then-replaceSpan (#32):
+            // Mandeck has no AX span, so Quality never upgrades.
+            do {
+                let result = try await STTProvider.transcribeTracked(samples)
+                cloudResult = .success(result)
+            } catch {
+                cloudResult = .failure(error)
             }
 
             let onDeviceText = InterimSpeechRecognizer.shared.finalText()
             let cloudText = cloudResult.map { $0.map(\.text) }
             guard let winner = Self.resolveTranscript(
                 cloud: cloudText,
-                deadlineExceeded: deadlineExceeded,
+                deadlineExceeded: false,
                 onDevice: onDeviceText
             ) else {
                 let failureError: Error = {
                     if let cloudResult, case .failure(let error) = cloudResult {
                         return error
-                    }
-                    if deadlineExceeded {
-                        return STTError.noConnection
                     }
                     return STTError.parseError
                 }()
@@ -362,7 +390,19 @@ final class PipelineController {
             }
 
             let snippetText = SnippetManager.applySnippets(to: winner.text)
-            let finalText = PersonalDictionary.shared.applyReplacements(to: snippetText)
+            let replaced = PersonalDictionary.shared.applyReplacementsTracked(to: snippetText)
+            let finalText = replaced.text
+            // What Haynoi corrected on its own, for the History row: the rules
+            // that fired in the cloud pass plus the ones that fired here.
+            let firedIDs: [UUID] = {
+                var ids: [UUID] = []
+                if winner.source == .cloud, let cloudResult, case .success(let r) = cloudResult {
+                    ids = r.firedIDs
+                }
+                ids.append(contentsOf: replaced.firedIDs)
+                return ids
+            }()
+            let fixes = Self.fixes(forRuleIDs: firedIDs)
             guard !finalText.isEmpty else {
                 await MainActor.run {
                     state.isTranscribing = false
@@ -372,7 +412,14 @@ final class PipelineController {
                 return
             }
 
-            NSLog("[Haynoi] Transcribed (%@): %@", winner.source == .cloud ? "cloud" : "on-device", finalText)
+            NSLog("[Haynoi] Transcribed (%@): %ld chars", winner.source == .cloud ? "cloud" : "on-device", finalText.count)
+            if case .failure(let error)? = cloudResult,
+               let notice = Self.offlineNotice(source: winner.source, error: error,
+                                               lastWarned: Self.lastOfflineWarning, now: Date()) {
+                Self.lastOfflineWarning = Date()
+                NotificationHelper.postOfflineFallback(signedOut: notice == .signedOut,
+                                                       reason: (error as? LocalizedError)?.errorDescription)
+            }
             // Capture attribution from the dictation target app (F2.3 / D17).
             let attrBundleId = dictationTargetApp?.bundleIdentifier
             let attrAppName = dictationTargetApp?.localizedName
@@ -381,7 +428,8 @@ final class PipelineController {
                 state.isTranscribing = false
                 state.addTranscription(finalText,
                                        appBundleId: attrBundleId,
-                                       appName: attrAppName)
+                                       appName: attrAppName,
+                                       fixes: fixes)
                 // Orb: "N words" success chip then auto-hide. The optional
                 // dink is quieter and tonally distinct from the stop tone
                 // (founder pick from the 2026-06-12 sound contest) and can
@@ -396,14 +444,6 @@ final class PipelineController {
             }
             // Fix #9: pass capturedTargetApp explicitly instead of mutating the static.
             let insertResult = await TextInserter.insert(finalText, targetApp: dictationTargetApp)
-            if winner.source == .onDevice, deadlineExceeded {
-                await Self.upgradeOnDeviceInsertIfCloudArrives(
-                    cloudTask: cloudTask,
-                    insertedText: insertResult.inserted,
-                    targetApp: insertResult.targetApp ?? dictationTargetApp,
-                    span: insertResult.span
-                )
-            }
             // v1.2 — Signal B (re-dictation similarity). Compare this transcript
             // to the previous one (RAM-only) BEFORE overwriting lastTranscript.
             // A qualifying near-homophone re-dictation opportunistically SUGGESTS
@@ -432,7 +472,7 @@ final class PipelineController {
                                 // .replacement. The .term feeds the prompt/rewrite
                                 // glossary; it can never trigger a hard swap.
                                 _ = PersonalDictionary.shared.addTerm(right, source: .learned)
-                                NSLog("[Haynoi] Learned (re-dictation, term-only): %@", right)
+                                NSLog("[Haynoi] Learned (re-dictation, term-only): %ld chars", right.count)
                                 // Metadata only: just which detector fired — never the term string.
                                 Analytics.capture("dictionary_term_learned", ["signal": "redictation"])
                             },
@@ -508,67 +548,111 @@ final class PipelineController {
         }
     }
 
-    /// After an on-device insert at the 2.5s deadline, Quality may still arrive.
-    /// Replace in place only when the pasted span is intact and the user did not
-    /// switch apps. Never delete the on-device text on cloud failure.
-    static func upgradeOnDeviceInsertIfCloudArrives(
-        cloudTask: Task<STTProvider.Result, Error>,
-        insertedText: String,
-        targetApp: NSRunningApplication?,
-        span: NSRange?
-    ) async {
-        let result: STTProvider.Result
-        do {
-            result = try await cloudTask.value
-        } catch {
-            NSLog("[Haynoi] Cloud follow-up failed — keeping on-device text: %@", error.localizedDescription)
-            return
+    /// Is there a voice in this recording? Judged on 30 ms frames against the
+    /// room's own noise floor, not on the average of the whole buffer.
+    ///
+    /// The average used to be compared with a fixed 0.005. A quiet voice with
+    /// pauses — dictating at night, thinking between sentences — averages under
+    /// that, so real speech was thrown away as "No speech detected" before it
+    /// reached the server (W37-1389, seven times on 2026-09-22 23:00–23:41).
+    /// Now: the floor is the 10th-percentile frame; a frame is voiced when it is
+    /// three times the floor (four in 0.3.11) and above an absolute minimum; 0.6 s of voiced
+    /// frames, counted only in unbroken 150 ms stretches, is speech — longer
+    /// than the 0.42 s start tone the mic can pick up, and clicks don't add up.
+    /// 2026-09-29: that 0.6 s dropped short soft replies ("có", "ok") whenever
+    /// the mic did not also hear the tone. Now 3× the floor, and 0.24 s of voice
+    /// outside anything that matches the start tone's waveform is speech too.
+    /// Steady noise (a fan) lifts the floor with it, so it still reads as
+    /// silence. Anything the old average let through still passes.
+    /// `tone`: the start tone's samples when one was played this dictation,
+    /// nil when sound is off, empty when it played but could not be loaded.
+    nonisolated static func hasSpeech(_ samples: [Float], tone: [Float]? = nil, sampleRate: Int = 16000) -> Bool {
+        let frameLength = sampleRate * 30 / 1000
+        guard frameLength > 0, samples.count >= frameLength else { return false }
+        let average = (samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count)).squareRoot()
+        if average > 0.005 { return true }
+        var frames: [Float] = []
+        frames.reserveCapacity(samples.count / frameLength)
+        var start = 0
+        while start + frameLength <= samples.count {
+            var sum: Float = 0
+            for i in start..<(start + frameLength) { sum += samples[i] * samples[i] }
+            frames.append((sum / Float(frameLength)).squareRoot())
+            start += frameLength
         }
-
-        let snippetText = SnippetManager.applySnippets(to: result.text)
-        let upgraded = PersonalDictionary.shared.applyReplacements(to: snippetText)
-        let front = NSWorkspace.shared.frontmostApplication
-        let sameApp = front?.processIdentifier == targetApp?.processIdentifier
-            || (front?.bundleIdentifier != nil && front?.bundleIdentifier == targetApp?.bundleIdentifier)
-
-        guard cloudUpgradeDecision(
-            cloud: .success(upgraded),
-            onDeviceInserted: insertedText,
-            sameApp: sameApp,
-            spanStillMatches: span != nil && span?.location != NSNotFound
-        ) else { return }
-
-        let replaced = await TextInserter.replaceSpan(
-            span,
-            with: upgraded,
-            oldText: insertedText,
-            targetApp: targetApp,
-            fallbackInsert: false
-        )
-        if replaced {
-            NSLog("[Haynoi] Transcribed (cloud-upgrade): %@", upgraded)
-            await MainActor.run {
-                AppState.shared.lastInsertedText = upgraded
-                AppState.shared.lastInsertionSpan = span
-            }
-        } else {
-            NSLog("[Haynoi] Cloud follow-up skipped replace — keeping on-device text")
+        let floor = frames.sorted()[frames.count / 10]
+        // 3× the floor (was 4×): a soft short reply peaks at about 6× the floor
+        // and dips between syllables; at 4× it broke into pieces too short to
+        // count. Steady noise still sits near 1× (evals/short-speech).
+        let voicedThreshold = max(0.003, floor * 3)
+        // Only unbroken 150 ms stretches count — syllables, not clicks.
+        var runs: [(start: Int, length: Int)] = []
+        var run = 0
+        for (index, frame) in (frames + [0]).enumerated() {
+            if frame > voicedThreshold { run += 1; continue }
+            if run >= 5 { runs.append((index - run, run)) }
+            run = 0
         }
+        let voiced = runs.reduce(0) { $0 + $1.length }
+        // 0.6 s of voice was the rule in 0.3.11 and still passes.
+        if voiced >= 20 {
+            NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d/%d frames", average, floor, voiced, frames.count)
+            return true
+        }
+        // Short replies ("có", "được", "ok" are 0.25–0.45 s) need less, but the
+        // start tone the mic can pick up is itself a 0.42 s stretch. A stretch is
+        // the tone only if it matches the tone's own waveform — not where it
+        // sits, since a reply can start as early as the tone does and Bluetooth
+        // can delay the tone (review 2026-09-29). 0.24 s of voice outside the
+        // tone is speech. Measured in evals/short-speech.
+        if let tone, tone.isEmpty { return false }
+        let notTone = runs.filter { r in
+            guard let tone else { return true }
+            // The stretch's own samples only: a window padded past it would
+            // score a reply said right next to the tone as the tone (review r2).
+            let from = r.start * frameLength
+            let to = min(samples.count, (r.start + r.length) * frameLength)
+            return toneMatch(samples[from..<to], tone: tone) < 0.5
+        }.reduce(0) { $0 + $1.length }
+        NSLog("[Haynoi] Speech gate: average %.5f, floor %.5f, voiced %d (%d not tone)/%d frames",
+              average, floor, voiced, notTone, frames.count)
+        return notTone >= 8
     }
 
-    /// Pure gate for the cloud follow-up. `spanStillMatches` is supplied by the
-    /// caller (AX verify lives in `replaceSpan`); this function stays testable.
-    nonisolated static func cloudUpgradeDecision(
-        cloud: Result<String, Error>,
-        onDeviceInserted: String,
-        sameApp: Bool,
-        spanStillMatches: Bool
-    ) -> Bool {
-        guard sameApp, spanStillMatches else { return false }
-        guard case .success(let text) = cloud else { return false }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        return trimmed != onDeviceInserted.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// How much `segment` looks like the tone (0…1): the best normalized
+    /// cross-correlation between the two, sliding the shorter along the longer.
+    /// A stretch shorter than the tone — only the loud head of a decaying tone
+    /// clears the threshold — is compared with every part of the tone. The tone
+    /// as heard through a room scores ~0.8; speech scores under ~0.35 against
+    /// the chime and deep tones (evals/short-speech).
+    nonisolated static func toneMatch(_ segment: ArraySlice<Float>, tone: [Float]) -> Float {
+        let x = Array(segment)
+        let (short, long) = x.count <= tone.count ? (x, tone) : (tone, x)
+        let n = short.count
+        guard n > 1 else { return 0 }
+        let mean = short.reduce(0, +) / Float(n)
+        let a = short.map { $0 - mean }
+        var aNorm: Float = 0
+        vDSP_svesq(a, 1, &aNorm, vDSP_Length(n))
+        aNorm = aNorm.squareRoot()
+        guard aNorm > 0 else { return 0 }
+        var best: Float = 0
+        var offset = 0
+        long.withUnsafeBufferPointer { lp in
+            a.withUnsafeBufferPointer { ap in
+                while offset + n <= lp.count {
+                    let window = lp.baseAddress! + offset
+                    var dot: Float = 0, sum: Float = 0, sumSq: Float = 0
+                    vDSP_dotpr(window, 1, ap.baseAddress!, 1, &dot, vDSP_Length(n))
+                    vDSP_sve(window, 1, &sum, vDSP_Length(n))
+                    vDSP_svesq(window, 1, &sumSq, vDSP_Length(n))
+                    let variance = sumSq - sum * sum / Float(n)
+                    if variance > 0 { best = max(best, abs(dot) / (variance.squareRoot() * aNorm)) }
+                    offset += 8
+                }
+            }
+        }
+        return best
     }
 
     nonisolated static func resolveTranscript(
@@ -596,6 +680,25 @@ final class PipelineController {
             }
         }
         return nil
+    }
+
+    /// When the cloud fails — signed out, server error, rate limit, no network,
+    /// timeout — the fast offline recognizer's text is pasted instead: quick,
+    /// wrong on English terms, no dictionary. That happened silently twice:
+    /// 18/09 (W37-1574, "bắt chữ cực kỳ sai", first build with the fallback) and
+    /// 30/09 (signed out: "deck" → "đếch"). Say it, at most once every 10 minutes.
+    /// sessionExpired is left out: the 401 path already posts its own notice.
+    enum OfflineNotice: Equatable { case signedOut, cloudFailed }
+
+    nonisolated(unsafe) static var lastOfflineWarning: Date?
+
+    nonisolated static func offlineNotice(source: Source, error: Error,
+                                          lastWarned: Date?, now: Date) -> OfflineNotice? {
+        guard source == .onDevice else { return nil }
+        if let stt = error as? STTError, case .sessionExpired = stt { return nil }
+        if let lastWarned, now.timeIntervalSince(lastWarned) < 600 { return nil }
+        if let stt = error as? STTError, case .notSignedIn = stt { return .signedOut }
+        return .cloudFailed
     }
 
     nonisolated static func shouldUseOnDeviceFallback(for error: Error) -> Bool {
@@ -638,13 +741,25 @@ final class PipelineController {
             FloatingBarController.shared.show()
             mark("orb-only (no mic TCC on Dev bundle)")
         }
+        // After start()'s async clear of interimPartial, seed a long line so
+        // the snapshot shows the Option A marquee (newest words on the right).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            AppState.shared.interimPartial = "Mở file báo cáo tháng chín, và xuất sang định dạng PDF, sau đó gửi cho anh Sơn kiểm tra luôn giúp"
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
             FloatingBarController.shared.debugSnapshot(to: dest)
+            let desktop = URL(fileURLWithPath: NSHomeDirectory() + "/haynoi/design/2026-09-17-caption-cao-cap/desktop-after-install.png")
+            try? FileManager.default.createDirectory(at: desktop.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let ok = FloatingBarController.shared.debugDesktopCapture(to: desktop)
+            mark(ok ? "desktop capture \(desktop.path)" : "desktop capture refused (TCC)")
             if let f = FloatingBarController.shared.debugWindowFrame {
-                let line = String(format: "%d %d %d %d %d\n",
+                let screen = OverlayPanel.activeScreen()
+                let vis = screen?.visibleFrame ?? .zero
+                let line = String(format: "%d %d %d %d %d visMaxY=%.0f visMinY=%.0f\n",
                                   Int(f.origin.x), Int(f.origin.y),
                                   Int(f.size.width), Int(f.size.height),
-                                  FloatingBarController.shared.debugWindowNumber)
+                                  FloatingBarController.shared.debugWindowNumber,
+                                  vis.maxY, vis.minY)
                 try? line.write(to: frameDest, atomically: true, encoding: .utf8)
                 mark("frame \(line.trimmingCharacters(in: .whitespacesAndNewlines))")
             } else {
@@ -698,7 +813,7 @@ final class PipelineController {
     func armCorrection() {
         guard let at = state.lastDictationAt, Date().timeIntervalSince(at) < 60,
               state.lastInsertedText != nil,
-              !state.isRecording, !state.isTranscribing else {
+              !state.isRecording, !state.isTranscribing, pendingStop == nil else {
             NSLog("[Haynoi] armCorrection: no recent dictation or busy — ignored")
             return
         }
@@ -741,7 +856,9 @@ final class PipelineController {
         let replacedInPlace = await TextInserter.replaceSpan(
             span, with: correctedTranscript, oldText: oldInserted, targetApp: targetApp)
         if !replacedInPlace {
-            state.setTransientStatus("Sửa ở vị trí con trỏ — văn bản cũ vẫn còn")
+            // Either inserted at the cursor (old text kept) or unconfirmed (the
+            // correction is on the clipboard with a notice) — never "fixed".
+            state.setTransientStatus("Chưa sửa được tại chỗ — văn bản cũ có thể vẫn còn")
         }
 
         // 3. Diff → wrong→right, then either self-heal a reversed fired rule or
@@ -762,11 +879,11 @@ final class PipelineController {
             }
             if let reversed, let w = reversed.wrong {
                 _ = PersonalDictionary.shared.disableMatchingReplacement(wrong: w, right: reversed.right)
-                NSLog("[Haynoi] Self-heal: disabled reversed rule %@ → %@", w, reversed.right)
+                NSLog("[Haynoi] Self-heal: disabled a reversed rule")
             } else {
                 // Propose learning — suppress the toast in live contexts (§5.1)
-                // and when the learning master switch is off (the replace itself
-                // already happened above; only the capture is gated).
+                // and when the learning master switch is off (the replace was
+                // already attempted above; only the capture is gated).
                 if LearningSettings.isEnabled, !LiveContext.isActive() {
                     let wrong = change.wrong
                     let right = change.right
@@ -777,7 +894,7 @@ final class PipelineController {
                             // clears the >=2 activation gate immediately (§1.2).
                             _ = PersonalDictionary.shared.upsertLearnedReplacement(
                                 wrong: wrong, right: right, confirmations: 2)
-                            NSLog("[Haynoi] Learned (fix-that): %@ → %@", wrong, right)
+                            NSLog("[Haynoi] Learned (fix-that): %ld → %ld chars", wrong.count, right.count)
                             // Metadata only: just which detector fired — never the term strings.
                             Analytics.capture("dictionary_term_learned", ["signal": "fixthat"])
                         },
@@ -816,7 +933,10 @@ final class PipelineController {
             ))
         }
 
-        if UserDefaults.standard.bool(forKey: "soundEnabled"),
+        // The dink means "fixed". An unconfirmed replace left the old text or
+        // put the correction on the clipboard, so stay silent.
+        if replacedInPlace,
+           UserDefaults.standard.bool(forKey: "soundEnabled"),
            UserDefaults.standard.bool(forKey: "successDinkEnabled") {
             SoundFeedback.shared.playSuccessTone()
         }
@@ -827,6 +947,16 @@ final class PipelineController {
     /// Called when AudioRecorder posts `didAbortRecording` (device failure mid-recording).
     private func handleRecorderAbort(_ reason: String) {
         NSLog("[Haynoi] Recorder aborted: %@", reason)
+
+        // The key was already released and only the tail was still recording:
+        // the dictation is complete enough — send what was captured now.
+        if pendingStop != nil {
+            finishPendingStopNow()
+            return
+        }
+        // Released and already handed on (the tail timer ran first): nothing
+        // of this dictation is lost, so no error for it.
+        if !state.isRecording { return }
 
         // Tear down recording state without calling recorder.stopRecording()
         // (the recorder already cleaned itself up before posting the notification).
@@ -879,7 +1009,7 @@ final class PipelineController {
     func retryLastFailedDictation() {
         // Fix #3: re-entry guard — retry must not run concurrently with itself
         // or with a live dictation.
-        guard !state.isTranscribing, !state.isRecording else {
+        guard !state.isTranscribing, !state.isRecording, pendingStop == nil else {
             NSLog("[Haynoi] retryLastFailedDictation: skipped (already transcribing or recording)")
             return
         }
@@ -905,13 +1035,15 @@ final class PipelineController {
 
         Task {
             do {
-                let text = try await STTProvider.transcribe(samples)
+                let result = try await STTProvider.transcribeTracked(samples)
+                let text = result.text
                 guard !text.isEmpty else {
                     await MainActor.run { state.isTranscribing = false }
                     return
                 }
                 let finalText = SnippetManager.applySnippets(to: text)
-                NSLog("[Haynoi] Retry succeeded: %@", finalText)
+                let retryFixes = Self.fixes(forRuleIDs: result.firedIDs)
+                NSLog("[Haynoi] Retry succeeded: %ld chars", finalText.count)
                 // Fix #2: delete the saved WAV BEFORE recomputing hasFailedDictation
                 // so the Retry button disappears and a second retry cannot replay
                 // the same recording.
@@ -923,7 +1055,8 @@ final class PipelineController {
                     state.isTranscribing = false
                     state.addTranscription(finalText,
                                            appBundleId: retryBundleId,
-                                           appName: retryAppName)
+                                           appName: retryAppName,
+                                           fixes: retryFixes)
                     state.hasFailedDictation = FailedDictationStore.hasAny
                 }
                 await TextInserter.insert(finalText, targetApp: retryTargetApp)

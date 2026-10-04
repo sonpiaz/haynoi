@@ -34,6 +34,9 @@ final class AudioRecorder {
 
     /// True between `beginCapture` and `endCapture`.
     private var isCapturing = false
+    /// What an abort (device failure) cut short, until endCapture() takes it
+    /// or the next beginCapture() starts over.
+    private var abortedCapture: [Float]?
 
     /// Guards engine lifecycle, buffers, capture flag, and the live converter/format.
     private let lock = NSLock()
@@ -203,6 +206,7 @@ final class AudioRecorder {
             buffer.removeAll(keepingCapacity: true)
         }
         isCapturing = true
+        abortedCapture = nil
         lock.unlock()
 
         setLastTapFireTime(Date())
@@ -220,6 +224,13 @@ final class AudioRecorder {
         lock.unlock()
     }
 
+    /// Samples captured so far in the current capture, including one that an
+    /// abort cut short (0 when there is none).
+    func capturedSampleCount() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return isCapturing ? buffer.count : (abortedCapture?.count ?? 0)
+    }
+
     /// Stops accumulating, returns the recorded 16kHz mono samples, and returns
     /// the engine to ring-buffer mode (engine stays running). Schedules cooldown.
     @discardableResult
@@ -227,6 +238,10 @@ final class AudioRecorder {
         stopWatchdog()
 
         lock.lock()
+        // A capture the device cut short comes back from here, through the
+        // normal path so the cooldown and the callback cleanup still happen.
+        let aborted = abortedCapture
+        abortedCapture = nil
         let wasCapturing = isCapturing
         isCapturing = false
         // When we were NOT actually capturing (launch warm-up at setup(), or a
@@ -239,7 +254,7 @@ final class AudioRecorder {
             buffer.removeAll(keepingCapacity: true)
             ringBuffer.removeAll(keepingCapacity: true)
         } else {
-            samples = []
+            samples = aborted ?? []
         }
         // Always drop a pending captureLive callback — a chord that never became
         // a hold must not leave a stale tone trigger for the next dictation.
@@ -445,6 +460,14 @@ final class AudioRecorder {
     /// when a device fails mid-capture.
     private func abortRecordingWithError(_ reason: String) {
         stopWatchdog()
+        // Take what was captured before shutdownEngine clears it: an abort can
+        // land in the tail recorded after the key was released, and that
+        // dictation is still worth sending.
+        // It is kept here, not handed along with the notification, so the
+        // next endCapture() returns it whichever of the two runs first.
+        lock.lock()
+        if isCapturing { abortedCapture = buffer }
+        lock.unlock()
         shutdownEngine()
 
         DispatchQueue.main.async {

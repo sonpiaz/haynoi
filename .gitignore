@@ -40,6 +40,11 @@ site/appcast.xml
 site/.live-*.html
 site/_shots/
 
+# Local-only agent notes and session state (never publish)
+.internal/
+.claude/
+.claude-lock/
+
 # Local HUD / verify screenshots — not product
 .grok-standard-hud*
 d1.png

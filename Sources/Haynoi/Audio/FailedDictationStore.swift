@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 /// Persists failed-transcription WAV files to
-/// ~/Library/Application Support/Haynoi/failed/
+/// ~/Library/Application Support/Haynoi/failed/ (Haynoi-Dev in Debug)
 ///
 /// Keeps at most `maxSaved` entries (newest N, oldest pruned).
 /// Exposed as a simple save/load/prune surface used by PipelineController.
@@ -10,11 +10,10 @@ enum FailedDictationStore {
 
     private static let maxSaved = 5
 
+    /// Under the same folder policy as the dictionary, so a Debug build or a test
+    /// run cannot prune the owner's saved failures.
     static var failedDirectory: URL {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        )[0]
-        return appSupport.appendingPathComponent("Haynoi/failed", isDirectory: true)
+        PersonalDictionary.supportDirectory().appendingPathComponent("failed", isDirectory: true)
     }
 
     // MARK: - Save

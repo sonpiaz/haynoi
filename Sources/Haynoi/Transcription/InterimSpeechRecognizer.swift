@@ -17,6 +17,7 @@ final class InterimSpeechRecognizer {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var generation: UInt64 = 0
+    private var transcript = InterimTranscript()
     private var latestFinalText: String = ""
 
     private init() {}
@@ -41,9 +42,8 @@ final class InterimSpeechRecognizer {
     }
 
     func stop() {
-        DispatchQueue.main.async {
-            AppState.shared.interimPartial = ""
-        }
+        // Keep the last partial on screen as committed (no bold) until hide /
+        // the next hold. Blanking here made the caption vanish on key-up.
         queue.async { [weak self] in
             self?.stopOnQueue()
         }
@@ -64,6 +64,7 @@ final class InterimSpeechRecognizer {
 
     private func startOnQueue() {
         stopOnQueue()
+        transcript = InterimTranscript()
         latestFinalText = ""
 
         let locale = Self.preferredLocale()
@@ -92,8 +93,15 @@ final class InterimSpeechRecognizer {
         // orb updates as he talks. Partials stay RAM-only either way.
         let onDevice = rec.supportsOnDeviceRecognition
         request.requiresOnDeviceRecognition = onDevice
+        // This text is what gets pasted when the cloud is unreachable or the
+        // user is signed out — bias it toward their own terms ("deck",
+        // "Mandeck", "agent"), the way the cloud prompt already is. Apple
+        // caps useful contextual strings at about 100.
+        request.contextualStrings = Array(PersonalDictionary.shared.glossaryTerms().prefix(100))
         if #available(macOS 13.0, *) {
-            request.addsPunctuation = false
+            // Sentence-end marks let the HUD drop bold on a finished clause.
+            // Display-only — inserted text still comes from the cloud POST.
+            request.addsPunctuation = true
         }
 
         generation += 1
@@ -104,10 +112,15 @@ final class InterimSpeechRecognizer {
             guard let self else { return }
             self.queue.async {
                 guard gen == self.generation else { return }
-                if let text = result?.bestTranscription.formattedString, !text.isEmpty {
+                if let result {
+                    self.transcript.ingest(
+                        result.bestTranscription.formattedString,
+                        endsUtterance: result.speechRecognitionMetadata != nil
+                    )
+                    let text = self.transcript.text
                     self.latestFinalText = text
                     DispatchQueue.main.async {
-                        AppState.shared.interimPartial = text
+                        AppState.shared.interimPartial = CaptionLayout.tail(text)
                     }
                 }
                 if let error {
@@ -134,5 +147,33 @@ final class InterimSpeechRecognizer {
         case "en": return Locale(identifier: "en-US")
         default: return Locale(identifier: "vi-VN")
         }
+    }
+}
+
+/// Every partial of one PTT hold.
+///
+/// On-device SFSpeech (vi-VN, macOS 26) restarts `formattedString` after each
+/// pause: the result that closes an utterance carries
+/// `speechRecognitionMetadata`, and the next partial holds only the new
+/// utterance. Showing the raw partial blanked the caption mid-hold, and the
+/// on-device fallback kept only the last sentence. Keep finished utterances.
+struct InterimTranscript {
+    private var finished = ""
+    private var current = ""
+    private var utteranceEnded = false
+
+    var text: String {
+        finished.isEmpty ? current : current.isEmpty ? finished : finished + " " + current
+    }
+
+    mutating func ingest(_ partial: String, endsUtterance: Bool) {
+        guard !partial.isEmpty else { return }
+        // A recognizer that marks the pause but keeps the words is a continuation.
+        if utteranceEnded, !partial.hasPrefix(current) {
+            finished = text
+            current = ""
+        }
+        current = partial
+        utteranceEnded = endsUtterance
     }
 }

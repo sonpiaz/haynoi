@@ -8,9 +8,22 @@
 #      publishing a release (HAYNOI_RELEASE_APPCAST=1).
 #   2. Only files tracked by git are uploaded, so untracked screenshots and
 #      scratch pages in site/ never reach production.
+#
+# The PostHog key is not in the source: analytics.js carries a placeholder that
+# this script fills from HAYNOI_POSTHOG_KEY (environment, or the repo's
+# gitignored .env). No key, no deploy — a site that silently stops counting
+# is worse than a deploy that refuses.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+if [[ -z "${HAYNOI_POSTHOG_KEY:-}" && -f .env ]]; then
+  HAYNOI_POSTHOG_KEY=$(sed -n 's/^HAYNOI_POSTHOG_KEY=//p' .env | tail -1)
+fi
+if [[ "${HAYNOI_POSTHOG_KEY:-}" != phc_* ]]; then
+  echo "HAYNOI_POSTHOG_KEY is missing or not a PostHog project key; refusing to deploy." >&2
+  exit 1
+fi
 
 # $OUT becomes the site root that gets deployed.
 OUT=$(mktemp -d)
@@ -32,12 +45,20 @@ else
 fi
 
 # Guard 2 — stage only git-tracked files from site/ into the deploy root,
-# then the appcast.
+# then the appcast. site/functions/ is Pages Functions code, compiled by
+# wrangler from --cwd site, not served as static files.
 git ls-files -z site | while IFS= read -r -d '' f; do
   rel=${f#site/}
+  [[ $rel == functions/* ]] && continue
   mkdir -p "$OUT/$(dirname "$rel")"
   cp "$f" "$OUT/$rel"
 done
 cp appcast.xml "$OUT/appcast.xml"
 
-wrangler pages deploy "$OUT" --project-name=haynoi --branch=main --commit-dirty=true
+sed -i '' "s/__HAYNOI_POSTHOG_KEY__/${HAYNOI_POSTHOG_KEY}/" "$OUT/analytics.js"
+if grep -qF "__HAYNOI_POSTHOG_KEY__" "$OUT/analytics.js"; then
+  echo "analytics.js still carries the key placeholder; refusing to deploy." >&2
+  exit 1
+fi
+
+wrangler pages deploy "$OUT" --cwd site --project-name=haynoi --branch=main --commit-dirty=true
