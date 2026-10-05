@@ -211,3 +211,8 @@ past a failed step.
 - Different from plan: the night H1 kit tickets were already done; H2 soak needed a re-signed copy because builds on the mini are ad-hoc and Sparkle carries another Team ID.
 - Learned: to run any `~/haynoi-builds` app on the mini, ad-hoc `--deep` re-sign a copy first; never touch the build folder.
 - Applied now: measure each PR (state, head, base, conflicts) before asking for review.
+
+## Retro · 05/10 day shift (parked)
+- Different from plan: nothing; the queue is empty of safe work, only `ok an pro` (W37-1847) remains.
+- Learned: old PRs on a public repo carry stale facts (Pro price, retired model, personal email); review every sentence against code, and squash-merge so history stays clean.
+- Applied now: park with the state on disk; take W37-1847 the moment the code arrives.
