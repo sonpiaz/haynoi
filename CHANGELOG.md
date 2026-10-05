@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Plans & Billing no longer offers a Pro you cannot buy yet.** The Pro card
+  now says "Coming soon": no price, no Upgrade button, no checkout.
+- **The success sound plays only when "fix that" really replaced the text.**
+  When it could not, it stays quiet instead of telling you it worked.
+- **Settings → Account → Test connection now says the free words reset weekly**, the
+  same 5,000 words a week shown everywhere else.
 - **"Fix that" no longer claims a correction it could not see.** In apps that
   accept an edit and quietly drop it, a correction could vanish without a word.
   When Haynoi cannot confirm the change, it now leaves the correction on the
