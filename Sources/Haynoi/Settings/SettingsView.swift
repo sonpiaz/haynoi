@@ -801,20 +801,13 @@ private struct DictionaryEditor: View {
 // MARK: - Plans & Billing Tab
 
 private struct BillingTab: View {
-    @State private var billingPeriod: BillingPeriod = .annual
     @ObservedObject private var billing = BillingManager.shared
     @Environment(\.colorScheme) private var scheme
-
-    enum BillingPeriod { case monthly, annual }
-
-    private var monthlyPrice: String { "$14.99" }
-    private var annualMonthlyPrice: String { "$10.49" }
-    private var annualTotalPrice: String { "$125.88" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: C.s5) {
             currentPlanSection
-            upgradeSection
+            plansSection
             teamSection
         }
         .task { await billing.refresh() }
@@ -897,14 +890,11 @@ private struct BillingTab: View {
         return detail
     }
 
-    // MARK: Upgrade
+    // MARK: Plans
 
-    private var upgradeSection: some View {
+    private var plansSection: some View {
         VStack(alignment: .leading, spacing: C.s2) {
-            SectionEyebrow(title: "Upgrade")
-
-            // Billing period toggle
-            billingToggle
+            SectionEyebrow(title: "Plans")
 
             // Plan cards
             HStack(alignment: .top, spacing: C.s3) {
@@ -912,28 +902,6 @@ private struct BillingTab: View {
                 proPlanCard
             }
         }
-    }
-
-    private var billingToggle: some View {
-        HStack(spacing: 4) {
-            BillingPeriodButton(
-                label: "Monthly",
-                isActive: billingPeriod == .monthly
-            ) { billingPeriod = .monthly }
-
-            BillingPeriodButton(
-                label: "Annual",
-                badge: "Save 30%",
-                isActive: billingPeriod == .annual
-            ) { billingPeriod = .annual }
-        }
-        .padding(3)
-        .background(Color(hex: "EEEEF0"))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var freePlanCard: some View {
@@ -1029,20 +997,13 @@ private struct BillingTab: View {
             .clipShape(Capsule())
             .padding(.bottom, C.s2)
 
-            // Price — follows the Monthly/Annual toggle
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(billingPeriod == .monthly ? monthlyPrice : annualMonthlyPrice)
-                    .font(.system(.title, design: .monospaced).weight(.regular))
-                    .foregroundStyle(Color.obsidianLabel(for: scheme))
-                Text("/ month")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
-            }
-            .padding(.bottom, 2)
+            // Pro is not on sale yet (decided 05/10): no price, no checkout.
+            Text("Coming soon")
+                .font(.system(.title, design: .monospaced).weight(.regular))
+                .foregroundStyle(Color.obsidianLabel(for: scheme))
+                .padding(.bottom, 2)
 
-            Text(billingPeriod == .monthly
-                 ? "Billed monthly. Cancel anytime."
-                 : "Billed \(annualTotalPrice) / year. Cancel anytime.")
+            Text("Not on sale yet.")
                 .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(Color.obsidianLabel3(for: scheme))
                 .padding(.bottom, C.s3)
@@ -1081,45 +1042,14 @@ private struct BillingTab: View {
                     RoundedRectangle(cornerRadius: C.rSM)
                         .stroke(Color.obsidianDivider(for: scheme), lineWidth: 1)
                 )
-        } else if billing.awaitingCheckout {
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Waiting for payment…")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.obsidianLabel3(for: scheme))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Color.obsidianSubtle(for: scheme))
-            .clipShape(RoundedRectangle(cornerRadius: C.rSM))
         } else {
-            VStack(spacing: 4) {
-                Button {
-                    Analytics.capture("upgrade_clicked", [
-                        "cycle": billingPeriod == .monthly ? "monthly" : "annual",
-                    ])
-                    Task {
-                        await billing.startCheckout(
-                            cycle: billingPeriod == .monthly ? "monthly" : "annual")
-                    }
-                } label: {
-                    Text("Upgrade to Pro")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: C.rSM))
-                }
-                .buttonStyle(.plain)
-
-                if let err = billing.lastError {
-                    Text(err)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(scheme == .dark ? Color.obsidianDarkError : Color.obsidianError)
-                        .lineLimit(2)
-                }
-            }
+            Text("Coming soon")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.obsidianLabel3(for: scheme))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.obsidianSubtle(for: scheme))
+                .clipShape(RoundedRectangle(cornerRadius: C.rSM))
         }
     }
 
@@ -1174,56 +1104,6 @@ private struct BillingTab: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - BillingPeriodButton
-
-private struct BillingPeriodButton: View {
-    let label: String
-    var badge: String? = nil
-    let isActive: Bool
-    let action: () -> Void
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(
-                        isActive
-                            ? Color.obsidianLabel(for: scheme)
-                            : Color.obsidianLabel3(for: scheme)
-                    )
-
-                if let badge {
-                    Text(badge)
-                        .font(.system(size: 10, weight: .bold))
-                        .kerning(0.3)
-                        .foregroundStyle(Color.accentOnLight)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Color.accent.opacity(0.08))
-                        .overlay(Capsule().stroke(Color.accent.opacity(0.35), lineWidth: 1))
-                        .clipShape(Capsule())
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 5)
-            .background(
-                isActive
-                    ? Color.obsidianSurface(for: scheme)
-                    : Color.clear
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .shadow(
-                color: isActive ? Color.black.opacity(0.10) : .clear,
-                radius: 3, y: 1
-            )
-        }
-        .buttonStyle(.plain)
-        .animation(.obsidianFade, value: isActive)
     }
 }
 

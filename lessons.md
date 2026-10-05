@@ -201,3 +201,18 @@ past a failed step.
 - Different from plan: night H1 found most open tickets already done or waiting on Sơn (spec 19/09, Cloudflare); only 2 small fixes were safe.
 - Learned: on the mini, XCTest needs `-scheme HaynoiTests` + ad-hoc flags; the `Haynoi` scheme has no test action.
 - Applied now: before picking tickets, read the last comments first; most "open" haynoi tickets are parked on Sơn.
+
+## Retro · 03→04/10 night wave 1 H1 (start)
+- Different from plan: the plan asks to build W37-940 + W37-945, but both are already done and ĐẠT (Grok + Claude) on kit `40c9457`, waiting for deploy since 02/10.
+- Learned: night plans are written from board titles; the board still shows these as backlog because nobody with rights closed them.
+- Applied now: measure first, re-run the kit tests on 40c9457, report "already done" with evidence instead of rebuilding.
+
+## Retro · 04/10 day shift (start)
+- Different from plan: the night H1 kit tickets were already done; H2 soak needed a re-signed copy because builds on the mini are ad-hoc and Sparkle carries another Team ID.
+- Learned: to run any `~/haynoi-builds` app on the mini, ad-hoc `--deep` re-sign a copy first; never touch the build folder.
+- Applied now: measure each PR (state, head, base, conflicts) before asking for review.
+
+## Retro · 05/10 day shift (parked)
+- Different from plan: nothing; the queue is empty of safe work, only `ok an pro` (W37-1847) remains.
+- Learned: old PRs on a public repo carry stale facts (Pro price, retired model, personal email); review every sentence against code, and squash-merge so history stays clean.
+- Applied now: park with the state on disk; take W37-1847 the moment the code arrives.
