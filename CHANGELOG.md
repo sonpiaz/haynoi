@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **New app icon.** The same ń mark, now flat on a solid dark tile so it stays sharp
+  in the Dock, Finder and the menu bar. When idle, the menu bar shows the ń.
+
 ### Fixed
 - **Plans & Billing no longer offers a Pro you cannot buy yet.** The Pro card
   now says "Coming soon": no price, no Upgrade button, no checkout.
