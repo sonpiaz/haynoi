@@ -216,3 +216,8 @@ past a failed step.
 - Different from plan: nothing; the queue is empty of safe work, only `ok an pro` (W37-1847) remains.
 - Learned: old PRs on a public repo carry stale facts (Pro price, retired model, personal email); review every sentence against code, and squash-merge so history stays clean.
 - Applied now: park with the state on disk; take W37-1847 the moment the code arrives.
+
+## Retro · 08/10 logo (start)
+- Different from plan: the brief points at a `logo-design` skill that is not on the mini; the Pheme scripts were the working template.
+- Learned: the old accent (13 of 512 units) disappears below 32 px; a flat tile needs a thicker accent, not a glow.
+- Applied now: one Python script draws every icon from the SVG path, so app, menu bar, site and kit cannot drift apart.

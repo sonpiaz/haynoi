@@ -127,11 +127,12 @@ final class AppState: ObservableObject {
 
     // MARK: - Computed
 
-    var menuBarIcon: String {
+    /// SF Symbol for a busy or failed state; nil when idle (the ń template mark shows).
+    var menuBarIcon: String? {
         if error != nil { return "exclamationmark.circle" }
         if isRecording { return "record.circle.fill" }
         if isTranscribing { return "ellipsis.circle" }
-        return "waveform.circle"
+        return nil
     }
 
     var totalWords: Int {
