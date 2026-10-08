@@ -34,10 +34,12 @@ struct HaynoiApp: App {
                 .frame(width: 360)
                 .haynoiTheme()
         } label: {
-            Label(
-                Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Haynoi",
-                systemImage: appState.menuBarIcon
-            )
+            let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Haynoi"
+            if let symbol = appState.menuBarIcon {
+                Label(name, systemImage: symbol)
+            } else {
+                Label(name, image: "MenuBarIcon")
+            }
         }
         .menuBarExtraStyle(.window)
 
@@ -210,7 +212,7 @@ private struct MenuBarContent: View {
 
     private var popoverHeader: some View {
         HStack(alignment: .center, spacing: 13) {
-            // The real app icon — brand/haynoi-icon.svg rendered into AppIcon
+            // The real app icon — AppIcon, drawn by brand/make-icons.py
             AppIconBadge(size: 44)
 
             VStack(alignment: .leading, spacing: 3) {
